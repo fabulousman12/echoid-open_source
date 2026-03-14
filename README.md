@@ -23,7 +23,20 @@ Some files are kept out of the repository because they are local, generated, or 
 - Generated release output, screenshots, and crash logs
 
 This keeps the public repository focused on the core code while avoiding accidental leaks of deployment-specific setup.
+## Usage Limitations
 
+Some files are intentionally not included in this repository.  
+This mainly affects certain native Android components required to run the application on Android devices.
+
+Because of this, the project can currently only be fully tested using the **web version**.
+
+Features that depend on native Android behavior cannot be tested here, including:
+
+- App dead-state message handling
+- Floating window overlays
+- Other Android platform–specific behaviors
+
+When contributing or making changes, please ensure that any feature affecting both platforms includes the necessary **Android platform-dependent implementation**, in addition to the web implementation.
 ## Setup
 
 1. Install dependencies:
