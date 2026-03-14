@@ -1,0 +1,27 @@
+{
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@capacitor-firebase/messaging": "^6.3.1",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/push-notifications": "^6.0.3",
+    "firebase": "^11.1.0",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.2.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}

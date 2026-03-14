@@ -1,0 +1,72 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/dist
+/src/data.ts
+/src/data.local.ts
+/src/data.private.ts
+/src/data.secrets.ts
+/src/additionalfiles
+/src/additatinalfiles
+
+# misc
+/src/firebase-config.js
+/src/firebase-config.ts
+/src/firebase-config.local.*
+/src/firebase-config.*
+/ios
+/android
+.DS_Store
+.env
+.env.local
+.env.*
+!.env.example
+google-services.json
+GoogleService-Info.plist
+
+.env.development.local
+.env.test.local
+.env.production.local
+/.nx
+/.nx/cache
+/.vscode/*
+!/.vscode/extensions.json
+.idea
+/firebase.json
+/.firebaserc
+/google-services.json
+/capacitor.config.ts
+/capacitor.config.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+publickey.crt
+keypair copy.pem
+keypair.pem
+*.pem
+.log*
+.pem*
+# Optional eslint cache
+.eslintcache
+# cleanup tools
+bfg-*.jar
+
+# vite temp files
+vite.config.ts.timestamp-*.mjs
+
+# generated and local artifacts
+/cypress/screenshots
+/cypress/videos
+/android/app/release
+/android/app/debug
+hs_err_pid*.log
+replay_pid*.log

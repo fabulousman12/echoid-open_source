@@ -1,0 +1,41 @@
+.group-add-page {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f3f4f6;
+}
+
+.group-add-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #24272e;
+  color: #fff;
+  padding: 12px;
+}
+
+.group-add-title {
+  margin: 0;
+}
+
+.group-add-link {
+  border: none;
+  background: transparent;
+  color: #fff;
+  text-decoration: underline;
+}
+
+.group-add-link:disabled {
+  opacity: 0.5;
+}
+
+.group-add-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.group-add-disabled {
+  opacity: 0.75;
+}
+

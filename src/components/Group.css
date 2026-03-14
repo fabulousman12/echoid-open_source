@@ -1,0 +1,112 @@
+.group-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+  padding: 8px 10px 10px;
+  background: transparent;
+  border-bottom: 0;
+  backdrop-filter: none;
+}
+
+.group-top-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.group-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #cfd9e6;
+  border-radius: 999px;
+  background: #eef3f8;
+  color: #1f2937;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.group-search-input::placeholder {
+  color: #7f8a98;
+}
+
+.group-search-input:focus {
+  border-color: #2b7cff;
+  box-shadow: 0 0 0 3px rgba(43, 124, 255, 0.2);
+  background: #ffffff;
+}
+
+.group-tabs-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(14, 18, 28, 0.9);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.group-tab-btn {
+  position: relative;
+  height: 34px;
+  min-width: 86px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #cfd5e2;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.18s ease;
+}
+
+.group-tab-btn.is-active {
+  background: #2474f5;
+  border-color: #2474f5;
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(36, 116, 245, 0.35);
+}
+
+.group-tab-btn:not(.is-active):hover {
+  color: #f2f5fa;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.group-request-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 2px #131722;
+}
+
+.group-request-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+#group-list-container {
+  background: #f7f9fc;
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid #d9e2ef;
+}
+
+#group-list-container .list-group-item.user-card {
+  background: #ffffff;
+  border: 1px solid #d9e2ef;
+}

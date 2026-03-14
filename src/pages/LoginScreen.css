@@ -1,0 +1,52 @@
+.auth-container {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    padding: 2rem;
+    border-radius: 1rem;
+    max-width: 400px;
+    margin: auto;
+    margin-top: 10vh;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  }
+  
+  .auth-input {
+    width: 100%;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    border: none;
+  }
+  
+  .auth-button {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: #007bff;
+    border: none;
+    color: #fff;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+  }
+  
+  .social-buttons {
+    margin-top: 1rem;
+  }
+  
+  .social-button {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    border: none;
+    color: #fff;
+  }
+  
+  .social-button.google {
+    background-color: #db4437;
+  }
+  
+  .social-button.facebook {
+    background-color: #3b5998;
+  }
+  

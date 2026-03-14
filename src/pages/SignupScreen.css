@@ -1,0 +1,82 @@
+.settings-container {
+  background-color: black;
+  color: white;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  padding: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+.settings-title {
+  text-align: center;
+  margin-top: 10px;
+}
+
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-size: 18px;
+  color: blue;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.settings-section {
+  margin: 20px 0;
+  padding: 10px;
+  border-radius: 10px;
+  background-color: #222;
+  transition: all 0.3s ease-in-out;
+  overflow: hidden;
+  height: auto;
+}
+
+.settings-section.active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
+  z-index: 10;
+  background-color: #111;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.section-content {
+  margin-top: 20px;
+}
+
+.close-btn {
+  margin-bottom: 20px;
+  font-size: 16px;
+  background: none;
+  color: #0af;
+  border: none;
+  cursor: pointer;
+}
+
+.arrow {
+  font-size: 16px;
+  transition: transform 0.3s ease;
+}
+
+.arrow.up {
+  transform: rotate(90deg);
+}
+
+.theme-btn-container {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}

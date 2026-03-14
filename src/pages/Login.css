@@ -1,0 +1,47 @@
+/* LoginForm.css */
+:host {
+    --background: #2382e2; /* Set the desired background color */
+    --color: #343a40; /* Set the desired text color */
+  }
+  
+body {
+    background-color: #167fe8; /* Light background for the entire body */
+  }
+
+  
+  
+  .login-container {
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+    background-color: #0056b3;
+  }
+  
+  .input-field {
+    transition: border-color 0.3s;
+  }
+  
+  .input-field:focus {
+    border-color: #007bff; /* Change border color on focus */
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5); /* Add a glow effect on focus */
+  }
+  
+  .btn-login {
+    background-color: #007bff;
+    border: none;
+    transition: background-color 0.3s, transform 0.2s;
+  }
+  
+  .btn-login:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    transform: translateY(-2px); /* Lift effect on hover */
+  }
+  
+  .text-primary {
+    color: #007bff;
+    text-decoration: none;
+  }
+  
+  .text-primary:hover {
+    text-decoration: underline; /* Underline on hover */
+  }
+  

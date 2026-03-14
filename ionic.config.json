@@ -1,0 +1,13 @@
+{
+  "name": "ionic-app-base",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite", "proxies": [
+    {
+      "path": "/api",
+      "proxyUrl": "http://192.168.167.140:8000"
+    }
+  ]
+  
+}

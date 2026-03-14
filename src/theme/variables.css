@@ -1,0 +1,95 @@
+/* For information on how to create your own theme, please see:
+http://ionicframework.com/docs/theming/ */
+:root {
+    --ion-background-color: #ffffff;
+    --ion-text-color: #000000;
+    --primary: #2563eb;
+    --primary-dark: #1e40af;
+    --primary-light: #dbeafe;
+    --secondary: #0891b2;
+    --background: #f8fafc;
+    --surface: #ffffff;
+    --surface-light: #f1f5f9;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+  --success: #10b981;
+  --danger: #ef4444;
+  --chat-bg-overlay: 238, 237, 239;
+}
+
+.dark-theme {
+  --primary: #2b2d31;
+  --primary-dark: #1f2124;
+  --primary-light: #3b4048;
+  --secondary: #64748b;
+  --background: #2b2d31;
+  --surface: #32363d;
+  --surface-light: #3b4048;
+  --text-primary: #e5e7eb;
+  --text-secondary: #b0b7c3;
+  --border: #4b525c;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --chat-bg-overlay: 43, 45, 49;
+}
+
+.dark-theme .bg-white {
+  background-color: var(--surface) !important;
+}
+
+.dark-theme .bg-gray-100 {
+  background-color: var(--surface-light) !important;
+}
+
+.dark-theme .bg-gray-200,
+.dark-theme .bg-gray-300 {
+  background-color: #424752 !important;
+}
+
+.dark-theme .bg-gray-800,
+.dark-theme .bg-black {
+  background-color: #1c1f24 !important;
+}
+
+.dark-theme .text-black,
+.dark-theme .text-gray-900,
+.dark-theme .text-gray-800,
+.dark-theme .text-gray-700 {
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .text-gray-600,
+.dark-theme .text-gray-500,
+.dark-theme .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+
+.dark-theme .border-gray-200,
+.dark-theme .border-gray-300 {
+  border-color: var(--border) !important;
+}
+  .ant-popover,
+.ant-tooltip,
+.popover-wrapper {
+  pointer-events: none !important;
+  display: none !important;
+}
+.chat-gpt-quick-query-container *{
+  display: none;
+  background-color: #000000;
+}
+
+.mobile-alert {
+  border-radius: 16px !important;
+  font-size: 14px;
+}
+
+.mobile-alert .swal2-title {
+  font-size: 18px;
+}
+
+.mobile-alert .swal2-confirm {
+  border-radius: 10px;
+  padding: 6px 16px;
+}

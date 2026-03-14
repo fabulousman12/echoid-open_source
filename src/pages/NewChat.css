@@ -1,0 +1,81 @@
+/* NewChat.css */
+.header {
+    background-color: #11b8e2; /* WhatsApp Header Color */
+    height: 60px; /* Increased height */
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 20px; /* Adjust padding as needed */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+}
+
+.header button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px; /* Increased icon size */
+}
+
+.header-search {
+    border: none;
+    border-radius: 20px; /* Rounded input */
+    padding: 10px;
+    max-width: 300px;
+    flex-grow: 1; /* Allow input to take available space */
+    margin-left: 10px; /* Space between button and input */
+    background-color: rgba(188, 228, 240, 0.8); /* Light background for the input */
+}
+
+.header-search:focus {
+    outline: none; /* Remove focus outline */
+    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5); /* Focus effect */
+}
+
+.contacts-list {
+    padding: 20px 0; /* Padding for contact list */
+    margin-top: 40px; /* Adjust margin to accommodate the header */
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    cursor: pointer;
+    border-radius: 10px; /* Rounded contacts */
+    transition: background-color 0.3s; /* Smooth hover effect */
+}
+
+.contact-item:hover {
+    background-color: rgba(0, 0, 0, 0.1); /* Hover effect */
+}
+
+.contact-img {
+    border-radius: 50%; /* Make the image circular */
+    margin-right: 15px; /* Space between image and text */
+    width: 48px;
+    height: 48px;
+}
+.conatined-first{
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    flex-direction: row;
+}
+.contacts-list {
+    border-top: 1px solid #ddd; /* Add a border for separation */
+  }
+  
+  .contact-item {
+    transition: background-color 0.3s ease;
+  }
+  
+  .contact-item:hover {
+    background-color: #e9ecef; /* Light gray on hover */
+  }
+  .rounded-circle {
+    border: 2px solid #11b8e2; /* Profile image border */
+  }
+  
+  .text-muted {
+    color: #6c757d; /* Muted text for phone numbers */
+  }

@@ -1,0 +1,233 @@
+/* User Card Styles */
+.user-card {
+  display: flex;
+  align-items: center;
+  padding: 15px; /* Increased padding for better spacing */
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: 8px; /* Rounded corners for the user card */
+  margin: 5px 0; /* Margin for spacing between cards */
+  background-color: var(--surface);
+}
+
+.user-card:hover {
+  background-color: var(--surface-light); /* Highlight on hover */
+}
+
+/* Avatar Styles */
+.rounded-avatar {
+  border-radius: 50%;
+  width: 60px; /* Increased avatar size */
+  height: 60px; /* Increased avatar size */
+  object-fit: cover;
+  border: 2px solid var(--border); /* Defined border */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Soft shadow */
+}
+
+/* Text Styles */
+.user-name {
+  font-weight: 500;
+  font-size: 18px; /* Increased font size */
+  color: var(--text-primary);
+}
+
+.timestamp {
+  font-size: 14px; /* Increased timestamp font size */
+  color: var(--text-secondary);
+}
+
+.last-message {
+  font-size: 15px; /* Increased last message font size */
+  color: var(--text-secondary);
+  margin-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: calc(100% - 70px); /* Adjusted width for more space */
+}
+
+/* Unread Badge Styles */
+.unread-badge {
+  background-color: var(--success); /* Green for unread messages */
+  color: var(--text-primary);
+  font-size: 14px; /* Increased badge font size */
+  padding: 4px 8px; /* Increased padding for the badge */
+  border-radius: 50%;
+  display: inline-block;
+  min-width: 24px; /* Adjusted minimum width for the badge */
+  text-align: center;
+}
+
+/* Floating Menu Styles */
+.floating-menu {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  background-color: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  width: 200px; /* Set a width for the menu */
+  padding: 10px 0; /* Add padding to the menu */
+  transition: opacity 0.3s ease;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  animation: floatingMenuIn 0.16s ease-out forwards;
+}
+
+.menu-item {
+  padding: 10px 20px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.menu-item:hover {
+  background-color: var(--surface-light); /* Highlight on hover */
+}
+
+.menu-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes floatingMenuIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header Styles */
+.header {
+  position: fixed;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  border-radius: 0 0 15px 15px;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+  height: 70px;
+}
+
+.settings-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.settings-icon-wrapper .admin-unread-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  border: 2px solid var(--surface, #ffffff);
+  box-shadow: 0 0 0 rgba(239, 68, 68, 0.6);
+  animation: adminDotGlow 1.6s ease-in-out infinite;
+}
+
+@keyframes adminDotGlow {
+  0% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+    transform: scale(1);
+  }
+  60% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+    transform: scale(1.20);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+    transform: scale(1);
+  }
+}
+
+/* Footer Styles */
+.footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+}
+.floating-button {
+  position: fixed;
+  bottom: 200px; /* Adjust to keep it just above the footer */
+  right: 40px;
+  width: 80px;
+  height: 80px;
+  background-color: var(--primary); /* Or your preferred color */
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #f0eaea;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+  border: none;
+  cursor: pointer;
+}
+
+.floating-button:hover {
+  background-color: var(--primary-dark); /* Darker shade on hover */
+}
+
+.floating-icon {
+  font-size: 24px;
+}
+.user-card {
+  transition: transform 0.3s ease-in-out;
+}
+
+.swiping-left {
+  transform: translateX(-50px);
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+.swiping-right {
+  transform: translateX(50px);
+  background-color: rgba(34, 197, 94, 0.2);
+}
+.user-card {
+  position: relative;
+  background-color: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.user-card:hover {
+  background-color: var(--surface-light);
+}
+
+.badge {
+  font-size: 0.8rem;
+}
+
+.list-group {
+  margin: 0 auto;
+  max-width: 600px;
+}
+.custom-input {
+  padding: 10px 15px; /* Default padding */
+  border-radius: 25px; /* Rounded corners */
+  border: 1px solid var(--border);
+  height: 45px; /* Fixed height */
+  width: 100%; /* Initially take full width */
+  font-size: 1rem;
+  transition: all 0.4s ease-in-out; /* Smooth transition for all properties */
+  background-color: var(--surface);
+  color: var(--text-primary);
+}
+
+.custom-input:focus {
+  height: 60px; /* Increase height when focused */
+  width: 110%; /* Increase width when focused (breathing effect) */
+  border-color: var(--primary-light); /* Highlight border color */
+  box-shadow: 0px 4px 12px rgba(37, 99, 235, 0.2); /* Add a soft blue shadow */
+  outline: none; /* Remove default focus outline */
+}

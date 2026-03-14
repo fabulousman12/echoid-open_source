@@ -1,0 +1,165 @@
+SQLite and WebSocket Service Documentation
+Overview
+This system is designed to manage SQLite-based storage for messages and unread counts, as well as to integrate WebSocket communication. The code is structured to handle storing, retrieving, and updating chat messages, as well as managing unread message counts in SQLite. It also facilitates a WebSocket connection for real-time message exchange.
+
+Modules & Dependencies
+SQLite: Uses @capacitor-community/sqlite for SQLite database management, creating and interacting with a local SQLite database on mobile platforms.
+WebSocket: Uses WebSocket to provide real-time communication between users, including message sending and receiving.
+React: Manages application state and UI updates with hooks like useState, useRef.
+Functions
+1. initSQLiteDB
+Initializes the SQLite database by creating tables for storing messages and unread counts. If the database does not exist, it creates a new one.
+
+Usage:
+js
+Copy code
+const db = await initSQLiteDB();
+Parameters:
+None.
+Returns:
+SQLiteDBConnection object representing the SQLite database connection.
+2. storeMessageInSQLite
+Stores a message in the SQLite database. If the message already exists, it replaces the existing record.
+
+Usage:
+js
+Copy code
+await storeMessageInSQLite(db, message);
+Parameters:
+db: The SQLite database connection object.
+message: An object containing the message details (_id, sender, recipient, content, timestamp, status, read).
+Returns:
+A promise that resolves to the message ID once the message is stored.
+3. updateUnreadCountInSQLite
+Updates the unread message count for a given sender in the unreadCount table.
+
+Usage:
+js
+Copy code
+await updateUnreadCountInSQLite(db, sender);
+Parameters:
+db: The SQLite database connection object.
+sender: The sender's ID whose unread count is being updated.
+Returns:
+A promise that resolves once the unread count is updated.
+4. resetUnreadCountInSQLite
+Resets the unread message count for a given sender to zero.
+
+Usage:
+js
+Copy code
+await resetUnreadCountInSQLite(db, sender);
+Parameters:
+db: The SQLite database connection object.
+sender: The sender's ID whose unread count is being reset.
+Returns:
+A promise that resolves once the unread count is reset.
+5. getMessagesFromSQLite
+Fetches messages between the current user and their contacts. It retrieves the most recent messages, limiting the number of messages fetched per user.
+
+Usage:
+js
+Copy code
+const messages = await getMessagesFromSQLite(db, currentUser, limitPerUser);
+Parameters:
+db: The SQLite database connection object.
+currentUser: The current user's ID.
+limitPerUser: The number of messages to fetch per user.
+Returns:
+A promise that resolves to an array of messages for the user.
+6. getALLMessagesFromSQLite
+Fetches all messages in the database, ordered by timestamp.
+
+Usage:
+js
+Copy code
+const allMessages = await getALLMessagesFromSQLite(db);
+Parameters:
+db: The SQLite database connection object.
+Returns:
+A promise that resolves to an array of all messages in the database.
+7. getUnreadCount
+Fetches unread messages from the database.
+
+Usage:
+js
+Copy code
+const unreadMessages = await getUnreadCount(db);
+Parameters:
+db: The SQLite database connection object.
+Returns:
+A promise that resolves to an array of unread messages.
+8. connect
+Establishes a WebSocket connection to a given URL. It starts listening for messages and handles any errors or reconnections.
+
+Usage:
+js
+Copy code
+connect('ws://your-websocket-url');
+Parameters:
+url: The WebSocket URL to connect to.
+Returns:
+None (It sets up a WebSocket connection and listens for messages).
+9. startHeartbeat
+Sends a heartbeat (ping) message every 30 seconds to keep the WebSocket connection alive.
+
+Usage:
+js
+Copy code
+startHeartbeat(socket);
+Parameters:
+socket: The WebSocket connection object.
+Returns:
+None (It continuously sends ping messages at regular intervals).
+10. handleMessage
+Handles incoming WebSocket messages. Depending on the platform, it stores the message in either SQLite or Web storage.
+
+Usage:
+js
+Copy code
+handleMessage(data);
+Parameters:
+data: The WebSocket message data.
+Returns:
+None (The message is processed and stored).
+11. handleSQLiteStorage
+Stores a received WebSocket message in SQLite.
+
+Usage:
+js
+Copy code
+handleSQLiteStorage(db, data);
+Parameters:
+db: The SQLite database connection object.
+data: The message data received from WebSocket.
+Returns:
+None (The message is stored in SQLite).
+12. handleWebStorage
+Handles storing WebSocket messages in Web storage for non-hybrid platforms (web).
+
+Usage:
+js
+Copy code
+handleWebStorage(data);
+Parameters:
+data: The message data received from WebSocket.
+Returns:
+None (The message is stored in Web storage).
+WebSocket Lifecycle
+Connection: The WebSocket connection is initiated using connect(url), which establishes a connection to the provided URL.
+Message Handling: Messages are received in the message event listener, where they are processed and stored.
+Heartbeat: Every 30 seconds, a ping message is sent to keep the connection alive.
+Error Handling: Errors during WebSocket communication are logged.
+Reconnection: If the WebSocket connection is closed, the system attempts to reconnect automatically.
+Platform-Specific Behavior
+Hybrid Platform (Capacitor): For mobile platforms, SQLite is used for local storage of messages and unread counts. The database is initialized with initSQLiteDB, and all messages are stored using storeMessageInSQLite and updateUnreadCountInSQLite.
+Non-Hybrid Platforms (Web): Web storage is used to handle messages and unread counts. This is handled via handleWebStorage.
+Error Handling
+All operations, including database actions and WebSocket events, include error handling via try-catch blocks or error callbacks. Errors are logged to the console for debugging.
+Additional Notes
+SQLite: This system uses SQLite for efficient local storage and retrieval of messages, especially useful for mobile applications.
+WebSocket: The system relies on WebSocket for real-time communication, ensuring instant message delivery and status updates.
+Hybrid/Web Compatibility: The code is designed to work on both hybrid mobile platforms (Capacitor) and web, adjusting storage mechanisms accordingly.
+
+
+now needed to do the handling user on recive 
