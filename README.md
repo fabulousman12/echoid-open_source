@@ -1,90 +1,182 @@
-# Echoid
+# EchoId - Open Source Secure Messaging Platform
 
-Echoid is a privacy-focused chat application built with Ionic React and Capacitor. This repository is shared as a learning resource and a base for further development, while keeping deployment-specific setup outside the public codebase.
+EchoId is a privacy-focused, open-source messaging Project built for secure, real-time communication without tracking, analytics, or unnecessary data collection.
+
+This repository contains the public application code for the EchoId client, shared as a foundation for learning, collaboration, and further development while keeping deployment-specific secrets and private configuration out of version control.
+
+Learn more: https://echoidchat.online
+
+---
+
+## Overview
+
+EchoId is designed for people who want modern messaging features without giving up control over their data. The app focuses on privacy-first communication, transparent development, and a lightweight user experience.
+
+Unlike many messaging platforms, EchoId aims to minimize tracking and avoid bundling unnecessary data collection into the product experience.
+
+This codebase is built primarily with Ionic React and Capacitor, which allows the app to target both web and mobile-oriented workflows from a shared frontend codebase.
+
+---
+
+## Features
+
+- Real-time chat experience
+- Privacy-first product direction
+- Voice and video communication support
+- WebSocket-based messaging flow
+- Encryption-related client utilities
+- Media handling and rendering
+- Fast UI built with React and Ionic
+- Open-source codebase for transparency and community improvement
+
+---
+
+## Why EchoId?
+
+Most messaging apps optimize for engagement, growth metrics, and data visibility.
+
+EchoId is built with a different mindset:
+
+- Privacy-first architecture
+- Reduced reliance on tracking and analytics
+- Open-source transparency
+- Built as a practical base for developers and privacy-conscious users
+- Structured to keep sensitive deployment details outside the public repository
+
+---
+
+## Tech Stack
+
+- Frontend: Ionic React + React 18
+- Mobile runtime: Capacitor
+- Build tool: Vite
+- Language mix: TypeScript and JavaScript
+- Real-time communication: WebSocket client logic
+- Media and calling: WebRTC-related communication flows
+- State and UI tooling: Zustand, Ionic UI, Material UI
+- Testing: Vitest and Cypress
+
+---
 
 ## What This Repository Includes
 
-- Ionic React application code
-- Chat UI and state management
-- Media handling and rendering
-- WebSocket client logic
+- Application source code
+- Chat interface and state management
+- Media display and interaction logic
+- Client-side real-time communication logic
 - Encryption-related client utilities
-- Tests, tooling, and build configuration
 - Local plugin source such as `ionic-thumbnail`
+- Test, lint, and build configuration
+
+---
 
 ## What Is Intentionally Not Tracked
 
-Some files are kept out of the repository because they are local, generated, or tied to a specific deployment:
+Some files are intentionally excluded because they are local, generated, private, or tied to a specific deployment:
 
 - `.env` and other local environment files
 - `src/data.ts` and other private config variants
-- Firebase service config files
+- Firebase service configuration files
 - Android and iOS native project folders
 - Generated release output, screenshots, and crash logs
 
-This keeps the public repository focused on the core code while avoiding accidental leaks of deployment-specific setup.
+This keeps the public repository focused on reusable application logic while helping prevent accidental leaks of secrets or deployment-specific setup.
+
+---
+
 ## Usage Limitations
 
-Some files are intentionally not included in this repository.  
-This mainly affects certain native Android components required to run the application on Android devices.
+Some files required for full platform behavior are intentionally not included in this public repository.
 
-Because of this, the project can currently only be fully tested using the **web version**.
-
-Features that depend on native Android behavior cannot be tested here, including:
+At the moment, that means the project can be tested most reliably through the web version. Certain Android-native behaviors are not fully reproducible here, including:
 
 - App dead-state message handling
 - Floating window overlays
-- Other Android platform–specific behaviors
+- Other Android platform-specific integrations
 
-When contributing or making changes, please ensure that any feature affecting both platforms includes the necessary **Android platform-dependent implementation**, in addition to the web implementation.
-## Setup
+If you contribute features that affect both web and Android behavior, please make sure the Android-side implementation is considered in addition to the web implementation.
 
-1. Install dependencies:
+---
+
+## Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/echoid.git
+cd echoid
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Create a local environment file from the example:
+### 3. Create local configuration files
+
+Copy the example environment and data files:
 
 ```bash
 cp .env.example .env
-```
-
-3. Create a local data config from the example:
-
-```bash
 cp src/data.example.ts src/data.ts
 ```
 
-4. Fill in the values in your local `.env` and `src/data.ts`.
+Then fill in the values in your local `.env` and `src/data.ts`.
 
-5. Start the app:
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
+---
+
+## Available Scripts
+
+```bash
+npm run dev
+npm run build
+npm run preview
+npm run test.unit
+npm run test.e2e
+npm run lint
+```
+
+---
+
 ## Notes on Local Configuration
 
-- `.env.example` contains placeholder environment variables.
-- `src/data.example.ts` contains a public-safe example config.
-- Your real `src/data.ts` stays local and is ignored by git.
-- If you need Firebase, Android, or iOS platform files, provide your own project-specific versions locally.
+- `.env.example` contains placeholder environment variables
+- `src/data.example.ts` contains a public-safe example config
+- Your real `src/data.ts` should remain local and is ignored by git
+- If you need Firebase, Android, or iOS platform files, you will need to provide your own project-specific versions locally
+
+---
+
+## Contributing
+
+Contributions are welcome.
+
+If you want to improve the project, fix bugs, clean up rough edges, or expand missing pieces, feel free to open an issue or submit a pull request. Keeping changes focused, deterministic, and easy to review is especially helpful for this codebase.
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the basic workflow if available in your local checkout.
+
+---
 
 ## Open Code, Protected Brand
 
 The source code in this repository is open under the license in [`LICENSE`](./LICENSE).
 
-The Echoid name, logo, artwork, package identity, and related branding are not granted for unrestricted commercial or promotional reuse. If you fork this project, please use your own branding unless you have explicit permission.
+The EchoId name, logo, artwork, package identity, and related branding are not automatically granted for unrestricted commercial or promotional reuse. If you fork this project, use your own branding unless you have explicit permission.
 
-## Contributing
-
-Contributions are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the basic workflow.
+---
 
 ## Project Context
 
-This project was built primarily as a solo effort and a real-world learning project. Some areas may still reflect rapid iteration, experiments, or unfinished cleanup. Issues and pull requests that improve clarity, maintainability, and stability are appreciated.
+This project was built primarily as a real-world learning and development effort. Some areas may still reflect rapid iteration, experiments, or unfinished cleanup. Improvements to clarity, maintainability, reliability, and developer onboarding are all valuable.
+
+---
 
 ## License
 
