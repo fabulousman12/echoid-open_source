@@ -180,6 +180,9 @@ This project was built primarily as a real-world learning and development effort
 
 🚀 Product Hunt: https://www.producthunt.com/p/echoid
 📦 APK: https://github.com/fabulousman12/Echoid_apk/releases  
+
+📝 Dev.to: https://dev.to/jit_chakraborty_4222410eb/i-built-echoid-a-privacy-focused-messaging-app-with-encrypted-chat-and-voice-calls-2ang
+
 ## License
 
 This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
