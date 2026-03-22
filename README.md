@@ -103,7 +103,7 @@ If you contribute features that affect both web and Android behavior, please mak
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/echoid.git
+git clone https://github.com/fabulousman12/echoid.git
 cd echoid
 ```
 
@@ -178,6 +178,8 @@ This project was built primarily as a real-world learning and development effort
 
 ---
 
+🚀 Product Hunt: https://www.producthunt.com/p/echoid
+📦 APK: https://github.com/fabulousman12/Echoid_apk/releases  
 ## License
 
 This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
