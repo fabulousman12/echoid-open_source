@@ -14,8 +14,7 @@
 /src/data.local.ts
 /src/data.private.ts
 /src/data.secrets.ts
-/src/additionalfiles
-/src/additatinalfiles
+
 
 # misc
 /src/firebase-config.js
