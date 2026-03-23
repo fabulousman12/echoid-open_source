@@ -3,8 +3,40 @@
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 1px 1px, rgba(190, 190, 190, 0.18) 1px, transparent 0) 0 0 / 18px 18px,
-    #ececec;
+    linear-gradient(rgba(8, 13, 20, 0.92), rgba(8, 13, 20, 0.96)),
+    url('/circuit-board/circuit-board.svg');
+  background-repeat: repeat;
+  background-size: 304px 304px;
+}
+
+.gchat-page--embedded {
+  height: 100%;
+  min-height: 0;
+}
+
+.gchat-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #11192c;
+}
+
+.gchat-shell > .gchat-page {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.gchat-shell.is-profile-docked .gchat-page {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gchat-shell:not(.is-profile-docked) > .gchat-page {
+  width: 100%;
+  max-width: none;
 }
 
 .gchat-empty {
@@ -13,22 +45,23 @@
 }
 
 .gprofile-page {
-  background: #cfd2d8;
+  background: #0b1019;
 }
 
 .gprofile-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 12px;
-  background: #24272e;
+  padding: 18px 20px;
+  background: #161f31;
   color: #fff;
-  border-bottom: 2px solid #19c18d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .gprofile-title {
   margin: 0;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 1rem;
 }
 
 .gprofile-spacer {
@@ -37,59 +70,75 @@
 }
 
 .gprofile-body {
-  padding: 20px 16px 16px;
+  padding: 18px 16px 34px;
   overflow-y: auto;
+  background: #0b1019;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gprofile-body::-webkit-scrollbar {
+  display: none;
 }
 
 .gprofile-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .gprofile-hero.is-editing {
-  align-items: stretch;
+  align-items: center;
   gap: 14px;
+  width: min(100%, 360px);
+  margin-inline: auto;
 }
 
 .gprofile-avatar {
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
+  width: 92px;
+  height: 92px;
+  border-radius: 18px;
   object-fit: cover;
   border: 3px solid #19c18d;
   display: block;
   margin: 0 auto;
+  background: #fff;
+  padding: 6px;
 }
 
 .gprofile-name {
   text-align: center;
   margin: 0;
-  color: #1f2937;
-  font-weight: 700;
+  color: #f7fbff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  line-height: 1.15;
 }
 
 .gprofile-date {
   text-align: center;
-  color: #374151;
-  margin: 4px 0 16px;
+  color: #8ea2c8;
+  margin: 0 0 10px;
+  font-size: 0.72rem;
 }
 
 .gprofile-section-title {
   margin: 14px 0 8px;
-  letter-spacing: 2px;
-  color: #111827;
+  letter-spacing: 0.18em;
+  color: #8ea2c8;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
 }
 
 .gprofile-card {
-  background: #24272e;
+  background: #161f31;
   color: #fff;
   border-radius: 14px;
-  padding: 14px;
+  padding: 14px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .gprofile-description-card {
@@ -115,13 +164,14 @@
 
 .gprofile-clickable-title {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.92rem;
 }
 
 .gprofile-clickable-sub {
   margin-top: 4px;
   color: #9ca3af;
-  font-size: 0.86rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .gprofile-inline-input {
@@ -129,6 +179,7 @@
   color: #fff;
   border: 1px solid #3b4352;
   min-height: 44px;
+  border-radius: 12px;
 }
 
 .gprofile-inline-input:focus {
@@ -141,22 +192,25 @@
 .gprofile-edit-stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  width: 100%;
+  align-items: center;
 }
 
 .gprofile-edit-grid {
   display: grid;
   gap: 12px;
+  width: 100%;
 }
 
 .gprofile-field-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(36, 39, 46, 0.92);
-  border: 1px solid #3b4352;
-  border-radius: 16px;
-  padding: 12px;
+  background: #161f31;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 14px;
   color: #fff;
 }
 
@@ -166,9 +220,9 @@
 
 .gprofile-field-label {
   font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #cfd5df;
+  color: #e8edf7;
   font-weight: 700;
 }
 
@@ -180,17 +234,17 @@
 .gprofile-setting-label {
   display: block;
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  color: #111827;
+  color: #f2f6fd;
 }
 
 .gprofile-setting-hint {
   display: block;
   margin-top: 2px;
-  font-size: 0.72rem;
-  color: #4b5563;
-  line-height: 1.2;
+  font-size: 0.7rem;
+  color: #8ea2c8;
+  line-height: 1.3;
 }
 
 .gprofile-settings-grid {
@@ -202,12 +256,13 @@
 .gprofile-setting-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(36, 39, 46, 0.14);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+  align-items: stretch;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: #161f31;
+  box-shadow: none;
 }
 
 .gprofile-setting-copy {
@@ -216,15 +271,17 @@
 
 .gprofile-setting-select {
   margin: 0;
-  align-self: flex-start;
+  align-self: stretch;
+  width: 100%;
   background: #f8fafc;
   color: #111827;
   border: 1px solid #c8d1df;
-  min-width: 152px;
-  max-width: 180px;
+  min-width: 0;
+  max-width: none;
   height: 38px;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
+  border-radius: 10px;
 }
 
 .gprofile-setting-select:disabled {
@@ -245,30 +302,45 @@
   justify-content: stretch;
 }
 
+.gprofile-settings-actions .gprofile-settings-save {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  margin-top: 4px;
+}
+
 .gprofile-note {
   display: block;
   margin-top: 8px;
-  color: #4b5563;
+  color: #8ea2c8;
 }
 
 .gprofile-members {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  max-height: 260px;
+  align-items: stretch;
+  gap: 8px;
+  max-height: 280px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px;
+  padding: 0;
   background: transparent;
-  border-radius: 14px;
-  border: 1px solid #bcc1cb;
+  border-radius: 0;
+  border: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gprofile-members::-webkit-scrollbar {
+  display: none;
 }
 
 .gprofile-people-tabs {
   display: flex;
   gap: 8px;
-  margin: 4px 0 8px;
+  margin: 4px 0 10px;
 }
 
 .gprofile-people-tab {
@@ -276,8 +348,8 @@
   background: #24272e;
   color: #d1d5db;
   border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 0.82rem;
+  padding: 7px 12px;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
@@ -291,13 +363,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #24272e;
+  background: #161f31;
   color: #fff;
   border-radius: 12px;
-  padding: 10px;
-  width: 92%;
-  max-width: 320px;
-  border: 1px solid #3b4352;
+  padding: 10px 12px;
+  width: 100%;
+  max-width: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .gprofile-member-row.is-self {
@@ -306,19 +378,20 @@
 }
 
 .gprofile-member-avatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .gprofile-member-name {
   font-weight: 600;
+  font-size: 0.84rem;
 }
 
 .gprofile-member-role {
   margin-left: 8px;
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.4px;
   padding: 2px 6px;
@@ -333,7 +406,7 @@
 }
 
 .gprofile-member-actions-row {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -345,7 +418,7 @@
   color: #e5e7eb;
   border-radius: 8px;
   padding: 4px 8px;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 600;
 }
 
@@ -359,7 +432,7 @@
 }
 
 .gprofile-member-id {
-  font-size: 0.75rem;
+  font-size: 0.66rem;
   opacity: 0.8;
 }
 
@@ -370,7 +443,7 @@
 }
 
 .gprofile-empty {
-  background: #24272e;
+  background: #161f31;
   color: #d1d5db;
   border-radius: 12px;
   padding: 12px;
@@ -387,15 +460,16 @@
   width: 100%;
   border: none;
   border-radius: 12px;
-  padding: 12px;
-  text-align: center;
-  background: #24272e;
+  padding: 12px 14px;
+  text-align: left;
+  background: #161f31;
   color: #fff;
   font-weight: 600;
+  font-size: 0.84rem;
 }
 
 .gprofile-image-trigger {
-  width: 100%;
+  width: min(100%, 340px);
   border: 1px solid #19c18d;
   border-radius: 999px;
   padding: 11px 16px;
@@ -411,8 +485,111 @@
 }
 
 .gprofile-settings-save {
-  border-radius: 999px;
+  border-radius: 14px;
   text-align: center;
+  background: linear-gradient(180deg, #5fb4ff 0%, #3d8aff 100%);
+  color: #fff;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-hero.is-editing .gprofile-avatar {
+  width: 82px;
+  height: 82px;
+  border-radius: 16px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-hero.is-editing .gprofile-field-card {
+  width: 100%;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) {
+  display: flex;
+  flex-direction: column;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-header {
+  padding: 14px 16px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-title {
+  font-size: 0.95rem;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 14px 44px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-body > * {
+  width: min(100%, 340px);
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-hero {
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  padding: 5px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-name {
+  font-size: 0.94rem;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-date {
+  font-size: 0.66rem;
+  margin-bottom: 4px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-card,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-setting-row,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-member-row,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-action-btn {
+  border-radius: 14px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-card {
+  padding: 12px 13px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-setting-row {
+  padding: 12px 13px;
+  gap: 6px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-setting-label {
+  font-size: 0.8rem;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-setting-hint,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-clickable-sub,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-member-id,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-note {
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-setting-select {
+  height: 36px;
+  font-size: 0.76rem;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-clickable-title,
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-member-name {
+  font-size: 0.82rem;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-members {
+  max-height: 320px;
+}
+
+.gprofile-page:not(.gprofile-panel--docked) .gprofile-actions {
+  padding-bottom: 18px;
 }
 
 @media (min-width: 640px) {
@@ -444,12 +621,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 12px;
-  background: #24272e;
+  padding: 22px 24px;
+  background: #161f31;
   color: #fff;
-  border-bottom-left-radius: 14px;
-  border-bottom-right-radius: 14px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: 0 10px 22px rgba(8, 14, 26, 0.14);
 }
 
 .gchat-header.is-selection-mode {
@@ -461,14 +638,16 @@
   height: 42px;
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid rgba(47, 224, 163, 0.75);
 }
 
 .gchat-icon-btn {
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1d2639;
   color: #fff;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -498,7 +677,7 @@
 }
 
 .gchat-sub {
-  opacity: 0.72;
+  color: #8ea2c8;
 }
 
 .gchat-selection-actions {
@@ -551,7 +730,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px 4px;
+  padding: 14px 16px 8px;
 }
 
 .gchat-list {
@@ -562,6 +741,13 @@
   flex-direction: column;
   gap: 10px;
   padding: 6px 0;
+  width: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gchat-list::-webkit-scrollbar {
+  display: none;
 }
 
 .gchat-intro-wrap {
@@ -572,8 +758,8 @@
 
 .gchat-intro-card {
   width: min(92%, 420px);
-  background: #20242b;
-  border: 1px solid #343b46;
+  background: #161f31;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   color: #e5e7eb;
   border-radius: 18px;
   padding: 18px 14px;
@@ -629,21 +815,23 @@
 
 .gchat-bubble {
   max-width: min(76%, 420px);
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  padding: 9px 10px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background: #1e2940;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 12px 13px;
+  box-shadow: 0 10px 24px rgba(7, 12, 25, 0.12);
+  color: #f3f7ff;
 }
 
 .gchat-row.mine .gchat-bubble {
-  background: #ffffff;
-  border-color: #e5e7eb;
+  background: linear-gradient(180deg, #3d8aff 0%, #2f76f3 100%);
+  border-color: transparent;
+  color: #fff;
 }
 
 .gchat-row.other .gchat-bubble {
-  background: #b7d7ff;
-  border-color: #9ec5f4;
+  background: #1e2940;
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .gchat-user-avatar {
@@ -656,7 +844,7 @@
 
 .gchat-sender {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: #8ea2c8;
   margin-bottom: 2px;
 }
 
@@ -738,7 +926,7 @@
 .gchat-time {
   margin-top: 5px;
   font-size: 0.7rem;
-  color: #2d3748;
+  color: rgba(231, 240, 255, 0.72);
   text-align: right;
 }
 
@@ -841,11 +1029,10 @@
   gap: 8px;
   align-items: center;
   padding: 8px 10px;
-  border-top: 1px solid #30363f;
-  background: #24272e;
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
-  margin: 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #161f31;
+  border-radius: 22px;
+  margin: 12px 16px 16px;
   position: relative;
 }
 
@@ -897,8 +1084,8 @@
 }
 
 .gchat-round-btn {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: #1a1f27;
@@ -912,7 +1099,8 @@
   background: #1a1f27;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #e5e7eb;
-  border-radius: 14px;
+  border-radius: 18px;
+  min-height: 44px;
 }
 
 .gchat-input::placeholder {
@@ -928,11 +1116,12 @@
 
 .gchat-send-btn {
   border: none;
-  background: #3b82f6;
+  background: linear-gradient(180deg, #3d8aff 0%, #2f76f3 100%);
   color: #fff;
   font-weight: 600;
-  border-radius: 14px;
+  border-radius: 16px;
   min-width: 74px;
+  min-height: 44px;
 }
 
 .gchat-send-btn:hover,
@@ -956,12 +1145,11 @@
 }
 
 .gchat-inactive-member-note {
-  margin: 0 0 2px;
+  margin: 12px 16px 16px;
   padding: 12px 14px;
-  border-top: 1px solid #30363f;
-  background: #24272e;
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #161f31;
+  border-radius: 18px;
   color: #cbd5e1;
   font-size: 0.88rem;
   font-weight: 600;
@@ -1252,6 +1440,260 @@
 
 .gchat-group-modal-sub {
   color: #9ca3af;
+}
+
+.gprofile-panel--docked {
+  width: min(340px, 28%);
+  flex: 0 0 min(340px, 28%);
+  height: 100%;
+  min-height: 0;
+  background: #0b1019;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.gprofile-panel--docked .gprofile-body {
+  flex: 1;
+  padding: 16px 12px 34px;
+}
+
+.gprofile-panel--docked .gprofile-settings-actions .gprofile-settings-save {
+  width: 100%;
+}
+
+.gprofile-panel--docked .gprofile-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 16px;
+}
+
+.gprofile-panel--docked .gprofile-name {
+  font-size: 0.92rem;
+  line-height: 1.18;
+}
+
+.gprofile-panel--docked .gprofile-date {
+  margin-bottom: 10px;
+  font-size: 0.76rem;
+}
+
+.gprofile-panel--docked .gprofile-section-title {
+  margin: 10px 0 8px;
+  font-size: 0.7rem;
+}
+
+.gprofile-panel--docked .gprofile-card,
+.gprofile-panel--docked .gprofile-setting-row,
+.gprofile-panel--docked .gprofile-member-row,
+.gprofile-panel--docked .gprofile-action-btn {
+  border-radius: 14px;
+}
+
+.gprofile-panel--docked .gprofile-setting-row {
+  gap: 8px;
+  padding: 12px;
+}
+
+.gprofile-panel--docked .gprofile-setting-select {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 34px;
+  font-size: 0.76rem;
+}
+
+.gprofile-panel--docked .gprofile-members {
+  max-height: 248px;
+  padding: 6px;
+}
+
+.gprofile-panel--docked .gprofile-member-row {
+  width: 100%;
+  max-width: none;
+  padding: 8px;
+  gap: 8px;
+}
+
+.gprofile-panel--docked .gprofile-clickable-sub,
+.gprofile-panel--docked .gprofile-note,
+.gprofile-panel--docked .gprofile-setting-hint,
+.gprofile-panel--docked .gprofile-member-id {
+  font-size: 0.78rem;
+}
+
+.gprofile-panel--docked .gprofile-member-name,
+.gprofile-panel--docked .gprofile-clickable-title,
+.gprofile-panel--docked .gprofile-action-btn {
+  font-size: 0.82rem;
+}
+
+.gprofile-panel--docked .gprofile-action-btn {
+  padding: 10px 12px;
+}
+
+.gprofile-panel--docked .gprofile-header {
+  padding: 16px 14px;
+}
+
+.gprofile-panel--docked .gprofile-title {
+  font-size: 0.98rem;
+}
+
+.gprofile-panel--docked .gprofile-setting-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.gprofile-panel--docked .gprofile-setting-select {
+  width: 100%;
+  max-width: none;
+}
+
+.gchat-shell--light {
+  background: #edf2fb;
+}
+
+.gchat-page--light {
+  background:
+    linear-gradient(rgba(247, 249, 255, 0.94), rgba(247, 249, 255, 0.98)),
+    url('/circuit-board/circuit-board.svg');
+  background-repeat: repeat;
+  background-size: 304px 304px;
+}
+
+.gchat-shell--light .gchat-header,
+.gchat-shell--light .gprofile-header {
+  background: #ffffff;
+  color: #1d2740;
+  border-bottom-color: rgba(29, 39, 64, 0.08);
+}
+
+.gchat-shell--light .gchat-sub,
+.gchat-shell--light .gprofile-date,
+.gchat-shell--light .gprofile-section-title,
+.gchat-shell--light .gprofile-setting-hint,
+.gchat-shell--light .gprofile-note,
+.gchat-shell--light .gchat-intro-meta,
+.gchat-shell--light .gchat-intro-desc,
+.gchat-shell--light .gchat-sender,
+.gchat-shell--light .gchat-time {
+  color: #7b8da9;
+}
+
+.gchat-shell--light .gchat-icon-btn {
+  background: #f2f5fb;
+  border-color: rgba(29, 39, 64, 0.08);
+  color: #1d2740;
+}
+
+.gchat-shell--light .gchat-bubble,
+.gchat-shell--light .gchat-intro-card,
+.gchat-shell--light .gchat-form,
+.gchat-shell--light .gchat-inactive-member-note,
+.gchat-shell--light .gprofile-card,
+.gchat-shell--light .gprofile-setting-row,
+.gchat-shell--light .gprofile-member-row,
+.gchat-shell--light .gprofile-action-btn,
+.gchat-shell--light .gprofile-clickable-card {
+  background: #ffffff;
+  color: #1d2740;
+  border-color: rgba(29, 39, 64, 0.08);
+}
+
+.gchat-shell--light .gchat-row.other .gchat-bubble {
+  background: #ffffff;
+  color: #1d2740;
+}
+
+.gchat-shell--light .gchat-row.mine .gchat-bubble {
+  color: #ffffff;
+}
+
+.gchat-shell--light .gchat-input,
+.gchat-shell--light .gprofile-inline-input,
+.gchat-shell--light .gprofile-setting-select {
+  background: #f5f7fb;
+  border-color: rgba(29, 39, 64, 0.12);
+  color: #1d2740;
+}
+
+.gchat-shell--light .gprofile-field-card {
+  background: #ffffff;
+  border-color: rgba(29, 39, 64, 0.08);
+  color: #1d2740;
+}
+
+.gchat-shell--light .gprofile-field-label {
+  color: #1d2740;
+}
+
+.gchat-shell--light .gprofile-image-trigger {
+  background: #ffffff;
+  color: #19725e;
+}
+
+.gchat-shell--light .gchat-round-btn {
+  background: #f5f7fb;
+  border-color: rgba(29, 39, 64, 0.1);
+  color: #5274a6;
+}
+
+.gchat-shell--light .gprofile-page,
+.gchat-shell--light .gprofile-body,
+.gchat-shell--light .gprofile-panel--docked {
+  background: #f8fbff;
+}
+
+.gchat-shell--light .gprofile-name,
+.gchat-shell--light .gprofile-setting-label,
+.gchat-shell--light .gprofile-title {
+  color: #1d2740;
+}
+
+.gchat-shell--light .gprofile-setting-hint,
+.gchat-shell--light .gprofile-clickable-sub,
+.gchat-shell--light .gprofile-member-id,
+.gchat-shell--light .gprofile-date,
+.gchat-shell--light .gprofile-section-title {
+  color: #6f84a3;
+}
+
+.gchat-shell--light .gprofile-settings-save {
+  color: #fff;
+}
+
+@media (max-width: 1419px) {
+  .gprofile-setting-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .gprofile-setting-select {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .gprofile-page:not(.gprofile-panel--docked) .gprofile-body {
+    padding: 14px 12px 38px;
+  }
+
+  .gprofile-page:not(.gprofile-panel--docked) .gprofile-body > * {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1420px) {
+  .gchat-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .gchat-page--with-docked-profile .gchat-title-wrap {
+    cursor: default;
+  }
 }
 
 .gchat-transfer-list {

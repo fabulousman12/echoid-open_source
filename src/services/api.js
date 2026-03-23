@@ -44,6 +44,89 @@ export const api = {
       body: JSON.stringify({ publicKey, privateKeyHash })
     }, host),
 
+  createTemporaryUser: (host, payload = {}) =>
+    fetch(`${host}/user/temp/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }),
+
+  temporaryMe: (host) =>
+    authFetch(`${host}/user/temp/me`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  temporaryLogout: (host) =>
+    authFetch(`${host}/user/temp/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  temporaryChats: (host) =>
+    authFetch(`${host}/user/temp/chats`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  createTemporaryChat: (host, payload = {}) =>
+    authFetch(`${host}/user/temp/chats`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, host),
+
+  joinTemporaryChatByPayload: (host, payload = {}) =>
+    authFetch(`${host}/user/temp/chats/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, host),
+
+  joinTemporaryChat: (host, uid) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  getTemporaryRoomMembers: (host, uid) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/members`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  getTemporaryRoomRequests: (host, uid) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/requests`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  respondTemporaryRoomRequest: (host, uid, payload = {}) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/requests/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, host),
+
+  removeTemporaryRoomMember: (host, uid, targetUserId) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/members/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId })
+    }, host),
+
+  exitTemporaryChat: (host, uid) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}/exit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  deleteTemporaryChat: (host, uid) =>
+    authFetch(`${host}/user/temp/chats/${encodeURIComponent(uid)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
   existsUser: (host, phoneNumber) =>
     authFetch(`${host}/user/existsuser`, {
       method: "POST",

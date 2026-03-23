@@ -82,7 +82,17 @@ function readCachedGroups() {
   return sortGroups(cached.map(normalizeGroup).filter(Boolean));
 }
 
-const Group = ({ groupsMain = [], setGroupsMain, db, mutedGroupIds = [], setMutedGroupIds, onDeleteGroupLocal }) => {
+const Group = ({
+  groupsMain = [],
+  setGroupsMain,
+  db,
+  mutedGroupIds = [],
+  setMutedGroupIds,
+  onDeleteGroupLocal,
+  onGroupClick,
+  selectedGroupId = null,
+  appTheme = "dark",
+}) => {
   const history = useHistory();
   const { host } = useContext(LoginContext);
   const {
@@ -313,7 +323,7 @@ const Group = ({ groupsMain = [], setGroupsMain, db, mutedGroupIds = [], setMute
   }, [groupsMain, persistGroups]);
 
   return (
-    <div className="user-main-container">
+    <div className={`user-main-container group-root group-root--${appTheme}`}>
       <div className="group-top-bar">
         <div className="group-top-bar-inner">
           <input
@@ -348,12 +358,18 @@ const Group = ({ groupsMain = [], setGroupsMain, db, mutedGroupIds = [], setMute
 
       <div className="user-list-container" id="group-list-container">
         {activeTab === "groups" && (
-          <div className="list-group">
+          <div className="group-list-stack">
             {groupsToRender.map((group) => (
               <div
                 key={group.id}
-                className="list-group-item user-card d-flex justify-content-between align-items-center"
-                onClick={() => history.push('/group-chatwindow', { groupdetails: group })}
+                className={`group-list-card user-card d-flex justify-content-between align-items-center ${String(selectedGroupId || "") === String(group.id) ? "selected" : ""}`}
+                onClick={() => {
+                  if (typeof onGroupClick === "function") {
+                    onGroupClick(group);
+                    return;
+                  }
+                  history.push('/group-chatwindow', { groupdetails: group });
+                }}
                 onMouseDown={() => handleLongPressStart(group)}
                 onMouseUp={handleLongPressEnd}
                 onMouseLeave={handleLongPressEnd}
@@ -396,9 +412,9 @@ const Group = ({ groupsMain = [], setGroupsMain, db, mutedGroupIds = [], setMute
         )}
 
         {activeTab === "requests" && (
-          <div className="list-group">
+          <div className="group-list-stack">
             {filteredRequests.map((invite) => (
-                <div key={invite._id} className="list-group-item user-card">
+                <div key={invite._id} className="group-list-card user-card">
                   <div className="d-flex justify-content-between align-items-center gap-2">
                     <div className="d-flex align-items-center gap-2">
                       <img
@@ -498,4 +514,7 @@ Group.propTypes = {
   mutedGroupIds: PropTypes.array,
   setMutedGroupIds: PropTypes.func,
   onDeleteGroupLocal: PropTypes.func,
+  onGroupClick: PropTypes.func,
+  selectedGroupId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  appTheme: PropTypes.string,
 };

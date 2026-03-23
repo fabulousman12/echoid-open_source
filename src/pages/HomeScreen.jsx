@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { IonContent, IonLoading, IonAlert, createGesture } from '@ionic/react';
-import { FaEllipsisV, FaCog, FaCommentDots, FaVolumeMute, FaUsers } from 'react-icons/fa';
+import { FaEllipsisV, FaCommentDots, FaVolumeMute, FaUsers, FaRegEdit } from 'react-icons/fa';
 import { isPlatform } from '@ionic/react';
 import { useHistory } from 'react-router';
 import { PushNotifications } from '@capacitor/push-notifications';
@@ -21,6 +21,9 @@ import Maindata from '../data';
 import { logOutOutline } from 'ionicons/icons';
 import { MessageContext } from '../Contexts/MessagesContext';
 import UserMain from '../components/UserMain';
+import DesktopHomeLayout from '../components/DesktopHomeLayout';
+import ChatWindow from './chatwindo';
+import GroupChatWindow from './GroupChatWindow';
 import {   FaTimes } from 'react-icons/fa';
 import useUserStore from '../services/useUserStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -55,7 +58,45 @@ const waitForSocketConnection = (socket, callback) => {
   }, 100); // Check every 100ms
 };
 
-const HomeScreen = ({  usersMaintest,setUsersMaintest,saveUsersToLocalStorage, socket,messages,setMessages,connect,setCurrenuser,getmessages,setUnreadCounts,selectedUser1,messagesRef ,isIntialized,setIsIntialized,saveMessagesToLocalStorage,usersMain,groupsMain,setGroupsMain,setUsersMain,db,mode,setMode,userDetails,adminUnread,mutedGroupIds = [],setMutedGroupIds,onDeleteGroupLocal}) => {
+const HomeScreen = ({
+  usersMaintest,
+  setUsersMaintest,
+  saveUsersToLocalStorage,
+  socket,
+  messages,
+  setMessages,
+  connect,
+  setCurrenuser,
+  getmessages,
+  setUnreadCounts,
+  selectedUser1,
+  messagesRef,
+  isIntialized,
+  setIsIntialized,
+  saveMessagesToLocalStorage,
+  usersMain,
+  groupsMain,
+  setGroupsMain,
+  setUsersMain,
+  db,
+  mode,
+  setMode,
+  userDetails,
+  adminUnread,
+  mutedGroupIds = [],
+  setMutedGroupIds,
+  onDeleteGroupLocal,
+  groupMessagesByGroup = {},
+  setGroupMessagesByGroup,
+  onActiveGroupChange,
+  saveMessage,
+  setMessagestest,
+  blockedUsers,
+  blockUser,
+  unblockUser,
+  storeMessageInSQLite,
+  setCustomSounds,
+}) => {
 //  const { socket,messages,db,setMessages,connect,setSelectedUser,setCurrenuser,getmessages,setUnreadCounts } = useWebSocket(); // Use WebSocket context methods
  const {
   currentUserId,
@@ -89,10 +130,18 @@ const [isloading, setIsLoading] = useState(false);
   const [selectedCallIds, setSelectedCallIds] = useState([]);
   const [mutedUsers,setmutedList] = useState([])
 
-     const [showModal2, setShowModal2] = useState(false);
+  const [showModal2, setShowModal2] = useState(false);
   const [criticalUpdate, setCriticalUpdate] = useState(false);
   const [serverVersion, setServerVersion] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
+  const [appTheme, setAppTheme] = useState(() => globalThis.storage?.getItem?.("appTheme") || "light");
+  const canCreateChat = Capacitor.isNativePlatform?.() || isPlatform('hybrid');
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 940;
+  });
+  const [desktopSelectedUser, setDesktopSelectedUser] = useState(null);
+  const [desktopSelectedGroup, setDesktopSelectedGroup] = useState(null);
   const CURRENT_APP_VERSION = Maindata.AppVersion;
   const readJSON = useCallback((key, fallback) => {
     try {
@@ -117,20 +166,38 @@ const [isloading, setIsLoading] = useState(false);
     const list = Array.isArray(usersMain) ? usersMain : [];
     return new Map(list.map(c => [c.id, c]));
   }, [usersMain]);
-  const hasUnreadChats = useMemo(() => {
+
+  useEffect(() => {
     const list = Array.isArray(usersMain) ? usersMain : [];
-    const isTrueLike = (v) => v === true || String(v).toLowerCase() === "true" || v === 1 || String(v) === "1";
-    const isFalseLike = (v) => v === false || String(v).toLowerCase() === "false" || v === 0 || String(v) === "0";
-    return list.some((user) => {
+    if (desktopSelectedUser?.id) {
+      const refreshedDesktopUser = list.find((entry) => String(entry?.id || "") === String(desktopSelectedUser.id));
+      if (refreshedDesktopUser && refreshedDesktopUser !== desktopSelectedUser) {
+        setDesktopSelectedUser(refreshedDesktopUser);
+      }
+    }
+
+    if (selectedUser && typeof selectedUser === "object" && selectedUser.id) {
+      const refreshedSelectedUser = list.find((entry) => String(entry?.id || "") === String(selectedUser.id));
+      if (refreshedSelectedUser && refreshedSelectedUser !== selectedUser) {
+        setSelectedUser1(refreshedSelectedUser);
+      }
+    }
+  }, [desktopSelectedUser, selectedUser, setSelectedUser1, usersMain]);
+  const visibleChatUsers = useMemo(() => {
+    const list = Array.isArray(usersMain) ? usersMain : [];
+    return list.filter((user) => {
       if (!user) return false;
       if (String(user?.id || "") === String(currentUserId || "")) return false;
-      if (isTrueLike(user?.isArchive)) return false;
-      if (isFalseLike(user?.isActive)) return false;
-      const raw = user.unreadCount;
+      return !user?.isArchive;
+    });
+  }, [usersMain, currentUserId]);
+  const hasUnreadChats = useMemo(() => {
+    return visibleChatUsers.some((user) => {
+      const raw = user?.unreadCount;
       const count = typeof raw === "number" ? raw : parseInt(String(raw || "0"), 10);
       return Number.isFinite(count) && count > 0;
     });
-  }, [usersMain, currentUserId]);
+  }, [visibleChatUsers]);
   const hasUnreadGroups = useMemo(() => {
     const list = Array.isArray(groupsMain) ? groupsMain : [];
     return list.some((group) => {
@@ -140,6 +207,13 @@ const [isloading, setIsLoading] = useState(false);
       return Number.isFinite(count) && count > 0;
     });
   }, [groupsMain]);
+  const unreadNotifications = useMemo(() => {
+    return visibleChatUsers.reduce((sum, entry) => {
+      const raw = entry?.unreadCount;
+      const count = typeof raw === "number" ? raw : parseInt(String(raw || "0"), 10);
+      return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+    }, 0);
+  }, [visibleChatUsers]);
   const customSounds = useMemo(() => readJSON('customSounds', []), [readJSON]);
   const soundsBySenderId = useMemo(() => {
     const list = Array.isArray(customSounds) ? customSounds : [];
@@ -528,7 +602,7 @@ const handleCallNotification = (data) => {
   };
 
   const navigateFooter = (direction) => {
-    const pages = ['Group', 'Chats', 'Calls', 'Status'];
+    const pages = ['Chats', 'Calls', 'Group'];
     let currentIndex = pages.indexOf(activeFooter);
     let nextIndex = (currentIndex + direction + pages.length) % pages.length;
     setActiveFooter(pages[nextIndex]);
@@ -539,6 +613,43 @@ const handleCallNotification = (data) => {
       handleClearCallSelection();
     }
   }, [activeFooter, callsSelectionMode]);
+
+  useEffect(() => {
+    const syncTheme = () => {
+      const nextTheme = globalThis.storage?.getItem?.("appTheme") || "light";
+      setAppTheme(nextTheme === "dark" ? "dark" : "light");
+    };
+
+    syncTheme();
+    window.addEventListener("app-theme-changed", syncTheme);
+    window.addEventListener("focus", syncTheme);
+    return () => {
+      window.removeEventListener("app-theme-changed", syncTheme);
+      window.removeEventListener("focus", syncTheme);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktopLayout(window.innerWidth >= 940);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktopLayout) {
+      setDesktopSelectedUser(null);
+    }
+  }, [isDesktopLayout]);
+
+  useEffect(() => {
+    if (activeFooter === "Status") {
+      setActiveFooter("Chats");
+    }
+  }, [activeFooter, setActiveFooter]);
 
 
   const handleDeselectAll = () => {
@@ -1044,12 +1155,33 @@ const handleCallNotification = (data) => {
     setSelectedUser1(user);
     selectedUser1.current = user.id
 
+    if (isDesktopLayout) {
+      setDesktopSelectedUser(user);
+      return;
+    }
+
     history.push('/chatwindow', { userdetails: user, callback: 'goBackToUserList',currentUserId });
   };
   
   // Reset selected user to go back to the user list
   const goBackToUserList = () => {
     setSelectedUser1(null);
+    if (selectedUser1?.current) {
+      selectedUser1.current = null;
+    }
+    setDesktopSelectedUser(null);
+  };
+
+  const handleGroupClick = (group) => {
+    if (isDesktopLayout) {
+      setDesktopSelectedGroup(group);
+      return;
+    }
+    history.push('/group-chatwindow', { groupdetails: group });
+  };
+
+  const goBackToGroupList = () => {
+    setDesktopSelectedGroup(null);
   };
 
   const toggleMenu = () => setMenuVisible(prev => !prev);
@@ -1284,82 +1416,63 @@ const handleCallNotification = (data) => {
     
   };
 
+  const markAllChatsRead = useCallback(() => {
+    const nextUsers = (readJSON("usersMain", []) || []).map((entry) => ({
+      ...entry,
+      unreadCount: 0,
+    }));
+    writeJSON("usersMain", nextUsers);
+    setUsersMain(nextUsers);
+    if (typeof setUsersMaintest === "function") {
+      setUsersMaintest(nextUsers);
+    }
+    if (typeof setUnreadCounts === "function") {
+      setUnreadCounts({});
+    }
+  }, [readJSON, writeJSON, setUsersMain, setUsersMaintest, setUnreadCounts]);
+
+  const handlePrimaryAction = useCallback(() => {
+    history.push(activeFooter === "Group" ? "/newgroup" : "/newchat");
+  }, [activeFooter, history]);
+
   
   
-  return (
-    <IonContent
-      className="d-flex flex-column"
-      style={{ minHeight: '100vh', backgroundColor: 'var(--background)' }}
-      onClick={() => {
-        if (menuVisible) closeMenu();
-      }}
-    >
-     <div className="d-flex align-items-center justify-content-between p-3  text-white" style={{ position: 'fixed', top: 0, zIndex: 1000, width: '100%', height: '85px',backgroundColor:'var(--primary)', borderBottomLeftRadius: '18px', borderBottomRightRadius: '18px' }}>
-      <div className="d-flex align-items-center">
+  const headerTitle = activeFooter === "Calls" ? "Calls" : activeFooter === "Group" ? "People" : "Messages";
+  const headerSubtitle = activeFooter === "Calls"
+    ? `${(calls || []).length} call logs`
+    : activeFooter === "Group"
+      ? `${(groupsMain || []).length} active groups`
+      : unreadNotifications > 0
+        ? `${unreadNotifications} unread notification${unreadNotifications === 1 ? "" : "s"}`
+        : "No unread notifications";
+
+  const homeHeader = (
+    <div className="home-screen-header">
+      <div className="home-screen-title-wrap">
         {selectionMode && activeFooter !== "Calls" ? (
           <MdOutlineCancel size={25} className="icon" onClick={handleDeselectAll} style={{ fontSize: '24px', cursor: 'pointer' }} />
         ) : callsSelectionMode && activeFooter === "Calls" ? (
           <MdOutlineCancel size={25} className="icon" onClick={handleClearCallSelection} style={{ fontSize: '24px', cursor: 'pointer' }} />
         ) : (
           <>
-          <div className='flex  items-center gap-3'>
-          <img src={user?.profilePhoto || '/img.jpg'} alt="name" className='w-10 h-10 rounded-full object-cover border border-gray-800'/>
-         <h5 className="text-xl font-sans tracking-tight  m-0">Echoid</h5>
-
-          </div>
+            <img src={user?.profilePhoto || '/img.jpg'} alt="name" className="home-screen-avatar" />
+            <div className="home-screen-copy">
+              <h5 className="home-screen-title">{headerTitle}</h5>
+              <div className="home-screen-subtitle">{headerSubtitle}</div>
+            </div>
           </>
         )}
       </div>
-      {showModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-                <div className="bg-white rounded-lg p-6 w-96 relative">
-                  {/* Close Button */}
-                  <button
-                    onClick={handleCancel}
-                    className=" top-2 right-2 text-red hover:text-red-700"
-                    title="Close"
-                  >
-                    <IonIcon icon={closeCircleOutline} size="large" />
-                  </button>
-      
-                  {/* Modal Content */}
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800">Are you sure you want to delete this chat?</h2>
-                  <p className="text-gray-700 mb-4">
-                    If you want, you can delete the chat but keep the messages.
-                  </p>
-                  <div className="flex space-x-4 text-gray-700">
-                    <button
-                      onClick={handleWipeChat}
-                      className="w-1/2 py-2 px-4 bg-red-500 text-black rounded-lg hover:bg-red-600"
-                    >
-                      Wipe it
-                    </button>
-                    <button
-                      onClick={handlePartialDelete}
-                      className="w-1/2 py-2 px-4 bg-yellow-500 text-black rounded-lg hover:bg-yellow-600"
-                    >
-                      Partial Delete
-                    </button>
-                  </div>
-                  <button
-                    onClick={handleCancel}
-                    className="mt-4 w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-      
-      <div className="d-flex gap-3 position-relative">
+
+      <div className="home-screen-actions">
         {selectionMode && activeFooter !== "Calls" ? (
           <>
-	<button type="button" className="text-danger rounded-[10px] bg-neutral-primary border border-danger hover:bg-danger hover:text-white focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none" onClick={handleDeleteChat} title="Delete">
-	  <RiDeleteBin5Fill size={18} />
-	</button>
-          <button type="button" className="text-fg-brand bg-neutral-primary rounded-[10px] border border-brand hover:bg-brand hover:text-white focus:ring-4 focus:ring-brand-subtle font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none" onClick={toggleMute} title="Toggle Mute">
-	  <FaVolumeMute size={18} />
-	</button>
+            <button type="button" className="text-danger rounded-[10px] bg-neutral-primary border border-danger hover:bg-danger hover:text-white focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none" onClick={handleDeleteChat} title="Delete">
+              <RiDeleteBin5Fill size={18} />
+            </button>
+            <button type="button" className="text-fg-brand bg-neutral-primary rounded-[10px] border border-brand hover:bg-brand hover:text-white focus:ring-4 focus:ring-brand-subtle font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none" onClick={toggleMute} title="Toggle Mute">
+              <FaVolumeMute size={18} />
+            </button>
             <div className="menu-anchor" onClick={(e) => e.stopPropagation()}>
               <FaEllipsisV className="icon" onClick={toggleMenu} />
               {menuVisible && (
@@ -1374,47 +1487,45 @@ const handleCallNotification = (data) => {
             </div>
           </>
         ) : callsSelectionMode && activeFooter === "Calls" ? (
-          <>
-            <button
-              type="button"
-              className="text-danger rounded-[10px] bg-neutral-primary border border-danger hover:bg-danger hover:text-white focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none"
-              onClick={handleDeleteCalls}
-            >
-           <RiDeleteBin5Fill size={18} />
-            </button>
-          </>
+          <button
+            type="button"
+            className="text-danger rounded-[10px] bg-neutral-primary border border-danger hover:bg-danger hover:text-white focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none"
+            onClick={handleDeleteCalls}
+          >
+            <RiDeleteBin5Fill size={18} />
+          </button>
         ) : (
           <>
-           <MdOutlinePortableWifiOff size={20} style={{display : connected ?  'none' : 'block'}}/>
-             <div
-               className="settings-icon-wrapper"
-               onClick={() => history.push('/settings')}
-             >
-               <FaCog className="icon settings" />
-               {adminUnread && <span className="admin-unread-dot" />}
-             </div>
+            {canCreateChat || activeFooter === "Group" ? (
+              <button type="button" className="home-screen-action-btn" onClick={handlePrimaryAction}>
+                <FaRegEdit size={16} />
+              </button>
+            ) : null}
+            {!connected && <MdOutlinePortableWifiOff size={20} />}
             <div className="menu-anchor" onClick={(e) => e.stopPropagation()}>
-              <FaEllipsisV className="icon" onClick={toggleMenu} />
+              <button type="button" className="home-screen-action-btn" onClick={toggleMenu}>
+                <FaEllipsisV className="icon" />
+              </button>
               {menuVisible && (
                 <div
                   className="floating-menu position-absolute bg-white shadow rounded p-3"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  <button className="btn" onClick={(e) => {
+                    e.currentTarget.blur();
+                    setMenuVisible(false);
+                    history.push('/Profile');
+                  }}>Profile Settings</button>
                   <button className="btn"  onClick={(e) => {
-    e.currentTarget.blur(); // remove focus
-    setMenuVisible(prev => !prev);
-    history.push('/Profile');
-  }}>Profile Settings</button>
+                    e.currentTarget.blur();
+                    setMenuVisible(prev => !prev);
+                    history.push('/Archived');
+                  }}>Archived Chats</button>
                   <button className="btn"  onClick={(e) => {
-    e.currentTarget.blur(); // remove focus
-    setMenuVisible(prev => !prev);
-    history.push('/Archived');
-  }}>Archived Chats</button>
-                  <button className="btn"  onClick={(e) => {
-    e.currentTarget.blur(); // remove focus
-    setMenuVisible(false);
-    history.push('/AdminChat');
-  }}>Help</button>
+                    e.currentTarget.blur();
+                    setMenuVisible(false);
+                    history.push('/AdminChat');
+                  }}>Help</button>
                 </div>
               )}
             </div>
@@ -1422,55 +1533,226 @@ const handleCallNotification = (data) => {
         )}
       </div>
     </div>
-  
-      <div className="flex-grow-1 overflow-auto" style={{ paddingTop: '80px', paddingBottom: '68px' }}>
-        {activeFooter === 'Group' && (
-          <Group
-            groupsMain={groupsMain}
-            setGroupsMain={setGroupsMain}
-            db={db}
-            mutedGroupIds={mutedGroupIds}
-            setMutedGroupIds={setMutedGroupIds}
-            onDeleteGroupLocal={onDeleteGroupLocal}
-          />
-        )}
-      
-        {activeFooter === 'Chats' && <UserMain usersMain={usersMain} history={history}  onUserClick={handleUserClick} currentUserId={currentUserId}  
-        mode={mode} setMode={setMode}
-        selectedUsers={selectedUsers} setSelectedUsers={setSelectedUsers} selectionMode={selectionMode} setSelectionMode={setSelectionMode} handleSwipe={handleSwipe} handleUserClick={handleUserClick} 
-        mutedUsers={mutedUsers} setmutedList={setmutedList}
-        goBackToUserList={goBackToUserList} />}
-        {activeFooter === 'Calls' && (
-          <Calls
-            calls={calls}
-            setCalls={setCalls}
-            usersMain={usersMain}
-            selectionMode={callsSelectionMode}
-            setSelectionMode={setCallsSelectionMode}
-            selectedCallIds={selectedCallIds}
-            setSelectedCallIds={setSelectedCallIds}
-          />
-        )}
-        {activeFooter === 'Status' && <Status />}
-      </div>
-      {activeFooter === "Chats" && (
-        <button className="floating-button" onClick={() => history.push('/newchat')}>
-          <FaCommentDots className="floating-icon" />
-        </button>
-      )}
-      {activeFooter === "Group" && (
-        <button className="floating-button" onClick={() => history.push('/newgroup')}>
-          <FaUsers className="floating-icon" />
-        </button>
+  );
+
+  const chatsContent = (
+    <UserMain
+      usersMain={usersMain}
+      history={history}
+      onUserClick={handleUserClick}
+      currentUserId={currentUserId}
+      mode={mode}
+      setMode={setMode}
+      selectedUsers={selectedUsers}
+      setSelectedUsers={setSelectedUsers}
+      selectionMode={selectionMode}
+      setSelectionMode={setSelectionMode}
+      handleSwipe={handleSwipe}
+      handleUserClick={handleUserClick}
+      mutedUsers={mutedUsers}
+      setmutedList={setmutedList}
+      goBackToUserList={goBackToUserList}
+      statusSection={<Status variant="home" />}
+      onMarkAllRead={markAllChatsRead}
+      appTheme={appTheme}
+    />
+  );
+
+  const mainBodyContent = (
+    <>
+      {activeFooter === 'Group' && (
+        <Group
+          groupsMain={groupsMain}
+          setGroupsMain={setGroupsMain}
+          db={db}
+          mutedGroupIds={mutedGroupIds}
+          setMutedGroupIds={setMutedGroupIds}
+          onDeleteGroupLocal={onDeleteGroupLocal}
+          onGroupClick={handleGroupClick}
+          selectedGroupId={desktopSelectedGroup?.id || null}
+          appTheme={appTheme}
+        />
       )}
 
-      <Footer
-        activeFooter={activeFooter}
-        setActiveFooter={setActiveFooter}
-        hasUnreadChats={hasUnreadChats}
-        hasUnreadGroups={hasUnreadGroups}
-        hasUnreadCalls={(calls || []).some((call) => call?.read === false)}
-      />
+      {activeFooter === 'Chats' && chatsContent}
+
+      {activeFooter === 'Calls' && (
+        <Calls
+          calls={calls}
+          setCalls={setCalls}
+          usersMain={usersMain}
+          selectionMode={callsSelectionMode}
+          setSelectionMode={setCallsSelectionMode}
+          selectedCallIds={selectedCallIds}
+          setSelectedCallIds={setSelectedCallIds}
+        />
+      )}
+    </>
+  );
+
+  const desktopRightContent = activeFooter === "Group" ? (
+    desktopSelectedGroup ? (
+      <div className="desktop-chat-embed-shell">
+        <GroupChatWindow
+          db={db}
+          socket={socket}
+          usersMain={usersMain}
+          groupsMain={groupsMain}
+          setGroupsMain={setGroupsMain}
+          groupMessagesByGroup={groupMessagesByGroup}
+          setGroupMessagesByGroup={setGroupMessagesByGroup}
+          mutedGroupIds={mutedGroupIds}
+          setMutedGroupIds={setMutedGroupIds}
+          onActiveGroupChange={onActiveGroupChange}
+          appTheme={appTheme}
+          embedded
+          embeddedGroup={desktopSelectedGroup}
+          onEmbeddedBack={goBackToGroupList}
+        />
+      </div>
+    ) : (
+      <div className="desktop-home-placeholder">
+        <h3 className="desktop-home-placeholder-title">Select a group</h3>
+        <p className="desktop-home-placeholder-copy">
+          Pick any group from the middle column to open the current group chat here.
+        </p>
+      </div>
+    )
+  ) : activeFooter !== "Chats" ? (
+    <div className="desktop-home-placeholder">
+      <h3 className="desktop-home-placeholder-title">
+        {activeFooter === "Calls" ? "Calls" : "People"}
+      </h3>
+      <p className="desktop-home-placeholder-copy">
+        {activeFooter === "Calls"
+          ? "Your call history stays in the center column on larger screens."
+          : "People and groups stay in the center column here. Open a chat from Messages to use the right pane."}
+      </p>
+    </div>
+  ) : desktopSelectedUser ? (
+    <div className="desktop-chat-embed-shell">
+        <ChatWindow
+          db={db}
+          socket={socket}
+        setMessages={setMessages}
+        saveMessage={saveMessage}
+        selectedUser={selectedUser}
+        messagesRef={messagesRef}
+        blockUser={blockUser}
+        unblockUser={unblockUser}
+        blockedUsers={blockedUsers}
+        setMessagestest={setMessagestest}
+        messages={messages}
+        storeMessageInSQLite={storeMessageInSQLite}
+        setmutedList={setmutedList}
+        setUsersMain={setUsersMain}
+        host={host}
+        customSounds={customSounds}
+        setCustomSounds={setCustomSounds}
+          embedded
+          embeddedUser={desktopSelectedUser}
+          onEmbeddedUserChange={setDesktopSelectedUser}
+          onEmbeddedBack={goBackToUserList}
+        />
+    </div>
+  ) : (
+    <div className="desktop-home-placeholder">
+      <h3 className="desktop-home-placeholder-title">Select a chat</h3>
+      <p className="desktop-home-placeholder-copy">
+        Pick any conversation from the middle column to open the current chat window here.
+      </p>
+    </div>
+  );
+
+  return (
+    <IonContent
+      className={`home-screen-page home-theme-${appTheme}`}
+      style={{ minHeight: '100vh', backgroundColor: '#0c1220' }}
+      onClick={() => {
+        if (menuVisible) closeMenu();
+      }}
+    >
+      <div className="home-screen-shell">
+        {isDesktopLayout ? (
+          <DesktopHomeLayout
+            appTheme={appTheme}
+            user={user}
+            activeFooter={activeFooter}
+            setActiveFooter={setActiveFooter}
+            hasUnreadChats={hasUnreadChats}
+            hasUnreadCalls={(calls || []).some((call) => call?.read === false)}
+            hasUnreadGroups={hasUnreadGroups}
+            onPrimaryAction={handlePrimaryAction}
+            onSettingsClick={() => history.push('/settings')}
+            onProfileClick={() => history.push('/Profile')}
+            showPrimaryAction={canCreateChat}
+            header={homeHeader}
+            middleContent={mainBodyContent}
+            rightContent={desktopRightContent}
+          />
+        ) : (
+          <>
+            {homeHeader}
+
+            <div className="home-screen-body">
+              {mainBodyContent}
+            </div>
+          </>
+        )}
+
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+            <div className="bg-white rounded-lg p-6 w-96 relative">
+              <button
+                onClick={handleCancel}
+                className=" top-2 right-2 text-red hover:text-red-700"
+                title="Close"
+              >
+                <IonIcon icon={closeCircleOutline} size="large" />
+              </button>
+
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">Are you sure you want to delete this chat?</h2>
+              <p className="text-gray-700 mb-4">
+                If you want, you can delete the chat but keep the messages.
+              </p>
+              <div className="flex space-x-4 text-gray-700">
+                <button
+                  onClick={handleWipeChat}
+                  className="w-1/2 py-2 px-4 bg-red-500 text-black rounded-lg hover:bg-red-600"
+                >
+                  Wipe it
+                </button>
+                <button
+                  onClick={handlePartialDelete}
+                  className="w-1/2 py-2 px-4 bg-yellow-500 text-black rounded-lg hover:bg-yellow-600"
+                >
+                  Partial Delete
+                </button>
+              </div>
+              <button
+                onClick={handleCancel}
+                className="mt-4 w-full py-2 px-4 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!isDesktopLayout && (
+        <Footer
+          activeFooter={activeFooter}
+          setActiveFooter={setActiveFooter}
+          hasUnreadChats={hasUnreadChats}
+          hasUnreadGroups={hasUnreadGroups}
+          hasUnreadCalls={(calls || []).some((call) => call?.read === false)}
+          onPrimaryAction={handlePrimaryAction}
+          onSettingsClick={() => history.push('/settings')}
+          appTheme={appTheme}
+          showPrimaryAction={canCreateChat}
+        />
+      )}
        <IonLoading
         isOpen={false}
         message={'Loading...'}

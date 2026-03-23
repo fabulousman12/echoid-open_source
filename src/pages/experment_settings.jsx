@@ -2,6 +2,8 @@
 import  { useState,useRef,useEffect } from "react"
 import "./Settings.css"
 import { useHistory } from 'react-router';
+import { isPlatform } from "@ionic/react";
+import { Capacitor } from "@capacitor/core";
 import data from '../data.ts'
 import Maindata from '../data';
 import './original_settings.css'
@@ -13,6 +15,7 @@ import { BellOff, Volume2, Upload, Play, Pause, X } from 'lucide-react';
 import { api } from "../services/api";
 import { getRefreshToken, clearTokens } from "../services/authTokens";
 import { InAppBrowser } from '@awesome-cordova-plugins/in-app-browser';
+import WebSettingsPage from "./WebSettingsPage";
 export default function SettingsPage({ ForAllSounfds, setForAllSounds, setismute, isnotmute, mode, setMode, messagesRef,setCurrentUser, adminUnread}) {
   const host = `https://${Maindata.SERVER_URL}`;
   const SUPPORT_URL = "https://buymeachai.ezee.li/Fabulousman";
@@ -33,6 +36,7 @@ const [readReceipts, setReadReceipts] = useState(true);
 const [timestampFormat, setTimestampFormat] = useState("12hr");
     const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 0));
 
 
   const [storageStats, setStorageStats] = useState({
@@ -43,6 +47,7 @@ const [timestampFormat, setTimestampFormat] = useState("12hr");
     document: 0,
   });
   const history = useHistory()
+  const currentUser = globalThis.storage.readJSON('currentuser', null) || {};
   const formattedDate = new Date(data.UpdatedDate).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -66,6 +71,13 @@ console.log(mutedUsers);
     if (typeof document !== "undefined") {
       document.body.classList.toggle("dark-theme", isDark);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -213,6 +225,11 @@ const handleSoundUpload = async () => {
     console.error("❌ Error opening audio picker:", err);
   }
 };
+  const clearSound = () => {
+    globalThis.storage.removeItem('ForAllSoundNotification');
+    setForAllSounds(null);
+    setIsPlaying(false);
+  };
   const handleThemeChange = (themeObj) => {
     setTheme(themeObj.background);
     globalThis.storage.setItem('chatThemeColor', themeObj.background);
@@ -292,6 +309,7 @@ const handleSoundUpload = async () => {
     if (typeof document !== "undefined") {
       document.body.classList.toggle("dark-theme", nextIsDark);
     }
+    window.dispatchEvent(new CustomEvent("app-theme-changed", { detail: { theme: nextIsDark ? "dark" : "light" } }));
   }
 
   const removeSound = (index) => {
@@ -617,6 +635,37 @@ const handleSoundUpload = async () => {
     <div className="settings-content">
       <h2>UI Settings</h2>
       <div className="setting-item">
+        <label>App Theme</label>
+        <div className="mode-buttons">
+          <button
+            className={!isDarkMode ? "selected" : ""}
+            onClick={() => {
+              setIsDarkMode(false);
+              globalThis.storage.setItem("appTheme", "light");
+              if (typeof document !== "undefined") {
+                document.body.classList.remove("dark-theme");
+              }
+              window.dispatchEvent(new CustomEvent("app-theme-changed", { detail: { theme: "light" } }));
+            }}
+          >
+            Light
+          </button>
+          <button
+            className={isDarkMode ? "selected" : ""}
+            onClick={() => {
+              setIsDarkMode(true);
+              globalThis.storage.setItem("appTheme", "dark");
+              if (typeof document !== "undefined") {
+                document.body.classList.add("dark-theme");
+              }
+              window.dispatchEvent(new CustomEvent("app-theme-changed", { detail: { theme: "dark" } }));
+            }}
+          >
+            Dark
+          </button>
+        </div>
+      </div>
+      <div className="setting-item">
         <label>Theme</label>
         <div className="theme-selector">
           {themes.map((t, i) => (
@@ -842,6 +891,55 @@ const handleSoundUpload = async () => {
     { id: "about", title: "About", icon: "i" },
     { id: "support", title: "Support", icon: "+" },
   ]
+
+  const isDesktopWebSettings = !isPlatform('hybrid') && viewportWidth >= 940;
+
+  if (isDesktopWebSettings) {
+    return (
+      <WebSettingsPage
+        isDarkMode={isDarkMode}
+        toggleTheme={toggleTheme}
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+        categories={categories}
+        currentUser={currentUser}
+        adminUnread={adminUnread}
+        notificationsEnabled={notificationsEnabled}
+        handleNotificationToggle={handleNotificationToggle}
+        ForAllSounfds={ForAllSounfds}
+        isPlaying={isPlaying}
+        handlePlaySound={handlePlaySound}
+        handleSoundUpload={handleSoundUpload}
+        clearSound={clearSound}
+        mutedUsers={mutedUsers}
+        handleClearMutedUsers={handleClearMutedUsers}
+        themes={themes}
+        handleThemeChange={handleThemeChange}
+        mode={mode}
+        handleModeChange={handleModeChange}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        bubbleStyle={bubbleStyle}
+        setBubbleStyle={setBubbleStyle}
+        readReceipts={readReceipts}
+        setReadReceipts={setReadReceipts}
+        timestampFormat={timestampFormat}
+        setTimestampFormat={setTimestampFormat}
+        resetToDefaults={resetToDefaults}
+        saveSettings={saveSettings}
+        storageStats={storageStats}
+        appver={appver}
+        formattedDate={formattedDate}
+        handleWatchSupportAd={handleWatchSupportAd}
+        handleDirectSupport={handleDirectSupport}
+        handleLogout={handleLogout}
+        onGoHome={() => history.push('/HomeScreen')}
+        onOpenProfile={() => history.push('/Profile', { activeSection: 'profile' })}
+        onOpenAdminChat={() => history.push("/AdminChat")}
+        onOpenBlockList={() => history.push('/Blocklist')}
+      />
+    );
+  }
 
   return (
     <div className={`settings-container ${isDarkMode ? "dark-theme" : ""}`}>

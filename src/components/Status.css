@@ -258,6 +258,100 @@
   letter-spacing: 0.2px;
 }
 
+.home-status-strip {
+  width: 100%;
+}
+
+.home-status-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 0 0 4px;
+  scrollbar-width: none;
+}
+
+.home-status-row::-webkit-scrollbar {
+  display: none;
+}
+
+.home-status-tile {
+  border: 0;
+  background: transparent;
+  color: var(--home-title, #1f2c49);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 66px;
+  padding: 0;
+}
+
+.home-status-avatar-wrap {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  padding: 3px;
+  background: var(--home-story-bg, rgba(184, 193, 211, 0.28));
+}
+
+.home-status-tile.is-unread .home-status-avatar-wrap,
+.home-status-tile--mine.has-story .home-status-avatar-wrap {
+  background: linear-gradient(135deg, #7c87ff, #f0b45f);
+}
+
+.home-status-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #23304e;
+}
+
+.home-status-name {
+  max-width: 70px;
+  color: var(--home-story-name, #5f6d8c);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-status-add {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed rgba(123, 140, 171, 0.6);
+  border-radius: 12px;
+  background: rgba(16, 23, 40, 0.64);
+  color: #9eb0d6;
+  font-size: 24px;
+  font-weight: 300;
+}
+
+.home-status-tile--adder .home-status-avatar-wrap {
+  background: transparent;
+}
+
+.home-status-add--standalone {
+  position: static;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.home-status-loading {
+  width: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .my-status-actions {
   display: flex;
   align-items: center;

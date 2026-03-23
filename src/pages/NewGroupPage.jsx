@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState, useContext } from "react";
-import { FaCamera } from "react-icons/fa";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FaArrowLeft, FaCamera, FaCheckCircle, FaChevronDown, FaSearch, FaTimes, FaUsers } from "react-icons/fa";
 import { useHistory } from "react-router-dom";
 import Cropper from "react-easy-crop";
 import PropTypes from "prop-types";
@@ -10,6 +10,39 @@ import "./NewGroupPage.css";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 const IMAGE_EXT_WHITELIST = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
+
+const SETTINGS_OPTIONS = {
+  addMembersPermission: [
+    { value: "ADMINS_ONLY", label: "Admins only" },
+    { value: "ALL_MEMBERS", label: "All members" },
+  ],
+  groupInfoEditPermission: [
+    { value: "ADMINS_ONLY", label: "Admins only" },
+    { value: "ALL_MEMBERS", label: "All members" },
+  ],
+  messagingPermission: [
+    { value: "ALL_MEMBERS", label: "All members" },
+    { value: "ADMINS_ONLY", label: "Admins only" },
+  ],
+};
+
+const SETTING_ROWS = [
+  {
+    key: "groupInfoEditPermission",
+    title: "Edit group info",
+    subtitle: "Allow members to change name or description",
+  },
+  {
+    key: "messagingPermission",
+    title: "Send messages",
+    subtitle: "All members can send messages",
+  },
+  {
+    key: "addMembersPermission",
+    title: "Add other members",
+    subtitle: "Members can invite their contacts",
+  },
+];
 
 const isImageFile = (file) => {
   if (!file) return false;
@@ -56,24 +89,10 @@ const getCroppedImg = async (imageSrc, croppedAreaPixels) => {
   });
 };
 
-const SettingsField = ({ label, value, onChange, options }) => (
-  <>
-    <label className="new-group-label">{label}</label>
-    <select className="form-select mb-2" value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  </>
-);
-
 const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
   const history = useHistory();
   const { host } = useContext(LoginContext);
   const storage = globalThis?.storage;
-
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatar, setAvatar] = useState("");
@@ -85,6 +104,7 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [isDesktop, setIsDesktop] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 940 : false));
   const fileRef = useRef(null);
 
   const [settings, setSettings] = useState({
@@ -92,6 +112,12 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
     groupInfoEditPermission: "ADMINS_ONLY",
     messagingPermission: "ALL_MEMBERS",
   });
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 940);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const readJSON = (key, fallback = null) => {
     try {
@@ -104,6 +130,7 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
       return fallback;
     }
   };
+
   const writeJSON = (key, value) => {
     try {
       if (typeof storage?.setItem === "function") {
@@ -115,6 +142,7 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
   };
 
   const currentUser = readJSON("currentuser", null);
+  const appTheme = readJSON("appTheme", "light") || "light";
   const currentId = String(currentUser?._id || currentUser?.id || "");
 
   const users = useMemo(() => {
@@ -128,23 +156,33 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
       .filter((u) => u.id && u.id !== currentId);
   }, [usersMain, currentId]);
 
-  const usersById = useMemo(
-    () => new Map(users.map((u) => [String(u.id || u._id), u])),
-    [users]
+  const usersById = useMemo(() => new Map(users.map((u) => [String(u.id || u._id), u])), [users]);
+
+  const selectedUsers = useMemo(
+    () => selectedIds.map((id) => usersById.get(String(id))).filter(Boolean),
+    [selectedIds, usersById]
   );
 
-  const selectedUsers = selectedIds.map((id) => usersById.get(String(id))).filter(Boolean);
-  const unselectedFiltered = users.filter((u) => {
-    const id = String(u.id || u._id);
-    if (selectedIds.includes(id)) return false;
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return [u.name, u.phoneNumber, u.email]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(q));
-  });
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return users.filter((u) => {
+      if (!query) return true;
+      return [u.name, u.phoneNumber, u.email]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [search, users]);
 
-  const visibleUsers = [...selectedUsers, ...unselectedFiltered].filter(Boolean);
+  const frequentUsers = useMemo(
+    () => filteredUsers.filter((u) => !selectedIds.includes(String(u.id))).slice(0, 3),
+    [filteredUsers, selectedIds]
+  );
+
+  const allVisibleUsers = useMemo(() => {
+    const selectedSet = new Set(selectedIds.map(String));
+    const rest = filteredUsers.filter((u) => !selectedSet.has(String(u.id)));
+    return [...selectedUsers, ...rest];
+  }, [filteredUsers, selectedIds, selectedUsers]);
 
   const toggleUser = (userId) => {
     const id = String(userId);
@@ -251,195 +289,265 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
     }
   };
 
-  const selectedCount = selectedIds.length;
-
-  const renderHeaderBar = () => (
-    <div className="new-group-header">
-      <button type="button" className="new-group-header-btn" onClick={() => history.push("/home")}>
-        Back
-      </button>
-      <h5 className="new-group-header-title">New Group</h5>
+  const renderUserRow = (user, compact = false) => {
+    const id = String(user.id || user._id);
+    const checked = selectedIds.includes(id);
+    return (
       <button
+        key={id}
         type="button"
-        className="new-group-header-btn"
-        onClick={() => setSelectedIds([])}
-        title="Deselect all"
+        onClick={() => toggleUser(id)}
+        className={`new-group-user-row ${checked ? "is-selected" : ""} ${compact ? "is-compact" : ""}`}
       >
-        Cancel
-      </button>
-    </div>
-  );
-
-  const renderProfileSection = () => (
-    <div className="new-group-section">
-      <div className="new-group-avatar-wrap">
         <img
-          src={avatar || img}
-          alt="Group avatar"
-          className="new-group-avatar"
-          onClick={handleAvatarPick}
+          src={user.avatar || user.profilePhoto || img}
+          alt={user.name || user.phoneNumber || "User"}
+          className="new-group-user-avatar"
         />
-        <button type="button" className="new-group-avatar-pick" onClick={handleAvatarPick} aria-label="Pick image">
-          <FaCamera size={16} />
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-        />
-      </div>
-      <input
-        className="form-control mt-3"
-        placeholder="Group name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <textarea
-        className="form-control mt-2"
-        placeholder="Description"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-      />
-    </div>
-  );
-
-  const renderSettingsSection = () => (
-    <div className="new-group-section">
-      <h6 className="new-group-section-title">Settings</h6>
-      <SettingsField
-        label="Who can add members"
-        value={settings.addMembersPermission}
-        onChange={(value) => setSettings((s) => ({ ...s, addMembersPermission: value }))}
-        options={[
-          { value: "ADMINS_ONLY", label: "Admins only" },
-          { value: "ALL_MEMBERS", label: "All members" },
-        ]}
-      />
-      <SettingsField
-        label="Who can change group details"
-        value={settings.groupInfoEditPermission}
-        onChange={(value) => setSettings((s) => ({ ...s, groupInfoEditPermission: value }))}
-        options={[
-          { value: "ADMINS_ONLY", label: "Admins only" },
-          { value: "ALL_MEMBERS", label: "All members" },
-        ]}
-      />
-      <SettingsField
-        label="Who can send messages"
-        value={settings.messagingPermission}
-        onChange={(value) => setSettings((s) => ({ ...s, messagingPermission: value }))}
-        options={[
-          { value: "ALL_MEMBERS", label: "All members" },
-          { value: "ADMINS_ONLY", label: "Admins only" },
-        ]}
-      />
-    </div>
-  );
+        <span className="new-group-user-main">
+          <strong className="new-group-user-name">{user.name || user.phoneNumber || "Unknown"}</strong>
+          <small className="new-group-user-sub">{user.phoneNumber || user.email || ""}</small>
+        </span>
+        {checked ? (
+          <FaCheckCircle className="new-group-user-check-icon" size={18} />
+        ) : (
+          <span className="new-group-user-check" aria-hidden="true" />
+        )}
+      </button>
+    );
+  };
 
   return (
-    <div className="new-group-page">
+    <div className={`new-group-page new-group-page--${appTheme} ${isDesktop ? "is-desktop" : "is-mobile"}`}>
       <div className="new-group-container">
-        {renderHeaderBar()}
-        <div className="new-group-content">
-          {renderProfileSection()}
-          {renderSettingsSection()}
-
-          <div className="new-group-section new-group-members-section">
-            <div className="new-group-members-header">
-              <label className="new-group-label">Members</label>
-              <div className="new-group-meta">{selectedCount} selected</div>
+        <header className="new-group-header">
+          <div className="new-group-header__left">
+            <button type="button" className="new-group-header-btn icon" onClick={() => history.push("/home")} aria-label="Back">
+              <FaArrowLeft size={15} />
+            </button>
+            <div className="new-group-header__copy">
+              <h1>New Group</h1>
             </div>
-            <div className="new-group-search">
-              <input
-                type="text"
-                className="new-group-search-input"
-                placeholder="Search users..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+          </div>
+
+          {isDesktop ? (
+            <div className="new-group-header__center">
+              <span>Chats</span>
+              <span className="is-active">Groups</span>
+              <span>Calls</span>
+              <span>Settings</span>
+            </div>
+          ) : null}
+
+          <div className="new-group-header__right">
+            <button type="button" className="new-group-header-btn" onClick={() => history.push("/home")}>
+              Cancel
+            </button>
+            {isDesktop ? (
+              <button type="button" className="new-group-header-submit" disabled={loading} onClick={createGroup}>
+                {loading ? "Creating..." : "Create Group"}
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="new-group-layout">
+          <aside className="new-group-sidebar">
+            <section className="new-group-card new-group-card--profile">
+              <div className="new-group-avatar-block">
+                <div className="new-group-avatar-wrap">
+                  <img
+                    src={avatar || img}
+                    alt="Group avatar"
+                    className="new-group-avatar"
+                    onClick={handleAvatarPick}
+                  />
+                  <button type="button" className="new-group-avatar-pick" onClick={handleAvatarPick} aria-label="Pick image">
+                    <FaCamera size={14} />
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  />
+                </div>
+              </div>
+
+              <div className="new-group-field">
+                <label className="new-group-label">Group Name</label>
+                <input
+                  className="new-group-input"
+                  placeholder={isDesktop ? "Enter group name..." : "Group name"}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+
+              <div className="new-group-field">
+                <label className="new-group-label">Description</label>
+                <textarea
+                  className="new-group-input new-group-input--textarea"
+                  placeholder={isDesktop ? "What is this group about?" : "Description [optional]"}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={isDesktop ? 4 : 3}
+                />
+              </div>
+            </section>
+
+            <section className="new-group-card new-group-card--permissions">
+              <div className="new-group-section-head">
+                <h2>Permissions</h2>
+              </div>
+
+              <div className="new-group-settings-list">
+                {SETTING_ROWS.map((row) => (
+                  <label key={row.key} className="new-group-setting-row">
+                    <span className="new-group-setting-copy">
+                      <strong>{row.title}</strong>
+                      <small>{row.subtitle}</small>
+                    </span>
+                    <span className="new-group-setting-control">
+                      <select
+                        value={settings[row.key]}
+                        onChange={(event) => setSettings((prev) => ({ ...prev, [row.key]: event.target.value }))}
+                        className="new-group-setting-select"
+                      >
+                        {SETTINGS_OPTIONS[row.key].map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <FaChevronDown className="new-group-setting-chevron" size={12} />
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          </aside>
+
+          <section className="new-group-main">
+            <div className="new-group-card new-group-card--members">
+              <div className="new-group-main-head">
+                <div>
+                  <h2>Add Members</h2>
+                </div>
+                <span className="new-group-selected-pill">{selectedIds.length} Selected</span>
+              </div>
+
+              <div className="new-group-searchbar">
+                <FaSearch className="new-group-searchbar-icon" size={13} />
+                <input
+                  type="text"
+                  className="new-group-searchbar-input"
+                  placeholder="Search contacts..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              {isDesktop && selectedUsers.length > 0 ? (
+                <div className="new-group-chip-row">
+                  {selectedUsers.map((user) => (
+                    <button
+                      key={String(user.id)}
+                      type="button"
+                      className="new-group-chip"
+                      onClick={() => toggleUser(user.id)}
+                    >
+                      <img src={user.avatar || user.profilePhoto || img} alt={user.name || "User"} />
+                      <span>{user.name || user.phoneNumber || "Unknown"}</span>
+                      <FaTimes size={10} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="new-group-list-wrap">
+                {isDesktop ? (
+                  <>
+                    {frequentUsers.length > 0 ? <div className="new-group-list-label">Frequent</div> : null}
+                    {frequentUsers.map((user) => renderUserRow(user))}
+                    <div className="new-group-list-label">All Contacts</div>
+                    {allVisibleUsers.map((user) => renderUserRow(user))}
+                  </>
+                ) : (
+                  <>
+                    <div className="new-group-mobile-members-head">
+                      <div className="new-group-mobile-members-title">
+                        <FaUsers size={14} />
+                        <span>Add Members</span>
+                      </div>
+                      <span className="new-group-selected-pill">{selectedIds.length} selected</span>
+                    </div>
+                    {allVisibleUsers.map((user) => renderUserRow(user, true))}
+                  </>
+                )}
+
+                {!allVisibleUsers.length ? (
+                  <div className="new-group-empty">No users found.</div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {!isDesktop ? (
+          <div className="new-group-bottom">
+            {error ? <div className="new-group-error">{error}</div> : null}
+            <button type="button" className="new-group-create-btn" disabled={loading} onClick={createGroup}>
+              {loading ? "Creating..." : "Create Group"}
+            </button>
+          </div>
+        ) : error ? (
+          <div className="new-group-web-error">{error}</div>
+        ) : null}
+      </div>
+
+      {cropSrc ? (
+        <div className="new-group-cropper-overlay">
+          <div className="new-group-cropper-box">
+            <div className="new-group-cropper-stage">
+              <Cropper
+                image={cropSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
               />
             </div>
-            <div className="new-group-users-box">
-              <div className="new-group-users-list">
-                {visibleUsers.map((user) => {
-                  const id = String(user.id || user._id);
-                  const checked = selectedIds.includes(id);
-                  return (
-                    <div
-                      key={id}
-                      onClick={() => toggleUser(id)}
-                      className={`new-group-user-row ${checked ? "is-selected" : ""}`}
-                    >
-                      <img
-                        src={user.avatar || img}
-                        alt="Profile"
-                        className="new-group-user-avatar"
-                      />
-                      <div className="new-group-user-main">
-                        <h6 className="new-group-user-name">{user.name || user.phoneNumber || "Unknown"}</h6>
-                        <small className="new-group-user-sub">{user.phoneNumber || user.email || ""}</small>
-                      </div>
-                      <span className={`new-group-user-check ${checked ? "is-checked" : ""}`} aria-hidden="true" />
-                    </div>
-                  );
-                })}
-                {!visibleUsers.length && (
-                  <div className="text-center text-secondary p-3">No users found.</div>
-                )}
+            <div className="new-group-cropper-actions">
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="new-group-cropper-range"
+              />
+              <div className="new-group-cropper-buttons">
+                <button className="new-group-cropper-btn secondary" onClick={() => setCropSrc(null)}>Cancel</button>
+                <button
+                  className="new-group-cropper-btn primary"
+                  onClick={async () => {
+                    const cropped = await getCroppedImg(cropSrc, croppedAreaPixels);
+                    setAvatar(cropped);
+                    setCropSrc(null);
+                  }}
+                >
+                  Apply
+                </button>
               </div>
             </div>
           </div>
         </div>
-
-        <div className="new-group-bottom">
-          {error && <div className="text-danger mb-2">{error}</div>}
-          <button type="button" className="btn new-group-create-btn w-100" disabled={loading} onClick={createGroup}>
-            {loading ? "Creating..." : `Create Group (${selectedCount} selected)`}
-          </button>
-        </div>
-      </div>
-
-      {cropSrc && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 d-flex flex-column justify-content-center">
-          <div style={{ position: "relative", height: 320, margin: 16, background: "#111", borderRadius: 12 }}>
-            <Cropper
-              image={cropSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={1}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
-            />
-          </div>
-          <div className="px-4">
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.1}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-100"
-            />
-            <div className="d-flex gap-2 mt-3">
-              <button className="btn btn-outline-light w-50" onClick={() => setCropSrc(null)}>Cancel</button>
-              <button
-                className="btn btn-light w-50"
-                onClick={async () => {
-                  const cropped = await getCroppedImg(cropSrc, croppedAreaPixels);
-                  setAvatar(cropped);
-                  setCropSrc(null);
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 };
@@ -450,16 +558,4 @@ NewGroupPage.propTypes = {
   usersMain: PropTypes.array,
   groupsMain: PropTypes.array,
   setGroupsMain: PropTypes.func,
-};
-
-SettingsField.propTypes = {
-  label: PropTypes.string.isRequired,
-  value: PropTypes.string.isRequired,
-  onChange: PropTypes.func.isRequired,
-  options: PropTypes.arrayOf(
-    PropTypes.shape({
-      value: PropTypes.string.isRequired,
-      label: PropTypes.string.isRequired,
-    })
-  ).isRequired,
 };

@@ -7,6 +7,10 @@ import { LoginProvider } from './Contexts/UserContext';
 import { MessageProvider } from './Contexts/MessagesContext';
 import HomeScreen from './pages/HomeScreen';
 import LoginScreen from './pages/LoginScreen';
+import TemporarySetupPage from './pages/TemporarySetupPage';
+import TemporaryHome from './pages/TemporaryHome';
+import TemporaryChatWindow from './pages/TemporaryChatWindow';
+import TemporaryProfilePage from './pages/TemporaryProfilePage';
 import SignupScreen from './pages/SignupScreen';
 import './tailwind.css';
 import { useHistory } from 'react-router';
@@ -81,6 +85,22 @@ import { getDeviceId, getDeviceIdSync } from "./services/deviceInfo";
 import { hashPrivateKey } from "./services/keyHash";
 import { buildUnreadUpdate } from "./services/wsPayloads";
 import { getAccessToken, globalLogout } from "./services/authTokens";
+import {
+  getTemporaryRuntimeUser,
+  getTemporarySessionUser,
+  isTemporaryRuntime,
+  setTemporarySessionUser,
+  subscribeTemporarySession,
+} from "./services/temporarySession";
+import {
+  appendTemporaryMessage,
+  getTemporaryRequestsForRoom,
+  removeTemporaryRequest,
+  removeTemporaryRequestsForRoom,
+  removeTemporaryRoom,
+  upsertTemporaryRequest,
+  upsertTemporaryRoom,
+} from "./services/tempRoomStorage";
 
 import img from '/img.jpg';
 
@@ -115,6 +135,13 @@ const {setSelectedUser1} = useContext(MessageContext)
   const [isIntialized,setIsIntialized] = useState(false)
 //const {usersMain, setUsersMain} = useContext(MessageContext);
   const socket = useRef(null);
+  const temporarySocket = useRef(null);
+  const temporarySocketHeartbeatRef = useRef(null);
+  const temporarySocketUrlRef = useRef(null);
+  const temporarySocketReconnectTimeoutRef = useRef(null);
+  const temporarySocketReconnectAttemptRef = useRef(0);
+  const temporarySocketManualCloseRef = useRef(false);
+  const acceptedTempRoomsRef = useRef(new Map());
   const host = `https://${Maindata.SERVER_URL}`;
  // const [initialMessageUserIds, setInitialMessageUserIds] = useState(new Set());
 //  const [unreadCounts, setUnreadCounts] = useState({});\
@@ -124,9 +151,10 @@ const history = useHistory()
   const [groupsMain, setGroupsMain] = useState(globalThis.storage.readJSON("groupsMain", []) || []);
   const selectedUser = useRef(null);
   const activeGroupIdRef = useRef(null);
+  const activeTempRoomIdRef = useRef(null);
   const [latestMessageTimestamps, setLatestMessageTimestamps] = useState(new Map());
   const [currentUser, setCurrenuser] = useState({});
- const currentuserRef = useRef(globalThis.storage.readJSON('currentuser', null) || null);
+ const currentuserRef = useRef(getTemporaryRuntimeUser() || globalThis.storage.readJSON('currentuser', null) || null);
 let heartbeatIntervalId = null;
   let db; // Ref to store the database connection
   const dbRef = useRef(null);
@@ -365,8 +393,14 @@ useEffect(() => {
 // const app = initializeApp(firebaseConfig);
 // const analytics = getAnalytics(app);
 const { connected } = useNetworkStatus();
-  const [show, setShow] = useState(false);
+const [show, setShow] = useState(false);
   const [lastStatus, setLastStatus] = useState(null);
+
+  useEffect(() => {
+    return subscribeTemporarySession(() => {
+      currentuserRef.current = getTemporaryRuntimeUser() || null;
+    });
+  }, []);
 
   useEffect(() => {
     if (lastStatus === null) {
@@ -1389,6 +1423,23 @@ useEffect(() => {
   useEffect(() => {
     const onAuthLogout = () => {
       try {
+        temporarySocketManualCloseRef.current = true;
+        if (temporarySocketReconnectTimeoutRef.current) {
+          clearTimeout(temporarySocketReconnectTimeoutRef.current);
+          temporarySocketReconnectTimeoutRef.current = null;
+        }
+        if (temporarySocketHeartbeatRef.current) {
+          clearInterval(temporarySocketHeartbeatRef.current);
+          temporarySocketHeartbeatRef.current = null;
+        }
+        if (temporarySocket.current && temporarySocket.current.readyState !== WebSocket.CLOSED) {
+          temporarySocket.current.close(1000, "logout");
+        }
+        temporarySocket.current = null;
+      } catch {
+        // no-op
+      }
+      try {
         history.push("/login");
       } catch {
         window.location.href = "/login";
@@ -1419,9 +1470,11 @@ useEffect(() => {
           ? window.sqlitePlugin.openDatabase({ name: 'Conversa_chats_store.db', location: 'default' })
           : null);
         if (startupDb && !dbRef.current) dbRef.current = startupDb;
-        const startupGroupMap = await bootstrapGroupMessages(dbRef.current);
-        console.log("lets sne")
-        await bootstrapGroupsData(dbRef.current, startupGroupMap);
+        if (!isTemporaryRuntime()) {
+          const startupGroupMap = await bootstrapGroupMessages(dbRef.current);
+          console.log("lets sne")
+          await bootstrapGroupsData(dbRef.current, startupGroupMap);
+        }
 
         let token = await getAccessToken();
         if (!token) {
@@ -1437,6 +1490,28 @@ useEffect(() => {
         }
 
         if (token) {
+          if (isTemporaryRuntime()) {
+            const tempUser = getTemporaryRuntimeUser() || getTemporarySessionUser();
+            if (tempUser) {
+              setTemporarySessionUser(tempUser);
+              currentuserRef.current = tempUser;
+            } else {
+              const tempResponse = await api.temporaryMe(host);
+              const tempJson = await tempResponse.json().catch(() => ({}));
+              if (tempResponse.ok && tempJson?.success && tempJson?.user) {
+                setTemporarySessionUser(tempJson.user);
+                currentuserRef.current = tempJson.user;
+              }
+            }
+
+            setInitialRoute('/temporaryhome');
+            const deviceId = getDeviceIdSync() || await getDeviceId();
+            const wsUrl = `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`;
+            await connectTemporarySocket(wsUrl);
+            setLink(wsUrl);
+            return;
+          }
+
           const syncedGroupMap = await bootstrapGroupMessages(dbRef.current, token);
           await bootstrapGroupsData(dbRef.current, syncedGroupMap, token);
           const groupsAfterSync = globalThis.storage.readJSON("groupsMain", []) || [];
@@ -3794,10 +3869,171 @@ case "ice-restart-answer": {
     return true;
   };
 
+  const handleTemporarySocketPayload = useCallback(async (data) => {
+    if ((data?.type === "temporary-message" || data?.type === "temporary-message-sent") && data?.message) {
+      const currentUserId = String(currentuserRef.current?._id || currentuserRef.current?.id || "");
+      const roomUid = String(data.message.roomUid || "");
+      const senderId = String(data.message.senderId || "");
+      const isOwnMessage = senderId && senderId === currentUserId;
+      const isActiveRoom = roomUid && roomUid === String(activeTempRoomIdRef.current || "");
+      appendTemporaryMessage(data.message, {
+        incrementUnread: !isOwnMessage && !isActiveRoom,
+      });
+      if (!isOwnMessage && !isActiveRoom && typeof Notification !== "undefined") {
+        if (Notification.permission === "granted") {
+          new Notification(data.message.senderName || "New room message", {
+            body: data.message.content || "You have a new temporary room message",
+          });
+        } else if (Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
+      }
+      return true;
+    }
+
+    if (data?.type === "temporary-room-updated" && data?.room) {
+      const currentUserId = String(currentuserRef.current?._id || currentuserRef.current?.id || "");
+      const roomUid = String(data?.room?.uid || data?.roomUid || "");
+      const roomMembers = Array.isArray(data?.members)
+        ? data.members.map((member) => String(member.id || member._id || member))
+        : (Array.isArray(data?.room?.members) ? data.room.members.map(String) : []);
+      if (currentUserId && roomMembers.includes(currentUserId)) {
+        acceptedTempRoomsRef.current.set(roomUid, Date.now());
+        removeTemporaryRequestsForRoom(roomUid, "outgoing");
+      }
+      upsertTemporaryRoom(data.room);
+      return true;
+    }
+
+    if (data?.type === "temporary-room-request-created" && data?.request) {
+      const currentUserId = String(currentuserRef.current?._id || currentuserRef.current?.id || "");
+      const normalized = upsertTemporaryRequest({
+        ...data.request,
+        room: data.room,
+        direction: String(data?.request?.userId || "") === currentUserId ? "outgoing" : "incoming",
+      });
+      if (normalized && normalized.direction === "incoming") {
+        Promise.resolve(Swal.fire({
+          title: "Join request received",
+          text: `${normalized.userName || "A user"} wants to join ${normalized.roomName || "your chatroom"}.`,
+          icon: "info",
+          timer: 2500,
+          showConfirmButton: false,
+          toast: true,
+          position: "top-end",
+        })).catch(() => {});
+      }
+      return true;
+    }
+
+    if (data?.type === "temporary-room-request-updated" && data?.request) {
+      const status = String(data?.status || data?.request?.status || "");
+      const roomUid = String(data?.request?.roomUid || data?.room?.uid || "");
+      const requestId = String(data?.request?.id || data?.request?._id || "");
+      const outgoingRequests = getTemporaryRequestsForRoom(roomUid, "outgoing");
+      const hasExactRequest = outgoingRequests.some((request) => String(request.id) === requestId);
+      const hasNewerPendingRequest = outgoingRequests.some((request) => String(request.id) !== requestId);
+      const acceptedAt = Number(acceptedTempRoomsRef.current.get(roomUid) || 0);
+      const ignoreDeclineBecauseAccepted = acceptedAt > 0 && Date.now() - acceptedAt < 15000;
+
+      if (status === "accepted" && data?.room) {
+        acceptedTempRoomsRef.current.set(roomUid, Date.now());
+        removeTemporaryRequestsForRoom(roomUid, "outgoing");
+        upsertTemporaryRoom({
+          ...data.room,
+          members: Array.isArray(data?.members) ? data.members.map((member) => String(member.id || member._id || member)) : data.room?.members,
+          memberCount: Array.isArray(data?.members) ? data.members.length : data.room?.memberCount,
+        });
+        Promise.resolve(Swal.fire({
+          title: "Join request accepted",
+          text: `You can now open ${data.room?.name || "the chatroom"}.`,
+          icon: "success",
+          timer: 2500,
+          showConfirmButton: false,
+          toast: true,
+          position: "top-end",
+        })).catch(() => {});
+      } else if (status === "declined" && ignoreDeclineBecauseAccepted) {
+        return true;
+      } else if (status === "declined" && hasExactRequest) {
+        removeTemporaryRequest(requestId);
+        Promise.resolve(Swal.fire({
+          title: "Join request declined",
+          text: `${data.request?.roomName || "This chatroom"} did not accept your request.`,
+          icon: "info",
+          timer: 2500,
+          showConfirmButton: false,
+          toast: true,
+          position: "top-end",
+        })).catch(() => {});
+      } else if (status === "declined" && hasNewerPendingRequest) {
+        return true;
+      }
+      return true;
+    }
+
+    if (data?.type === "temporary-room-deleted" && data?.roomUid) {
+      removeTemporaryRoom(data.roomUid);
+      window.setTimeout(() => {
+        Promise.resolve(Swal.fire({
+          title: "Chatroom deleted",
+          text: `${data?.roomName || "This chatroom"} has been deleted.`,
+          icon: "info",
+          timer: 2500,
+          showConfirmButton: false,
+          toast: true,
+          position: "top-end",
+        })).catch(() => {});
+      }, 40);
+      if (String(activeTempRoomIdRef.current || "") === String(data.roomUid || "")) {
+        activeTempRoomIdRef.current = null;
+        window.setTimeout(() => {
+          history.push("/temporaryhome");
+        }, 320);
+      }
+      return true;
+    }
+
+    if (data?.type === "temporary-room-removed" && data?.roomUid) {
+      removeTemporaryRoom(data.roomUid);
+      window.setTimeout(() => {
+        Promise.resolve(Swal.fire({
+          title: "Removed from chatroom",
+          text: `You have been removed from ${data?.roomName || "this chatroom"}.`,
+          icon: "info",
+          timer: 2500,
+          showConfirmButton: false,
+          toast: true,
+          position: "top-end",
+        })).catch(() => {});
+      }, 40);
+      if (String(activeTempRoomIdRef.current || "") === String(data.roomUid || "")) {
+        activeTempRoomIdRef.current = null;
+        window.setTimeout(() => {
+          history.push("/temporaryhome");
+        }, 320);
+      }
+      return true;
+    }
+
+    if (data?.type === "error" && String(data?.message || "").toLowerCase().includes("room")) {
+      const activeRoomUid = String(activeTempRoomIdRef.current || "");
+      const activeRequest = getTemporaryRequestsForRoom(activeRoomUid, "outgoing")[0];
+      if (activeRequest) {
+        removeTemporaryRequest(activeRequest.id);
+      }
+    }
+
+    return false;
+  }, [history]);
+
   // Handle messages received via WebSocket
   const handleMessage = async (data) => {
   
     try {
+      if (await handleTemporarySocketPayload(data)) {
+        return;
+      }
       if (data?.type === "group-message-sent" && data?.message) {
         await ingestGroupMessage(data.message);
         return;
@@ -3835,6 +4071,114 @@ case "ice-restart-answer": {
     activeGroupIdRef.current = nextGroupId ? String(nextGroupId) : null;
     globalThis.__ACTIVE_GROUP_ID = activeGroupIdRef.current;
   }, []);
+
+  const handleActiveTemporaryRoomChange = useCallback((nextRoomUid) => {
+    activeTempRoomIdRef.current = nextRoomUid ? String(nextRoomUid) : null;
+    globalThis.__ACTIVE_TEMP_ROOM_ID = activeTempRoomIdRef.current;
+  }, []);
+
+  const connectTemporarySocket = useCallback(async (url) => {
+    temporarySocketUrlRef.current = url;
+    temporarySocketManualCloseRef.current = false;
+    if (temporarySocket.current && temporarySocket.current.readyState === WebSocket.OPEN) {
+      return temporarySocket.current;
+    }
+    if (temporarySocket.current && temporarySocket.current.readyState === WebSocket.CONNECTING) {
+      return temporarySocket.current;
+    }
+    if (temporarySocketReconnectTimeoutRef.current) {
+      clearTimeout(temporarySocketReconnectTimeoutRef.current);
+      temporarySocketReconnectTimeoutRef.current = null;
+    }
+
+    temporarySocket.current = new WebSocket(url);
+
+    temporarySocket.current.addEventListener("open", () => {
+      console.log("Temporary WebSocket connected");
+      temporarySocketReconnectAttemptRef.current = 0;
+      if (temporarySocketHeartbeatRef.current) clearInterval(temporarySocketHeartbeatRef.current);
+      temporarySocketHeartbeatRef.current = window.setInterval(() => {
+        if (temporarySocket.current?.readyState === WebSocket.OPEN) {
+          temporarySocket.current.send(JSON.stringify({ type: "ping" }));
+        }
+      }, 20000);
+    });
+
+    temporarySocket.current.addEventListener("message", async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const handled = await handleTemporarySocketPayload(data);
+        if (!handled && data?.type === "error" && data?.message) {
+          console.warn("Temporary socket error:", data.message);
+        }
+      } catch (error) {
+        console.error("Invalid temporary socket payload", error);
+      }
+    });
+
+    temporarySocket.current.addEventListener("error", (error) => {
+      console.error("Temporary WebSocket error:", {
+        error,
+        readyState: temporarySocket.current?.readyState,
+        url,
+      });
+    });
+
+    temporarySocket.current.addEventListener("close", async (event) => {
+      const reasonText = String(event.reason || "").toLowerCase();
+      const isAuthLikeClose =
+        event.code === 4001 ||
+        event.code === 4401 ||
+        reasonText.includes("token") ||
+        reasonText.includes("expired");
+
+      console.warn("Temporary WebSocket closed:", {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+        readyState: temporarySocket.current?.readyState,
+        url,
+        reconnectAttempt: temporarySocketReconnectAttemptRef.current,
+      });
+
+      if (temporarySocketHeartbeatRef.current) {
+        clearInterval(temporarySocketHeartbeatRef.current);
+        temporarySocketHeartbeatRef.current = null;
+      }
+      temporarySocket.current = null;
+
+      if (temporarySocketManualCloseRef.current || !isAcitve.current || !isTemporaryRuntime()) {
+        return;
+      }
+
+      let reconnectUrl = temporarySocketUrlRef.current || url;
+      if (isAuthLikeClose) {
+        const refreshedToken = await refreshAccessToken(host);
+        if (refreshedToken) {
+          const deviceId = getDeviceIdSync() || await getDeviceId();
+          reconnectUrl = `wss://${Maindata.SERVER_URL}?token=${refreshedToken}&deviceId=${encodeURIComponent(deviceId)}`;
+          temporarySocketUrlRef.current = reconnectUrl;
+          console.warn("Temporary WebSocket token refreshed after disconnect");
+        }
+      }
+
+      temporarySocketReconnectAttemptRef.current += 1;
+      const delayMs = Math.min(1000 * (2 ** Math.max(temporarySocketReconnectAttemptRef.current - 1, 0)), 10000);
+      console.warn("Temporary WebSocket reconnect scheduled:", {
+        delayMs,
+        attempt: temporarySocketReconnectAttemptRef.current,
+        reconnectUrl,
+      });
+
+      temporarySocketReconnectTimeoutRef.current = window.setTimeout(() => {
+        connectTemporarySocket(reconnectUrl).catch((error) => {
+          console.error("Temporary WebSocket reconnect failed:", error);
+        });
+      }, delayMs);
+    });
+
+    return temporarySocket.current;
+  }, [handleTemporarySocketPayload, host]);
 
   // SQLite storage handling
   const handleSQLiteStorage = async (db, data) => {
@@ -6012,6 +6356,12 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
                 setMode={setMode}
                 setUsersMain={setUsersMain}
                 adminUnread={adminUnread}
+                blockedUsers={blockedUsers}
+                blockUser={blockUser}
+                unblockUser={unblockUser}
+                storeMessageInSQLite={storeMessageInSQLite}
+                customSounds={customSounds}
+                setCustomSounds={setCustomSounds}
                 
                 socket={socket.current}
                 sendMessage={sendMessage}
@@ -6034,6 +6384,9 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
                 mutedGroupIds={mutedGroupIds}
                 setMutedGroupIds={setMutedGroupIds}
                 onDeleteGroupLocal={softDeleteGroupLocal}
+                groupMessagesByGroup={groupMessagesByGroup}
+                setGroupMessagesByGroup={setGroupMessagesByGroup}
+                onActiveGroupChange={handleActiveGroupChange}
               
               />} 
             />
@@ -6047,6 +6400,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               getMessage={getmessages}
               socket={socket.current}
               connect={connect} 
+              connectTemporarySocket={connectTemporarySocket}
               sendMessage={sendMessage}
               close={close}
               reconnect={reconnect}
@@ -6056,6 +6410,34 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               getunread={getunread}
               resetunread={resetunread}
               selectedUser={selectedUser}  />} 
+            />
+            <Route
+              path="/temporary-setup"
+              render={(props) => (
+                <TemporarySetupPage
+                  {...props}
+                  connect={connect}
+                  connectTemporarySocket={connectTemporarySocket}
+                />
+              )}
+            />
+            <Route
+              path="/temporaryhome"
+              render={(props) => <TemporaryHome {...props} socket={temporarySocket.current} />}
+            />
+            <Route
+              path="/temporary-chatwindow"
+              render={(props) => (
+                <TemporaryChatWindow
+                  {...props}
+                  socket={temporarySocket.current}
+                  onActiveRoomChange={handleActiveTemporaryRoomChange}
+                />
+              )}
+            />
+            <Route
+              path="/temporary-profile"
+              render={(props) => <TemporaryProfilePage {...props} />}
             />
             <Route 
               path="/signup" 

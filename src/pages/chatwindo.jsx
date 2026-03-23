@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useHistory } from 'react-router';
 import img from '/img.jpg';
 import { nanoid } from 'nanoid';
@@ -42,8 +42,8 @@ import "./HomeScreen.css";
 import ImageRenderer from '../components/ImageRenderer';
 import VideoRenderer from '../components/VideoRenderer';
 import DocumentRenderer from '../components/DocumentRenderer';
+import WaveformPlayer from '../components/WaveformPlayer';
 import { playCircleOutline,documentOutline,downloadOutline,arrowBackOutline, ellipsisVerticalOutline,closeCircleOutline,closeOutline, copyOutline, trashOutline, arrowRedoOutline,call,videocam }from 'ionicons/icons';
-//import waveForm from '../components/WaveformPlayer'
 //import { IoArchiveOutline, IoBanOutline, IoTrashOutline } from "react-icons/io5"; // Ionicons (Outline)
 import { FaArrowDown } from 'react-icons/fa'; // Import the down arrow icon
 //import { OneSignal } from 'onesignal-cordova-plugin';
@@ -51,6 +51,7 @@ import { getAccessToken } from "../services/authTokens";
 import { api } from "../services/api";
 import { authFetch } from "../services/apiClient";
 import { getUploadUrl, isValidUploadResult } from "../services/uploadValidation";
+import { createObjectUrlFromWebFileRef, isWebStoredFileRef, readWebStoredFileAsUint8Array, saveBlobToWebFileStore } from "../services/webFileStore";
 //import { Http } from '@capacitor-community/http';
 import VideoPlayerPlyrWithResolve from '../components/VideoPlayerPlyr';
 import { CallRuntime } from "../store/CallRuntime";  // must be imported
@@ -119,6 +120,13 @@ import { CiRead } from "react-icons/ci";
  */
 export const saveFileToExternalStorage = async (blob, filename) => {
   try {
+    if (!Capacitor.isNativePlatform()) {
+      return await saveBlobToWebFileStore(blob, {
+        fileName: filename,
+        mimeType: blob?.type || '',
+        folder: 'chat_downloads',
+      });
+    }
     // 1️⃣ Convert Blob → Base64
     const base64 = await blobToBase64(blob);
     const base64Data = base64.split(',')[1]; // strip prefix
@@ -225,7 +233,30 @@ export const saveFileLocally = async (blob, filename, filetype) => {
 };
 
 
-const Chatwindo = ({ db,socket,setMessages,saveMessage,selectedUser, messagesRef,blockUser,unblockUser,blockedUsers,setMessagestest,messages,message,storeMessageInSQLite,setmutedList,setUsersMain,host,customSounds, setCustomSounds }) => {
+const Chatwindo = ({
+  db,
+  socket,
+  setMessages,
+  saveMessage,
+  selectedUser,
+  messagesRef,
+  blockUser,
+  unblockUser,
+  blockedUsers,
+  setMessagestest,
+  messages,
+  message,
+  storeMessageInSQLite,
+  setmutedList,
+  setUsersMain,
+  host,
+  customSounds,
+  setCustomSounds,
+  embedded = false,
+  embeddedUser = null,
+  onEmbeddedUserChange,
+  onEmbeddedBack,
+}) => {
     const location = useLocation();
     const history = useHistory();
 const localchat_messages=useRef()
@@ -238,7 +269,10 @@ const localchat_messages=useRef()
     const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     const [showMediaPreview, setShowMediaPreview] = useState(false);
     const imageVideoInputRef = useRef(null);
-    let { userdetails } = location.state || {};
+    const routedState = location.state || {};
+    const initialUserDetails = embeddedUser || routedState.userdetails || {};
+    const [activeUserDetails, setActiveUserDetails] = useState(initialUserDetails);
+    const userdetails = activeUserDetails || {};
     const [messages1, setMessages1] = useState([]);
     const [newMessage, setNewMessage] = useState('');
 
@@ -278,7 +312,9 @@ const [prodilepicBIg,setprodilepicBIg]=useState(false);
 const [isloading,setIsloading] = useState(false);
     const [selectedChats, setSelectedChats] = useState([]);
         const [selectionMode, setSelectionMode] = useState(false);
-  const isDarkMode = true
+  const [appTheme, setAppTheme] = useState(() => globalThis.storage?.getItem?.("appTheme") || "light");
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
+  const isDarkMode = appTheme !== "light";
   const mainuser = globalThis.storage.readJSON('currentuser', null)
 
   const userId = mainuser._id;        // caller
@@ -313,6 +349,48 @@ const swipeReplyRef = useRef({
 
 const [isRecording, setIsRecording] = useState(false);
 
+useEffect(() => {
+  const syncTheme = () => {
+    const nextTheme = globalThis.storage?.getItem?.("appTheme") || "light";
+    setAppTheme(nextTheme === "dark" ? "dark" : "light");
+  };
+
+  const handleResize = () => setViewportWidth(window.innerWidth);
+
+  syncTheme();
+  handleResize();
+  window.addEventListener("app-theme-changed", syncTheme);
+  window.addEventListener("focus", syncTheme);
+  window.addEventListener("resize", handleResize);
+  return () => {
+    window.removeEventListener("app-theme-changed", syncTheme);
+    window.removeEventListener("focus", syncTheme);
+    window.removeEventListener("resize", handleResize);
+  };
+}, []);
+
+useEffect(() => {
+  if (embedded && viewportWidth >= 1420 && isExpanded) {
+    setIsExpanded(false);
+  }
+}, [embedded, viewportWidth, isExpanded]);
+
+useEffect(() => {
+  setActiveUserDetails(embeddedUser || routedState.userdetails || {});
+}, [embeddedUser, routedState.userdetails]);
+
+useEffect(() => {
+  if (embedded && typeof onEmbeddedUserChange === "function" && userdetails?.id) {
+    onEmbeddedUserChange(userdetails);
+  }
+}, [embedded, onEmbeddedUserChange, userdetails]);
+
+useEffect(() => {
+  if (userdetails?.id && selectedUser?.current !== undefined) {
+    selectedUser.current = userdetails.id;
+  }
+}, [selectedUser, userdetails?.id]);
+
 let pressTimer = useRef(null);
 //const [isPaused, setIsPaused] = useState(false);
  
@@ -326,6 +404,7 @@ useEffect(() => {
 }, [userdetails?.id]);
 
 useEffect(() => {
+  if (embedded) return undefined;
   const backHandler = CapacitorApp.addListener('backButton', () => {
     selectedUser.current = null; // Clear selected user
     history.push('/home'); // or history.push('/home') if you want to allow back to Chatwindo later
@@ -334,7 +413,7 @@ useEffect(() => {
   return () => {
     backHandler.remove();
   };
-}, [history]);
+}, [embedded, history, selectedUser]);
 
   // useEffect(() => {
   //   const handleClickOutside = (event) => {
@@ -953,7 +1032,9 @@ const token = await getAccessToken();
 
 
     const toggleHeader = () => {
-      //console.log("toggleHeader");
+      if (embedded && viewportWidth >= 1420) {
+        return;
+      }
       setIsExpanded(!isExpanded);
     }
     const toglebigscreen = () => {
@@ -1299,7 +1380,10 @@ console.log("sending message culprit?",JSON.stringify(sentmsg))
       // 7. Update state
       setUsersMain(mergedUsers);
 
-      userdetails = mergedUsers.find(u => u.id === userdetails.id);
+      const mergedActiveUser = mergedUsers.find(u => u.id === userdetails.id);
+      if (mergedActiveUser) {
+        setActiveUserDetails(mergedActiveUser);
+      }
     } else {
       console.error("Failed to fetch updated user data");
     }
@@ -1352,7 +1436,7 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
         globalThis.storage.setItem("usersMain", JSON.stringify(updatedUsers));
         // Optionally: update userdetails in your state/UI too
         setUsersMain(updatedUsers);
-        userdetails.publicKey = key;
+        setActiveUserDetails((prev) => ({ ...(prev || {}), publicKey: key }));
       }
     } catch (error) {
       console.error("Failed to fetch public key:", error);
@@ -2152,8 +2236,12 @@ const encrptedtext = await encryptMessageHybrid(newMessage, userdetails.publicKe
     
 
     const handleBackButton = () => {
-    selectedUser.current = null
-        history.push('/');
+    selectedUser.current = null;
+    if (embedded) {
+      onEmbeddedBack?.();
+      return;
+    }
+    history.push('/');
     };
 
 
@@ -2516,6 +2604,27 @@ function convertBlobToBase64(blob) {
 
 const saveFilePermanently = async (file) => {
   try {
+    if (!Capacitor.isNativePlatform()) {
+      if (isWebStoredFileRef(file?.path || '')) return file.path;
+      if (file?.fileObject instanceof Blob) {
+        return await saveBlobToWebFileStore(file.fileObject, {
+          fileName: file?.name || 'media',
+          mimeType: file?.type || file?.fileObject?.type || '',
+          folder: String(file?.type || '').startsWith('video/') ? 'chat_media/videos' : 'chat_media/files',
+        });
+      }
+      if (typeof file?.preview === 'string' && file.preview.startsWith('data:')) {
+        const response = await fetch(file.preview);
+        const blob = await response.blob();
+        return await saveBlobToWebFileStore(blob, {
+          fileName: file?.name || 'media',
+          mimeType: file?.type || blob.type || '',
+          folder: String(file?.type || '').startsWith('video/') ? 'chat_media/videos' : 'chat_media/files',
+        });
+      }
+      return file?.path || '';
+    }
+
     const isVideo = file.type.startsWith('video/');
     const folder = isVideo ? 'files/userowned/videos' : 'files/userowned/images';
 
@@ -2597,6 +2706,13 @@ const uploadFile = async (file, token) => {
 const getBlobFromSandboxPath = async (path) => {
   try {
     // 1️⃣ Clean the URI prefix
+    if (isWebStoredFileRef(path)) {
+      const byteArray = await readWebStoredFileAsUint8Array(path);
+      if (!byteArray) {
+        throw new Error('Web stored file not found');
+      }
+      return byteArray;
+    }
     const cleanPath = path.replace('file://', '');
 
     let fileData;
@@ -2887,24 +3003,46 @@ const HandleBigimage = (img)=>{
 }
 
   const discordColors = {
-    background: "#E5E7EB",
-    bubbleYou: "#3B82F6",
-    bubbleOther: "#2B2D31",
-    textPrimary: "#FFFFFF",
-    textusersEpanded:"rgb(43, 45, 49)",
-    accent: "#10B981",
+    background: "#090d14",
+    bubbleYou: "#3480ff",
+    bubbleOther: "#1b2232",
+    textPrimary: "#f4f8ff",
+    textusersEpanded:"#f4f8ff",
+    accent: "#2fe0a3",
+    panel: "#111827",
+    panelAlt: "#151d2d",
+    border: "rgba(113, 132, 171, 0.16)",
+    subtext: "#7f92b4",
+    composer: "#121a28",
+    shell: "#0c111b",
   }
 
   const lightColors = {
-    background: "#FFFFFF",
-    bubbleYou: "linear-gradient(135deg, #6366F1, #8B5CF6)",
-    bubbleOther: "#F1F5F9",
-    textPrimary: "#0F172A",
-        textusersEpanded:"#ffffff",
-    accent: "#C084FC",
+    background: "#f7f9ff",
+    bubbleYou: "#3480ff",
+    bubbleOther: "#ffffff",
+    textPrimary: "#162238",
+    textusersEpanded:"#1a2740",
+    accent: "#2bd7a0",
+    panel: "#ffffff",
+    panelAlt: "#f3f6fc",
+    border: "rgba(130, 148, 182, 0.2)",
+    subtext: "#7f91b1",
+    composer: "#ffffff",
+    shell: "#edf2fb",
   }
 
   const colors = isDarkMode ? discordColors : lightColors
+  const isProfileDocked = embedded && viewportWidth >= 1420;
+  const showStandardChatSurface = !isExpanded || isProfileDocked;
+  const mediaCounts = useMemo(() => {
+    const items = Array.isArray(localchat_messages.current) ? localchat_messages.current : [];
+    return {
+      images: items.filter((msg) => msg.file_type === "image").length,
+      videos: items.filter((msg) => msg.file_type === "video").length,
+      docs: items.filter((msg) => msg.file_type !== "image" && msg.file_type !== "video" && msg.file_type !== "audio").length,
+    };
+  }, [messages1, isExpanded, showAll]);
 const handleArchive = () => {
   //console.log("Archive button clicked");
 
@@ -3429,10 +3567,34 @@ const handleFileOpen = async (msg) => {
 };
 
 
-const openFileInBrowser = (msg) => {
+const openFileInBrowser = async (msg) => {
+  if (!msg?.file_path) return;
+
+  if (isWebStoredFileRef(msg.file_path)) {
+    const objectUrl = await createObjectUrlFromWebFileRef(msg.file_path);
+    if (!objectUrl) return;
+    window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(objectUrl);
+      } catch {}
+    }, 60_000);
+    return;
+  }
+
+  if (/^(blob:|data:|https?:)/i.test(msg.file_path)) {
+    window.open(msg.file_path, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
   const blob = new Blob([msg.content], { type: getMimeTypeFromFileName(msg.fileName) });
   const fileURL = URL.createObjectURL(blob);
-  window.open(fileURL, '_blank');
+  window.open(fileURL, '_blank', 'noopener,noreferrer');
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(fileURL);
+    } catch {}
+  }, 60_000);
 };
 
 const handleFileClick = (file) => {
@@ -3630,13 +3792,202 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
 //     throw error;
 //   }
 // }
+const expandedProfilePanel = userdetails ? (
+  <div
+    className={`chat-profile-panel chat-profile-panel--${appTheme} ${isProfileDocked ? "chat-profile-panel--docked" : ""} ${embedded && !isProfileDocked ? "chat-profile-panel--embedded-overlay" : ""}`}
+    onClick={() => setShowExpandedMenu(false)}
+  >
+    <div className="chat-profile-topbar">
+      <button
+        type="button"
+        className="chat-profile-topbar-btn"
+        onClick={() => {
+          if (isProfileDocked) {
+            handleBackButton();
+            return;
+          }
+          setIsExpanded(false);
+        }}
+        title="Back"
+      >
+        <IonIcon icon={arrowBackOutline} />
+      </button>
+      <div className="chat-profile-topbar-title">Profile</div>
+      <div className="chat-profile-menu-wrap">
+        <button
+          type="button"
+          className="chat-profile-topbar-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowExpandedMenu((prev) => !prev);
+          }}
+          title="More options"
+        >
+          <IonIcon icon={ellipsisVerticalOutline} />
+        </button>
+        {showExpandedMenu && (
+          <div className="chat-profile-menu" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="chat-profile-menu-item" onClick={() => setShowExpandedMenu(false)}>
+              Edit Contact
+            </button>
+            <button type="button" className="chat-profile-menu-item" onClick={() => setShowExpandedMenu(false)}>
+              Share Contact
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
 
+    <div className="chat-profile-scroll">
+      <div className="chat-profile-hero">
+        <button
+          type="button"
+          className="chat-profile-avatar-button"
+          onClick={() => isExpanded ? toglebigscreen() : toggleHeader()}
+        >
+          <img
+            src={userdetails.avatar || "https://via.placeholder.com/120"}
+            alt="Profile"
+            className="chat-profile-avatar"
+          />
+          <span className="chat-profile-avatar-dot" />
+        </button>
+        <h2 className="chat-profile-name">{userdetails.name || "User"}</h2>
+        <p className="chat-profile-role">{userdetails.bio || userdetails.About || "Senior Product Designer"}</p>
+        <p className="chat-profile-status">
+          Online
+          {userdetails.phoneNumber ? ` • ${userdetails.phoneNumber}` : ""}
+        </p>
+      </div>
 
+      <div className="chat-profile-actions-row">
+        <button
+          type="button"
+          className="chat-profile-pill chat-profile-pill--call"
+          onClick={() => {
+            setIsExpanded(false);
+            handleStartCall(true);
+          }}
+        >
+          <IonIcon icon={call} />
+          <span>Call</span>
+        </button>
+        <button
+          type="button"
+          className="chat-profile-pill chat-profile-pill--video"
+          onClick={() => {
+            setIsExpanded(false);
+            handleStartCall(false);
+          }}
+        >
+          <IonIcon icon={videocam} />
+          <span>Video</span>
+        </button>
+      </div>
 
+      <section className="chat-profile-section">
+        <div className="chat-profile-section-label">Notifications</div>
+        <div className="chat-profile-card-list">
+          <button type="button" className="chat-profile-card-row" onClick={toggleMute}>
+            <span className="chat-profile-row-icon chat-profile-row-icon--blue">
+              {isMuted ? "🔕" : "🔔"}
+            </span>
+            <span className="chat-profile-row-copy">
+              <strong>Mute Notifications</strong>
+            </span>
+            <span className={`chat-profile-toggle ${isMuted ? "is-on" : ""}`}>
+              <span className="chat-profile-toggle-knob" />
+            </span>
+          </button>
+          <button type="button" className="chat-profile-card-row" onClick={handleCustomNotification}>
+            <span className="chat-profile-row-icon chat-profile-row-icon--sky">♫</span>
+            <span className="chat-profile-row-copy">
+              <strong>Custom Notification</strong>
+              <small title={sound ? `${sound.fileName} (${sound.soundPath})` : ""}>
+                {sound ? `${sound.fileName}`.slice(0, 18) : "Default sound"}
+              </small>
+            </span>
+            <span className="chat-profile-row-arrow">›</span>
+          </button>
+        </div>
+      </section>
 
+      <section className="chat-profile-section">
+        <div className="chat-profile-section-head">
+          <div className="chat-profile-section-label">Media</div>
+          <button type="button" className="chat-profile-view-all" onClick={handleViewAll}>
+            View All
+          </button>
+        </div>
+        <div className="chat-profile-media-grid">
+          <button type="button" className="chat-profile-media-card" onClick={() => { handleViewAll(); setSelectedTab('images'); }}>
+            <span className="chat-profile-media-icon">🖼</span>
+            <strong>Photos</strong>
+            <small>{mediaCounts.images}</small>
+          </button>
+          <button type="button" className="chat-profile-media-card" onClick={() => { handleViewAll(); setSelectedTab('videos'); }}>
+            <span className="chat-profile-media-icon">◉</span>
+            <strong>Shots</strong>
+            <small>{mediaCounts.videos}</small>
+          </button>
+          <button type="button" className="chat-profile-media-card" onClick={() => { handleViewAll(); setSelectedTab('documents'); }}>
+            <span className="chat-profile-media-icon">▣</span>
+            <strong>Videos</strong>
+            <small>{mediaCounts.docs}</small>
+          </button>
+        </div>
+      </section>
+
+      <section className="chat-profile-section">
+        <div className="chat-profile-section-label">Actions</div>
+        <div className="chat-profile-card-list">
+          <button type="button" className="chat-profile-card-row">
+            <span className="chat-profile-row-icon chat-profile-row-icon--soft">★</span>
+            <span className="chat-profile-row-copy"><strong>Mark Important</strong></span>
+          </button>
+          <button type="button" className="chat-profile-card-row">
+            <span className="chat-profile-row-icon chat-profile-row-icon--soft">⌖</span>
+            <span className="chat-profile-row-copy"><strong>Pin Chat</strong></span>
+          </button>
+          <button type="button" className="chat-profile-card-row" onClick={handleArchive}>
+            <span className="chat-profile-row-icon chat-profile-row-icon--soft">🗂</span>
+            <span className="chat-profile-row-copy"><strong>Archive Chat</strong></span>
+          </button>
+          <button type="button" className="chat-profile-card-row chat-profile-card-row--danger" onClick={isTargetBlocked ? handleUnblock : handleBlock}>
+            <span className="chat-profile-row-icon chat-profile-row-icon--danger">{isTargetBlocked ? "✓" : "⛔"}</span>
+            <span className="chat-profile-row-copy"><strong>{isTargetBlocked ? 'Unblock User' : 'Block User'}</strong></span>
+          </button>
+          <button type="button" className="chat-profile-card-row chat-profile-card-row--danger" onClick={handleDeleteChat}>
+            <span className="chat-profile-row-icon chat-profile-row-icon--danger">⌦</span>
+            <span className="chat-profile-row-copy"><strong>Delete Chat</strong></span>
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
+) : null;
 
     return (
-        <div className="chat-window d-flex flex-column vh-100">
+        <div
+          className={`chat-window-shell chat-window-shell--${appTheme} ${isProfileDocked ? "is-profile-docked" : ""}`}
+          style={{
+            "--chat-bg": colors.background,
+            "--chat-panel": colors.panel,
+            "--chat-panel-alt": colors.panelAlt,
+            "--chat-border": colors.border,
+            "--chat-text": colors.textPrimary,
+            "--chat-subtext": colors.subtext,
+            "--chat-accent": colors.bubbleYou,
+            "--chat-accent-alt": colors.accent,
+            "--chat-bubble-other": colors.bubbleOther,
+            "--chat-composer": colors.composer,
+            "--chat-shell": colors.shell,
+          }}
+        >
+        <div
+          className={`chat-window d-flex flex-column vh-100 ${embedded ? "desktop-embedded-chat-window" : ""}`}
+          style={embedded ? { height: "100%", minHeight: 0, position: "relative" } : undefined}
+        >
           { isloading && (
 
    <div style={{ textAlign: 'center',display: 'flex', justifyContent: 'center', alignItems: 'center',position: 'fixed', top: '50%', left: '50%', zIndex: 999999,transform: 'translate(-50%, -50%)',    background:' rgba(0, 0, 0, 0.5',height: '100vh',width:'100%',overflowY: 'auto' }}>
@@ -3650,7 +4001,7 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
             {
   selectionMode ? (
     // Header for selection mode
-      <div className="flex items-center justify-between w-full max-w-3xl px-4 py-2 relative bg-primary text-white" style={{ height: '70px' ,position:'fixed'}}>
+      <div className="flex items-center justify-between w-full max-w-3xl px-4 py-2 relative bg-primary text-white" style={{ height: '70px' ,position: embedded ? 'absolute' : 'fixed'}}>
     {/* Left: Back Button */}
     <div className="flex items-center space-x-3">
       <button
@@ -3731,7 +4082,13 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
   ) : (
              <div
   className={`header  text-white d-flex items-center p-3 justify-between transition-all duration-300 ${isExpanded ? 'expanded' : ''}`}
-  style={{ height: isExpanded ? '100vh' : '100px', overflow: isExpanded ? 'auto' : 'hidden',background: 'rgb(43, 45, 49)' }}
+  style={{
+    display: 'contents',
+    height: 'auto',
+    overflow: 'visible',
+    background: 'transparent',
+    padding: '0px'
+  }}
 >
   {/* Back Button */}
  {isExpanded && <button
@@ -3863,7 +4220,7 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
 
 
   {/* Profile and Name Section */}
-  {!isExpanded && userdetails && (
+  {false && !isExpanded && userdetails && (
    <div className="flex items-center justify-between w-full max-w-3xl px-4 py-2 relative">
 
    {/* Left: Back Button */}
@@ -3936,12 +4293,60 @@ const introDescription = userdetails?.About || "Messages are end-to-end encrypte
  
   )}
 
+  {showStandardChatSurface && userdetails && (
+   <div className="chat-thread-header">
+    <div className="chat-thread-header-main">
+      <button
+        className="chat-thread-icon-btn"
+        title="Back"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleBackButton();
+        }}
+      >
+        <IonIcon icon={arrowBackOutline} size="small" />
+      </button>
+      <button
+        type="button"
+        className="chat-thread-user"
+        onClick={toggleHeader}
+      >
+        <img
+          src={userdetails.avatar || img}
+          alt="Avatar"
+          className="chat-thread-avatar"
+        />
+        <div className="chat-thread-user-copy">
+          <h4 className="chat-thread-user-name">
+            {userdetails.name?.length > 15 ? `${userdetails.name.slice(0, 15)}...` : userdetails.name}
+          </h4>
+          <div className="chat-thread-user-status">
+            {userdetails.isActive !== false ? "Active now" : "Online"}
+          </div>
+        </div>
+      </button>
+    </div>
+    <div className="chat-thread-header-actions">
+      <button className="chat-thread-icon-btn" title="Call" onClick={() => handleStartCall(true)}>
+        <IonIcon icon={call} size="small" />
+      </button>
+      <button className="chat-thread-icon-btn" title="Video Call" onClick={() => handleStartCall(false)}>
+        <IonIcon icon={videocam} size="small" />
+      </button>
+      <button className="chat-thread-icon-btn" title="More Options" onClick={() => handleMoreOptions(userdetails.id)}>
+        <IonIcon icon={ellipsisVerticalOutline} size="small" />
+      </button>
+    </div>
+  </div>
+  )}
+
   {/* Expanded View - User Details and Call Options */}
      {/* Expanded Profile View */}
-      {isExpanded && userdetails && (
+      {!isProfileDocked && isExpanded && userdetails && expandedProfilePanel}
+      {false && !isProfileDocked && isExpanded && userdetails && (
         <div
-          className="expanded-view fixed inset-0 z-50 overflow-hidden flex flex-col"
-          style={{ backgroundColor: colors.background }}
+          className="expanded-view inset-0 z-50 overflow-hidden flex flex-col"
+          style={{ backgroundColor: colors.background, position: embedded ? "absolute" : "fixed" }}
           onClick={() => setShowExpandedMenu(false)}
         >
           <div
@@ -4636,14 +5041,10 @@ setSelectedTab('documents')
 
             {/* Messages container */}
   <div
-  className="messages-container flex-grow flex flex-col-reverse overflow-y-auto p-3"
+  className={`messages-container chat-messages-surface chat-messages-surface--${appTheme} flex-grow flex flex-col-reverse overflow-y-auto p-3`}
   style={{
-    marginTop: "70px",
-    backgroundColor: "var(--background)",
- backgroundImage: " linear-gradient(rgba(var(--chat-bg-overlay), 0.9), rgba(var(--chat-bg-overlay), 0.9)), url('/circuit-board/circuit-board.svg')",
-
-     backgroundRepeat: "repeat",
-    backgroundSize: "304px 304px",
+    marginTop: "5px",
+    position: "relative",
   }}
   ref={scrollRef}
   onScroll={handleScroll} >
@@ -4653,9 +5054,9 @@ setSelectedTab('documents')
           ref={buttonRef}
           onClick={scrollToMessages}
           style={{
-            position: 'fixed',
-            bottom: '20dvh',
-            right: '20px',
+            position: embedded ? 'absolute' : 'fixed',
+            bottom: embedded ? '104px' : '20dvh',
+            right: embedded ? '18px' : '20px',
             padding: '15px 15px',
             backgroundColor: '#007bff',
             color: 'white',
@@ -4864,7 +5265,7 @@ setSelectedTab('documents')
        </IonButton>
      ) : (
        // Show real audio player after downloaded
-       <waveForm audioFile={msg.file_path} msg = {msg} />
+       <WaveformPlayer audioFile={msg.file_path} msg={msg} />
      )}
    </div>
  </div>
@@ -5480,20 +5881,14 @@ top: '50%',
                              </div>
           ) : (
             <div
-            className={`max-w-xs p-3 rounded-lg shadow `}
+            className={`chat-text-bubble ${msg.sender === user._id ? 'chat-text-bubble--mine' : 'chat-text-bubble--other'}`}
             style={{
-              position: 'relative' ,
-              maxWidth: "20rem",         // max-w-xs = max-width: 20rem
-              padding: "0.75rem",         // p-3 = padding: 0.75rem
-              borderRadius: "0.5rem",     // rounded-lg = border-radius: 0.5rem
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)", // shadow = basic light shadow
-              backgroundColor: msg.sender === user._id ? "white" : "#BFDBFE", // bg-white or bg-blue-250
-              color: msg.sender === user._id ? "black" : "black"             // text-black or text-red-1000
+              position: 'relative',
             }}
         >
-            <p>{msg.content}</p>
+            <p className="chat-text-bubble-content">{msg.content}</p>
             {renderReplyPreview(msg)}
-            <small className="block mb-2 my-2 text-right">
+            <small className="chat-text-bubble-time">
               {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </small>
             
@@ -5550,35 +5945,17 @@ top: '50%',
           )}
         </div>
       ))}
-      {!selectionMode && !isExpanded && (
+      {!selectionMode && showStandardChatSurface && (
         <div className="d-flex justify-content-center px-2 mb-2" style={{ paddingTop: "14px" }}>
-          <div
-            style={{
-              width: "min(92%, 420px)",
-              background: "#20242b",
-              border: "1px solid #343b46",
-              color: "#e5e7eb",
-              borderRadius: "18px",
-              padding: "14px 12px",
-              textAlign: "center",
-              boxShadow: "0 6px 14px rgba(0, 0, 0, 0.18)",
-            }}
-          >
+          <div className="chat-intro-card">
             <img
               src={introAvatar}
               alt={introName}
-              style={{
-                width: "82px",
-                height: "82px",
-                borderRadius: "50%",
-                objectFit: "cover",
-                margin: "0 auto 8px",
-                border: "2px solid #4b5563",
-              }}
+              className="chat-intro-avatar"
             />
-            <h6 style={{ margin: "0 0 4px", fontSize: "1rem", fontWeight: 700 }}>{introName}</h6>
+            <h6 className="chat-intro-name">{introName}</h6>
             {introCreatedAt ? (
-              <div style={{ fontSize: "0.83rem", color: "#cbd5e1", marginBottom: "6px" }}>
+              <div className="chat-intro-date">
                 {new Date(introCreatedAt).toLocaleString([], {
                   year: "numeric",
                   month: "2-digit",
@@ -5588,14 +5965,7 @@ top: '50%',
                 })}
               </div>
             ) : null}
-            <div
-              style={{
-                fontSize: "0.82rem",
-                color: "#d1d5db",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
+            <div className="chat-intro-copy">
               {introDescription}
             </div>
           </div>
@@ -5664,41 +6034,15 @@ top: '50%',
               scrollToMessageById(replyTargetMessage.id);
             }
           }}
-          style={{
-            margin: "0 12px 6px",
-            backgroundColor: "#4b8fe8",
-            color: "#fff",
-            borderRadius: "9px",
-            padding: "7px 10px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
-            cursor: "pointer",
-          }}
+          className="chat-reply-bar"
         >
           <div
-            style={{
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
+            className="chat-reply-label"
           >
             {getReplyBarLabel(replyTargetMessage)}
           </div>
           <div
-            style={{
-              fontSize: "0.72rem",
-              opacity: 0.9,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              marginLeft: "6px",
-              flex: 1,
-              textAlign: "right",
-            }}
+            className="chat-reply-meta"
           >
             {getReplyBarMeta(replyTargetMessage)}
           </div>
@@ -5708,19 +6052,7 @@ top: '50%',
               e.stopPropagation();
               setReplyTargetMessage(null);
             }}
-            style={{
-              border: "none",
-              width: "24px",
-              height: "24px",
-              borderRadius: "50%",
-              lineHeight: 1,
-              fontWeight: 700,
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            className="chat-reply-close"
             aria-label="Cancel reply"
           >
             <MdClose size={14} />
@@ -5731,16 +6063,7 @@ top: '50%',
             {/* Message input form */}
 	  <form
   onSubmit={sendMessage}
-  className="flex items-center gap-2"
-  style={{
-    zIndex: 100,
-    minHeight: "72px",
-    padding: "10px 12px",
-    borderTop: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "16px",
-    boxShadow: "0px -6px 20px rgba(0, 0, 0, 0.25)",
-    backgroundColor: "rgba(33, 36, 41, 0.98)"
-  }}
+  className="chat-composer"
 >
   {isRecording  ? (
     // 🎤 Voice Recording Mode UI
@@ -5759,7 +6082,7 @@ top: '50%',
       {/* Emoji Button */}
       <button
         type="button"
-        className="btn p-0"
+        className="chat-composer-side-btn"
         style={{
           width: "40px",
           height: "40px",
@@ -5785,38 +6108,19 @@ top: '50%',
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
        
-         className="flex-grow p-2 rounded-md focus:outline-none"
+         className="chat-composer-input"
 	  placeholder={  isTargetBlocked ? 'You blocked this user' : 'Type a message'}
-          style={{
-            borderRadius: "18px",
-            color: "#e5e7eb",
-            backgroundColor: "#1f2228",
-            border: "1px solid rgba(255,255,255,0.08)",
-            padding: "10px 14px",
-            width: "100%",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)"
-          }}
+          style={{ width: "100%" }}
         />
 
         {/* File Attach Button */}
         { !newMessage && (
         <button
           type="button"
-          className="btn p-0"
-          style={{
-            width: "40px",
-            height: "40px",
-            borderRadius: "12px",
-            backgroundColor: "#1f2228",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "#8ab4ff",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
+          className="chat-composer-side-btn"
           onClick={toggleFileOptions}
         >
-          <FaPaperclip style={{ fontSize: "1.1rem", color: "#8ab4ff" }} />
+          <FaPaperclip style={{ fontSize: "1rem" }} />
         </button>)}
               {showEmojiPicker && (
         <div
@@ -5841,7 +6145,7 @@ top: '50%',
             style={{
               bottom: "70px",
               right: "0px",
-              background: "rgba(33, 36, 41, 0.98)",
+              background: "var(--chat-panel)",
               padding: "10px",
               zIndex: 200,
               display: "flex",
@@ -5856,18 +6160,7 @@ top: '50%',
             {/* Image/Video */}
             <button
               type="button"
-              className="btn p-0"
-              style={{
-                backgroundColor: "#1f2228",
-                color: "#8ab4ff",
-                borderRadius: "12px",
-                width: "44px",
-                height: "44px",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "1px solid rgba(255,255,255,0.08)"
-              }}
+              className="chat-composer-side-btn"
               onClick={handlePickMedia}
             >
               <FaImage style={{ fontSize: "1.25rem" }} />
@@ -5916,18 +6209,7 @@ top: '50%',
       {/* Traditional Send Button */}
       <button
         type="submit"
-        className="btn ms-2"
-        style={{
-          backgroundColor: "#3B82F6",
-          color: "white",
-          borderRadius: "16px",
-          padding: "10px 16px",
-          fontSize: "0.95rem",
-          fontWeight: 600,
-          border: "none",
-          minWidth: "72px",
-          boxShadow: "0 6px 14px rgba(59,130,246,0.35)"
-        }}
+        className="chat-send-btn"
   onMouseDown={handlePressStart2}
   onMouseUp={handlePressEnd2}
   onMouseLeave={handlePressCancel}
@@ -6179,9 +6461,9 @@ top: '50%',
   </div>
 )}
 
-
-
         </div>
+        {isProfileDocked && expandedProfilePanel}
+      </div>
     );
 };
 

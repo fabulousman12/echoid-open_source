@@ -1,9 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { IonIcon } from '@ionic/react';
 import { playOutline, pauseOutline } from 'ionicons/icons';
+import {
+  createObjectUrlFromWebFileRef,
+  isWebStoredFileRef,
+  revokeResolvedObjectUrl,
+} from '../services/webFileStore';
 
-const SimpleAudioPlayer = ({ audioFile, msg }) => {
+const SimpleAudioPlayer = ({ audioFile }) => {
   const audioRef = useRef(null);
+  const [resolvedAudioFile, setResolvedAudioFile] = useState(audioFile);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -12,15 +18,38 @@ const SimpleAudioPlayer = ({ audioFile, msg }) => {
   const [buffering, setBuffering] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+
+    const resolveAudio = async () => {
+      if (isWebStoredFileRef(audioFile)) {
+        objectUrl = await createObjectUrlFromWebFileRef(audioFile);
+        if (active) setResolvedAudioFile(objectUrl || audioFile);
+      } else {
+        setResolvedAudioFile(audioFile);
+      }
+    };
+
+    resolveAudio();
+
+    return () => {
+      active = false;
+      revokeResolvedObjectUrl(objectUrl);
+    };
+  }, [audioFile]);
+
+  useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    setLoading(true);
+    setError(null);
+
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
+      setDuration(audio.duration || 0);
       setLoading(false);
     };
-
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime || 0);
     const handleError = () => {
       setError('Error playing audio.');
       setIsPlaying(false);
@@ -42,7 +71,7 @@ const SimpleAudioPlayer = ({ audioFile, msg }) => {
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('playing', handlePlaying);
     };
-  }, [audioFile]);
+  }, [resolvedAudioFile]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -63,10 +92,7 @@ const SimpleAudioPlayer = ({ audioFile, msg }) => {
 
     const wasPlaying = !audio.paused;
     audio.pause();
-
-    const seekTime = (e.target.value / 100) * audio.duration;
-    audio.currentTime = seekTime;
-
+    audio.currentTime = (Number(e.target.value) / 100) * (audio.duration || 0);
     if (wasPlaying) {
       setTimeout(() => audio.play(), 300);
     }
@@ -122,7 +148,7 @@ const SimpleAudioPlayer = ({ audioFile, msg }) => {
             <div style={{ fontSize: 11, color: 'white' }}>{formatTime(duration)}</div>
           </div>
 
-          <audio ref={audioRef} src={audioFile} preload="metadata" />
+          <audio ref={audioRef} src={resolvedAudioFile} preload="metadata" />
         </>
       )}
     </div>

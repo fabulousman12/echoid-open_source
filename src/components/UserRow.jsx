@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useSwipeable } from 'react-swipeable';
 import img from '/img.jpg';
-import { FaBellSlash } from 'react-icons/fa';
+import { FaBellSlash, FaCheckDouble } from 'react-icons/fa';
 import './UserRow.css';
-const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, selectedUsers, setSelectedUsers, selectionMode, setSelectionMode, mutedUsers, swipeFeedback }) => {
+const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, selectedUsers, setSelectedUsers, selectionMode, setSelectionMode, mutedUsers, swipeFeedback, appTheme }) => {
   const [isSwiped, setIsSwiped] = useState(false);  // Track swipe completion
   const [swipeDirection, setSwipeDirection] = useState('');  // Track swipe direction
   const timeoutRef = useRef(null);
@@ -60,6 +60,28 @@ const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, sel
   };
 
   const isSelected = selectedUsers.includes(user.id);
+  const hasUnread = Number(user.unreadCount || 0) > 0;
+  const previewText = String(user.lastMessage || '');
+  const isTyping = /^typing/i.test(previewText);
+  const baseBackground = appTheme === "dark" ? '#121a2d' : '#ffffff';
+  const selectedBackground = appTheme === "dark" ? '#18274a' : '#eef1ff';
+
+  const formatTimestamp = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const isSameDay = date.toDateString() === now.toDateString();
+    if (isSameDay) {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
 
   // Determine the background color based on the action type
   const getActionColor = (action) => {
@@ -82,16 +104,14 @@ const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, sel
       className="list-group-item user-card d-flex justify-content-between align-items-center"
       style={{
         position: 'relative',
-        marginBottom: '10px',
         overflow: 'hidden',
-
         transform: isActiveSwipe
           ? 'translateX(100%)' // Fixed to translate right for swipe action
           : isSwiped
           ? `translateX(${swipeDirection === 'left' ? '-100%' : '100%'})` // Move based on swipe direction
           : 'translateX(0)', // Return to original position
         transition: 'transform 0.3s ease',
-        backgroundColor: isSelected ? 'rgb(79 ,255 ,231)' : '#ecfdff', // Highlight selected users
+        backgroundColor: isSelected ? selectedBackground : baseBackground,
         animation: isSwiped ? `${swipeDirection === 'left' ? 'leftRecoil' : 'rightRecoil'} 0.6s ease-in-out` : '', // Apply recoil effect based on direction
       }}
       {...handlers}
@@ -105,28 +125,33 @@ const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, sel
         src={user.avatar || img}
         alt={`${user.name}'s avatar`}
          loading="lazy"
-        className="rounded-circle"
-        style={{ marginRight: '10px', width: '48px', height: '48px' ,aspectRatio: '4/3'}}
+        className="user-row-avatar"
       />
-      <div className="flex-grow-1">
-        <h6 className="mb-0 user-name">{user.name}</h6>
+      <div className="flex-grow-1 user-row-copy">
+        <div className="user-row-topline">
+          <h6 className="mb-0 user-name">{user.name}</h6>
+          <small className="timestamp d-block">
+            {formatTimestamp(user.timestamp)}
+          </small>
+        </div>
         {mutedUsers && mutedUsers.includes(user.id) && (
           <FaBellSlash
-            className="ms-2"
-            style={{ color: 'gray', fontSize: '0.9rem' }}
+            className="user-row-muted"
             title="Muted"
           />
         )}
         {user.lastMessage && (
-        <small className="text-muted last-message">  {user.lastMessage.length > 20
-    ? user.lastMessage.slice(0, 20) + '...'
-    : user.lastMessage}</small>)}
+          <div className={`last-message ${isTyping ? 'last-message--typing' : ''}`}>
+            {!hasUnread && !isTyping && <FaCheckDouble className="user-row-read-icon" />}
+            <span>
+              {previewText.length > 36 ? `${previewText.slice(0, 36)}...` : previewText}
+            </span>
+          </div>
+        )}
       </div>
-      <div className="text-right">
-        {user.unreadCount > 0 && <span className="badge " style={{backgroundColor:'rgb(43, 45, 49)'}}>{user.unreadCount}</span>}
-        <small className="text-muted timestamp d-block">
-          {user.timestamp ? new Date(user.timestamp).toLocaleTimeString() : ''}
-        </small>
+      <div className="text-right user-row-meta">
+        {hasUnread && <span className="badge unread-badge-modern">{user.unreadCount}</span>}
+        {user.isActive !== false && <span className="user-row-online" />}
       </div>
 
       {isActiveSwipe && (

@@ -1,9 +1,13 @@
-import { getAccessToken, getRefreshToken, setTokens, globalLogout } from "./authTokens";
+import { getAccessToken, getRefreshToken, setTokens, globalLogout, isTemporarySession } from "./authTokens";
 import { getDeviceInfo, getDeviceId } from "./deviceInfo";
 import Swal from "sweetalert2";
 
 let refreshPromise = null;
 let refreshSwalShown = false;
+
+function isBannedMessage(message) {
+  return String(message || "").toLowerCase().includes("banned");
+}
 
 export async function refreshAccessToken(host) {
   if (refreshPromise) return refreshPromise;
@@ -13,19 +17,28 @@ export async function refreshAccessToken(host) {
     if (!refreshToken) return null;
     const deviceInfo = await getDeviceInfo();
 
-    const res = await fetch(`${host}/user/refresh`, {
+    const refreshPath = isTemporarySession() ? "/user/temp/refresh" : "/user/refresh";
+    const res = await fetch(`${host}${refreshPath}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken, ...deviceInfo })
     });
 
     if (!res.ok) {
+      let serverMessage = "Your session was revoked. Please login again.";
+      try {
+        const json = await res.json();
+        serverMessage = json?.error || json?.message || serverMessage;
+      } catch {
+        // ignore JSON parse failures
+      }
+
       if (res.status === 401 || res.status === 403) {
         if (!refreshSwalShown) {
           refreshSwalShown = true;
           Swal.fire({
-            title: "Session revoked",
-            text: "Your session was revoked. Please login again.",
+            title: isBannedMessage(serverMessage) ? "Account banned" : "Session revoked",
+            text: serverMessage,
             icon: "error",
             confirmButtonText: "OK",
             width: 320,
@@ -46,7 +59,8 @@ export async function refreshAccessToken(host) {
     if (!json.authtoken) return null;
     await setTokens({
       accessToken: json.authtoken,
-      refreshToken: json.refreshToken || refreshToken
+      refreshToken: json.refreshToken || refreshToken,
+      isTemporary: isTemporarySession()
     });
     refreshSwalShown = false;
     return json.authtoken;
@@ -66,7 +80,8 @@ export async function refreshAccessTokenWithReason(host) {
   }
 
   const deviceInfo = await getDeviceInfo();
-  const res = await fetch(`${host}/user/refresh`, {
+  const refreshPath = isTemporarySession() ? "/user/temp/refresh" : "/user/refresh";
+  const res = await fetch(`${host}${refreshPath}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken, ...deviceInfo })
@@ -93,7 +108,8 @@ export async function refreshAccessTokenWithReason(host) {
 
   await setTokens({
     accessToken: json.authtoken,
-    refreshToken: json.refreshToken || refreshToken
+    refreshToken: json.refreshToken || refreshToken,
+    isTemporary: isTemporarySession()
   });
   return { token: json.authtoken, error: null };
 }

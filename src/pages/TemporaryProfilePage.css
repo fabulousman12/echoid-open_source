@@ -1,0 +1,86 @@
+.temporary-profile-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(255, 184, 77, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 184, 77, 0.12) 1px, transparent 1px),
+    linear-gradient(180deg, #1b2232 0%, #202736 100%);
+  background-size: 18px 18px, 18px 18px, auto;
+  padding: 12px;
+}
+
+.temporary-profile-shell {
+  padding: 0;
+}
+
+.temporary-profile-card {
+  width: min(100%, 960px);
+  border-radius: 16px;
+}
+
+.temporary-profile-navbar {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 0 24px 8px;
+}
+
+.temporary-profile-navlink,
+.temporary-profile-navbtn {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #eef3fb;
+  color: #617391;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.temporary-profile-navlink.is-active {
+  background: #5a58ff;
+  color: #fff;
+}
+
+.temporary-profile-navbtn {
+  min-width: 72px;
+}
+
+.temporary-profile-avatar {
+  background: linear-gradient(135deg, #eef3ff, #dce9ff);
+}
+
+.temporary-profile-eyebrow {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7f91af;
+  font-weight: 800;
+}
+
+.temporary-profile-id {
+  word-break: break-all;
+}
+
+.temporary-profile-warning {
+  color: #546884;
+}
+
+.temporary-profile-signout {
+  background: #17233d;
+}
+
+@media (max-width: 760px) {
+  .temporary-profile-page {
+    padding: 0;
+    background: linear-gradient(180deg, #eff4fb 0%, #f7f9fe 100%);
+  }
+
+  .temporary-profile-card {
+    border-radius: 0;
+    min-height: 100vh;
+  }
+
+  .temporary-profile-navbar {
+    padding-inline: 16px;
+  }
+}

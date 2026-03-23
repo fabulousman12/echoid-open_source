@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { IonSpinner,IonImg } from '@ionic/react';
 import { Capacitor } from '@capacitor/core';
 import imga from '../../public/favicon.png';
+import { createObjectUrlFromWebFileRef, isWebStoredFileRef, revokeResolvedObjectUrl } from '../services/webFileStore';
 
 interface Props {
   src: string;
@@ -78,11 +79,25 @@ const ImageRenderer: React.FC<Props> = ({
   useEffect(() => {
     let retries = 0;
     let stopped = false;
+    let resolvedObjectUrl = "";
 
     const resolvePath = async () => {
       setLoading(true);
       setScale(1);
       setOffset({ x: 0, y: 0 });
+
+      if (isWebStoredFileRef(src)) {
+        try {
+          resolvedObjectUrl = await createObjectUrlFromWebFileRef(src);
+          setUri(resolvedObjectUrl || imga);
+        } catch (error) {
+          console.error("Failed to resolve web-stored image:", error);
+          setUri(imga);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
 
       const normalized = normalizeSource(src);
       if (
@@ -123,6 +138,7 @@ const ImageRenderer: React.FC<Props> = ({
 
     return () => {
       stopped = true;
+      revokeResolvedObjectUrl(resolvedObjectUrl);
     };
   }, [src]);
 

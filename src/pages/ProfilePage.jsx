@@ -4,7 +4,8 @@ import StarLoader from './StarLoader';
 import './ProfilePage.css';
 //import { cameraOutline, closeCircleOutline } from 'ionicons/icons';
 import { useHistory, useLocation } from 'react-router';
-import { User, Mail, Phone, Calendar, MapPin, LogOut, Edit2, Save, X, Camera } from 'lucide-react';
+import { User, Mail, Phone, Calendar, MapPin, LogOut, Edit2, Save, X, Camera, ChevronRight } from 'lucide-react';
+import { isPlatform } from '@ionic/react';
 import './ProfilePage.css'
 import Cropper from 'react-easy-crop';
 import { IoChevronBack } from "react-icons/io5";
@@ -56,6 +57,8 @@ const ProfilePage = ({host}) => {
   const [activeSection, setActiveSection] = useState(
     routeLocation?.state?.activeSection ?? null
   );
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 0));
+  const [appTheme, setAppTheme] = useState(() => globalThis.storage?.getItem?.("appTheme") || "light");
   const lastScrollTopRef = useRef(0);
   
   useEffect(() => {
@@ -125,6 +128,19 @@ const ProfilePage = ({host}) => {
     };
     loadDeviceId();
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    const syncTheme = () => setAppTheme(globalThis.storage?.getItem?.("appTheme") || "light");
+    handleResize();
+    syncTheme();
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("app-theme-changed", syncTheme);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("app-theme-changed", syncTheme);
+    };
   }, []);
 
   const toggleEdit = () => setIsEditing(true);
@@ -489,8 +505,352 @@ if (
   );
 };
 
+  const renderDesktopProfileDetails = () => (
+    <div className={`profile-web-shell profile-web-shell--${profileThemeClass}`}>
+      <div className="profile-web-card">
+        <div className="profile-web-topbar">
+          <div className="profile-web-topbar-title">Profile</div>
+          <button
+            type="button"
+            className="profile-web-settings-btn"
+            onClick={() => (activeSection ? handleCloseSection() : history.push("/home"))}
+            title={activeSection ? "Close" : "Back"}
+          >
+            {activeSection ? <X size={16} /> : <IoChevronBack size={18} />}
+          </button>
+        </div>
+
+        <div className="profile-web-hero">
+          <div className="profile-web-avatar-wrap">
+            {profilePhoto ? (
+              <img
+                src={profilePhoto}
+                alt="Profile"
+                className="profile-web-avatar"
+                onClick={() => setIsFullScreen(true)}
+              />
+            ) : (
+              <div className="profile-web-avatar profile-web-avatar--fallback">
+                <User size={40} />
+              </div>
+            )}
+            {isEditing ? (
+              <label htmlFor="profile-picture-upload-web" className="profile-web-avatar-edit">
+                <Camera size={14} />
+                <input
+                  id="profile-picture-upload-web"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePhotoChange}
+                  onClick={handlePhotoPickRequest}
+                  className="hidden"
+                />
+              </label>
+            ) : null}
+          </div>
+
+          <h2 className="profile-web-name">{name || "Profile"}</h2>
+          <div className="profile-web-email">{currentUser?.email || ""}</div>
+
+          {!isEditing ? (
+            <button type="button" className="profile-web-edit-btn" onClick={toggleEdit}>
+              Edit Profile
+            </button>
+          ) : (
+            <div className="profile-web-edit-actions">
+              <button type="button" className="profile-web-edit-btn is-primary" onClick={saveChanges}>
+                <Save size={14} />
+                <span>Save</span>
+              </button>
+              <button type="button" className="profile-web-edit-btn" onClick={handleCancelEdit}>
+                <X size={14} />
+                <span>Cancel</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="profile-web-grid">
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Full Name</span>
+            {isEditing ? (
+              <input type="text" value={name} onChange={handleNameChange} className="profile-web-input" />
+            ) : (
+              <div className="profile-web-value">{name || "Not set"}</div>
+            )}
+          </div>
+
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Email Address</span>
+            {isEditing ? (
+              <input type="email" value={currentUser?.email || ""} disabled className="profile-web-input is-disabled" />
+            ) : (
+              <div className="profile-web-value">{currentUser?.email || "Not set"}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="profile-web-panel">
+          <div className="profile-web-panel-label">
+            <span className="profile-web-panel-icon"><Edit2 size={14} /></span>
+            <span>About</span>
+          </div>
+          {isEditing ? (
+            <textarea
+              value={about}
+              onChange={handleAboutChange}
+              rows={4}
+              className="profile-web-input profile-web-textarea"
+            />
+          ) : (
+            <p className="profile-web-about">{about || "Not set"}</p>
+          )}
+        </div>
+
+        <div className="profile-web-grid">
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Phone Number</span>
+            {isEditing ? (
+              <input type="tel" value={currentUser?.phoneNumber || ""} disabled className="profile-web-input is-disabled" />
+            ) : (
+              <div className="profile-web-value">{currentUser?.phoneNumber || "Not set"}</div>
+            )}
+          </div>
+
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Location</span>
+            {isEditing ? (
+              <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="profile-web-input" />
+            ) : (
+              <div className="profile-web-value">{location || "Not set"}</div>
+            )}
+          </div>
+
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Date of Birth</span>
+            {isEditing ? (
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="profile-web-input" />
+            ) : (
+              <div className="profile-web-value">{dob || "Not set"}</div>
+            )}
+          </div>
+
+          <div className="profile-web-info-card">
+            <span className="profile-web-label">Gender</span>
+            {isEditing ? (
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className="profile-web-input">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Non-binary">Retard</option>
+                <option value="Prefer not to say">Prefer not to say(Low iq)</option>
+              </select>
+            ) : (
+              <div className="profile-web-value">{gender || "Not set"}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="profile-web-signout-wrap">
+          <button type="button" className="profile-web-signout" onClick={handleLogout}>
+            <LogOut size={15} />
+            <span>Sign Out</span>
+          </button>
+          <div className="profile-web-version">EchoId Version</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDesktopProfileOverview = () => (
+    <div className={`profile-settings-web profile-settings-web--${profileThemeClass}`}>
+      <div className="profile-settings-web__card">
+        <div className="profile-settings-web__topbar">
+          <button
+            type="button"
+            className="profile-settings-web__iconbtn"
+            onClick={() => history.push("/home")}
+            title="Back"
+          >
+            <IoChevronBack size={18} />
+          </button>
+          <div className="profile-settings-web__title">Profile Page</div>
+          <button
+            type="button"
+            className="profile-settings-web__iconbtn"
+            onClick={() => setActiveSection("profile")}
+            title="Profile detail"
+          >
+            <Edit2 size={16} />
+          </button>
+        </div>
+
+        <div className="profile-settings-web__hero">
+          <div className="profile-settings-web__avatarWrap">
+            {profilePhoto ? (
+              <img
+                src={profilePhoto}
+                alt="Profile"
+                className="profile-settings-web__avatar"
+                onClick={() => setIsFullScreen(true)}
+              />
+            ) : (
+              <div className="profile-settings-web__avatar profile-settings-web__avatar--fallback">
+                <User size={34} />
+              </div>
+            )}
+          </div>
+          <div className="profile-settings-web__name">{name || "Profile"}</div>
+          <div className="profile-settings-web__email">{currentUser?.email || ""}</div>
+        </div>
+
+        <div className="profile-settings-web__content">
+          <div className="profile-settings-web__sectionLabel">Public Info</div>
+          <div className="profile-settings-web__grid profile-settings-web__grid--two">
+            <button
+              type="button"
+              className="profile-settings-web__feature"
+              onClick={() => setActiveSection("profile")}
+            >
+              <span className="profile-settings-web__featureIcon"><User size={16} /></span>
+              <span className="profile-settings-web__featureText">
+                <strong>Profile detail</strong>
+                <small>View and edit profile info</small>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="profile-settings-web__feature"
+              onClick={() => setActiveSection("anonymous")}
+            >
+              <span className="profile-settings-web__featureIcon"><Mail size={16} /></span>
+              <span className="profile-settings-web__featureText">
+                <strong>Anonymous profile</strong>
+                <small>Manage anonymous identity</small>
+              </span>
+            </button>
+          </div>
+
+          <div className="profile-settings-web__sectionLabel">Status Visibility</div>
+          <div className="profile-settings-web__panel">
+            <div className="profile-settings-web__panelTitle">Select who can view your status</div>
+
+            <label className="profile-settings-web__statusOption" htmlFor="status-viewers-all-web">
+              <input
+                id="status-viewers-all-web"
+                type="radio"
+                name="status-viewers-web"
+                value="all_chat_users"
+                checked={statusViewerScope === "all_chat_users"}
+                onChange={() => {
+                  setStatusViewerScope("all_chat_users");
+                  globalThis.storage?.setItem?.("status_viewers_scope", JSON.stringify("all_chat_users"));
+                  const usersMain = globalThis.storage?.readJSON?.("usersMain", []) || [];
+                  const normalizeNumber = (value) => {
+                    if (!value) return "";
+                    const digits = String(value).replace(/\D/g, "");
+                    if (!digits) return "";
+                    const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+                    return `+91${last10}`;
+                  };
+                  const numbers = Array.from(
+                    new Set(
+                      usersMain
+                        .map((u) => normalizeNumber(u.phoneNumber || u.phone || u.mobile || u.number || u.contactNumber))
+                        .filter(Boolean)
+                    )
+                  );
+                  globalThis.storage?.setItem?.("status_viewers_numbers", JSON.stringify(numbers));
+                }}
+              />
+              <span className="profile-settings-web__statusRadio" />
+              <span className="profile-settings-web__statusCopy">
+                <strong>All chat users</strong>
+                <small>This option makes the status visible to only the users you have in your chat.</small>
+              </span>
+            </label>
+
+            <button
+              type="button"
+              className={`profile-settings-web__statusButton ${statusViewerScope === "selected_contacts" ? "is-active" : ""}`}
+              onClick={() => {
+                setStatusViewerScope("selected_contacts");
+                globalThis.storage?.setItem?.("status_viewers_scope", JSON.stringify("selected_contacts"));
+                history.push("/status-viewers");
+              }}
+            >
+              <span className="profile-settings-web__statusCopy">
+                <strong>Selected from contact</strong>
+                <small>Choose specific contacts who can view your status.</small>
+              </span>
+              <span className="profile-settings-web__statusMeta">
+                {statusViewerScope === "selected_contacts" ? (
+                  <span className="profile-settings-web__statusCount">{statusViewersCount}</span>
+                ) : null}
+                <ChevronRight size={16} />
+              </span>
+            </button>
+          </div>
+
+          <div className="profile-settings-web__dualSections">
+            <div>
+              <div className="profile-settings-web__sectionLabel">Security</div>
+              <div className="profile-settings-web__stack">
+                <button type="button" className="profile-settings-web__feature" onClick={openSessions}>
+                  <span className="profile-settings-web__featureIcon"><Phone size={16} /></span>
+                  <span className="profile-settings-web__featureText">
+                    <strong>Active logins</strong>
+                    <small>View devices and active sessions</small>
+                  </span>
+                </button>
+                <button type="button" className="profile-settings-web__feature" onClick={() => {}}>
+                  <span className="profile-settings-web__featureIcon"><Phone size={16} /></span>
+                  <span className="profile-settings-web__featureText">
+                    <strong>Manage password</strong>
+                    <small>Update or reset your password</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="profile-settings-web__sectionLabel">Support</div>
+              <div className="profile-settings-web__stack">
+                <button type="button" className="profile-settings-web__feature" onClick={() => {}}>
+                  <span className="profile-settings-web__featureIcon"><Mail size={16} /></span>
+                  <span className="profile-settings-web__featureText">
+                    <strong>Help center</strong>
+                    <small>Get answers and guides</small>
+                  </span>
+                </button>
+                <button type="button" className="profile-settings-web__feature" onClick={() => {}}>
+                  <span className="profile-settings-web__featureIcon"><Edit2 size={16} /></span>
+                  <span className="profile-settings-web__featureText">
+                    <strong>Report a bug</strong>
+                    <small>Tell us what went wrong</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="profile-settings-web__footer">
+            <button type="button" className="profile-settings-web__logout" onClick={handleLogout}>
+              Logout
+            </button>
+            <div className="profile-settings-web__version">EchoId Version</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const isDesktopWebProfile = !isPlatform('hybrid') && viewportWidth >= 940;
+  const profileThemeClass = appTheme === "dark" ? "dark" : "light";
+
   return (
     <div className="h-screen flex flex-col bg-slate-50">
+      {!isDesktopWebProfile && (
       <div className={`profile-fixed-header ${headerVisible ? "" : "is-hidden"}`}>
         <button
           onClick={() => (activeSection ? handleCloseSection() : history.push("/home"))}
@@ -502,13 +862,14 @@ if (
         <div className="profile-header-title">Profile Page</div>
         <div className="profile-header-spacer" />
       </div>
+      )}
 
       <div
         className="flex-1 overflow-y-auto scrollbar-hide profile-scroll"
         onScroll={handleHeaderScroll}
       >
-        <div className="profile-header-offset" />
-        {(!activeSection || activeSection === "profile") && (
+        {!isDesktopWebProfile && <div className="profile-header-offset" />}
+        {!isDesktopWebProfile && (!activeSection || activeSection === "profile") && (
         <div className="profile-hero">
           <div className="profile-avatar-wrapper">
             {profilePhoto ? (
@@ -538,13 +899,24 @@ if (
               </label>
             )}
           </div>
+          {isEditing && activeSection === "profile" && (
+            <label
+              htmlFor="profile-picture-upload"
+              className="profile-avatar-change-btn"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Change Photo</span>
+            </label>
+          )}
           <div className="profile-hero-name">{name}</div>
           <div className="profile-hero-email">{currentUser?.email || ""}</div>
         </div>
         )}
 
         <div className="profile-sections">
-          {!activeSection && (
+          {!activeSection && isDesktopWebProfile && renderDesktopProfileOverview()}
+
+          {!activeSection && !isDesktopWebProfile && (
   <>
     <h2>Public</h2>
     <div
@@ -755,7 +1127,9 @@ if (
   </>
 )}
 
-          {activeSection === "profile" && (
+          {activeSection === "profile" && isDesktopWebProfile && renderDesktopProfileDetails()}
+
+          {activeSection === "profile" && !isDesktopWebProfile && (
             <div className="profile-details-card">
               <div className="profile-details-header">
                 <h2 className="text-base font-semibold text-slate-900">
@@ -1048,7 +1422,7 @@ if (
 
         </div>
 
-        {!activeSection && (
+        {!activeSection && !isDesktopWebProfile && (
           <div className="p-3">
             <button
               onClick={handleLogout}
@@ -1076,8 +1450,8 @@ if (
       <div
         style={{
           width: "100%",
-          maxWidth: 520,
-          maxHeight: "80vh",
+          maxWidth: "min(92vw, 680px)",
+          maxHeight: "min(80vh, 760px)",
           background: "#fff",
           borderRadius: 12,
           overflow: "hidden",
@@ -1157,7 +1531,7 @@ if (
       <div
         style={{
           width: "100%",
-          maxWidth: 420,
+          maxWidth: "min(92vw, 420px)",
           background: "#fff",
           borderRadius: 12,
           overflow: "hidden",

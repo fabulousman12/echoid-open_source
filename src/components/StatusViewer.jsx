@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MdDeleteSweep } from "react-icons/md";
 import "./StatusViewer.css";
 
@@ -309,142 +310,13 @@ export default function StatusViewer({
     resumePlayback();
   };
 
-  return (
+  const viewerContent = (
     <div
       className="status-viewer-modal fixed top-0 left-0 w-full h-full bg-black flex flex-col items-center justify-center"
       style={{ zIndex: 9999, position: "fixed" }}
     >
-      <button
-        onClick={onClose}
-        className="absolute top-8 left-4 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
-        style={{ zIndex: 120 }}
-      >
-        X
-      </button>
-      {isOwn && current?.id && (
-        <button
-          onClick={async () => {
-            if (isDeleting) return;
-            pausePlayback();
-            setIsDeleting(true);
-            const ok = await onDeleteStatus?.(current.id);
-            setIsDeleting(false);
-            if (!ok) {
-              resumePlayback();
-              return;
-            }
-            viewedIdsRef.current.add(`deleted:${current.id}`);
-            if (safeItems.length > 1) {
-              if (activeIndex >= filteredItems.length - 1) {
-                setSkipCount((prev) => prev + 1);
-                setIndex(Math.max(0, index - 1));
-              } else {
-                setIndex(index);
-              }
-              resumePlayback();
-            } else {
-              onClose?.();
-            }
-          }}
-          className="absolute top-8 right-4 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
-          style={{ marginRight: "35px", zIndex: 120 }}
-        >
-          <MdDeleteSweep size={20} />
-        </button>
-      )}
-      {user && (
-        <div
-          className="absolute top-8 left-16 right-4 z-50"
-          style={{ display: "flex", alignItems: "center", gap: "10px", color: "white" }}
-        >
-          <img
-            src={user.avatar || "/img.jpg"}
-            alt={user.username || "User"}
-            style={{ width: "45px", height: "45px", borderRadius: "50%", objectFit: "cover" }}
-          />
-          <div style={{ fontWeight: 600 }}>
-            {String(user.username || "User").length > 12
-              ? `${String(user.username || "User").slice(0, 12)}...`
-              : String(user.username || "User")}
-            {timeLabel ? (
-              <span style={{ marginLeft: "8px", fontSize: "12px", opacity: 0.8 }}>
-                {timeLabel}
-              </span>
-            ) : null}
-          </div>
-          {isVideo && (
-            <button
-              type="button"
-              onClick={() => setIsMuted((prev) => !prev)}
-              style={{
-                marginLeft: "auto",
-                background: "rgba(0,0,0,0.5)",
-                border: "1px solid rgba(255,255,255,0.4)",
-                position:"absolute",
-                
-                color: "white",
-                top:'80px',
-                right:'25px',
-                borderRadius: "999px",
-                padding: "4px 10px",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-            >
-              {isMuted ? "Muted" : "Sound"}
-            </button>
-          )}
-          {timeLeft > 0 && (
-            <div
-              style={{
-                marginLeft: isVideo ? "8px" : "auto",
-                fontSize: "12px",
-                opacity: 0.8,
-              }}
-            >
-              {timeLeft}s
-            </div>
-          )}
-        </div>
-      )}
-
       <div
-        className="absolute left-4 right-4 z-50"
-        style={{ top: "100px", display: "flex", gap: "6px" }}
-      >
-        {safeItems.map((_, i) => {
-          const isPast = i < index;
-          const isActive = i === index;
-          const scale = isPast ? 1 : isActive ? Math.max(0, Math.min(1, progress)) : 0;
-          return (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                height: "4px",
-                
-                borderRadius: "999px",
-                border: "1px solid rgba(255,255,255,0.65)",
-                background: "transparent",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  background: "rgba(255, 255, 255, 0.9)",
-                  transform: `scaleX(${scale})`,
-                  transformOrigin: "left",
-                  transition: isVideo ? "none" : "transform 120ms linear",
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      <div
-        className="flex-1 flex flex-col items-center justify-center w-full"
+        className="status-viewer-stage flex-1 flex flex-col items-center justify-center w-full"
         ref={containerRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -452,12 +324,103 @@ export default function StatusViewer({
         onMouseUp={resumePlayback}
         onMouseLeave={resumePlayback}
       >
+        <div className="status-viewer-shell">
+          <div className="status-viewer-top-overlay">
+            <div className="status-viewer-progress-row">
+              {safeItems.map((_, i) => {
+                const isPast = i < index;
+                const isActive = i === index;
+                const scale = isPast ? 1 : isActive ? Math.max(0, Math.min(1, progress)) : 0;
+                return (
+                  <div key={i} className="status-viewer-progress-track">
+                    <div
+                      className="status-viewer-progress-fill"
+                      style={{
+                        transform: `scaleX(${scale})`,
+                        transition: isVideo ? "none" : "transform 120ms linear",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="status-viewer-header-row">
+              <button
+                onClick={onClose}
+                className="status-viewer-top-btn"
+              >
+                X
+              </button>
+
+              {user ? (
+                <div className="status-viewer-user-meta">
+                  <img
+                    src={user.avatar || "/img.jpg"}
+                    alt={user.username || "User"}
+                    className="status-viewer-user-avatar"
+                  />
+                  <div className="status-viewer-user-copy">
+                    <div className="status-viewer-user-name">
+                      {String(user.username || "User").length > 16
+                        ? `${String(user.username || "User").slice(0, 16)}...`
+                        : String(user.username || "User")}
+                    </div>
+                    {timeLabel ? <div className="status-viewer-user-time">{timeLabel}</div> : null}
+                  </div>
+                </div>
+              ) : <div className="status-viewer-user-meta" />}
+
+              <div className="status-viewer-top-actions">
+                {isVideo ? (
+                  <button
+                    type="button"
+                    className="status-viewer-top-btn"
+                    onClick={() => setIsMuted((prev) => !prev)}
+                  >
+                    {isMuted ? "Muted" : "Sound"}
+                  </button>
+                ) : null}
+                {timeLeft > 0 ? <div className="status-viewer-top-time">{timeLeft}s</div> : null}
+                {isOwn && current?.id ? (
+                  <button
+                    onClick={async () => {
+                      if (isDeleting) return;
+                      pausePlayback();
+                      setIsDeleting(true);
+                      const ok = await onDeleteStatus?.(current.id);
+                      setIsDeleting(false);
+                      if (!ok) {
+                        resumePlayback();
+                        return;
+                      }
+                      viewedIdsRef.current.add(`deleted:${current.id}`);
+                      if (safeItems.length > 1) {
+                        if (activeIndex >= filteredItems.length - 1) {
+                          setSkipCount((prev) => prev + 1);
+                          setIndex(Math.max(0, index - 1));
+                        } else {
+                          setIndex(index);
+                        }
+                        resumePlayback();
+                      } else {
+                        onClose?.();
+                      }
+                    }}
+                    className="status-viewer-top-btn"
+                  >
+                    <MdDeleteSweep size={18} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
         <div
+          className="status-viewer-frame"
           style={{
             width: "100%",
-            maxWidth: "min(92vw, 520px)",
             aspectRatio: "9 / 16",
-            maxHeight: "80vh",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -525,14 +488,7 @@ export default function StatusViewer({
 
         {current?.caption ? (
           <div
-            style={{
-              position:'absolute',
-              color: "white",
-              bottom: "50px",
-              fontSize: "15px",
-              maxWidth: "88%",
-              textAlign: "center",
-            }}
+            className="status-viewer-caption"
           >
             {current.caption}
           </div>
@@ -645,6 +601,7 @@ export default function StatusViewer({
             Deleting...
           </div>
         )}
+        </div>
       </div>
       {viewerSheetOpen && (
         <div
@@ -754,4 +711,10 @@ export default function StatusViewer({
       )}
     </div>
   );
+
+  if (typeof document !== "undefined" && document.body) {
+    return createPortal(viewerContent, document.body);
+  }
+
+  return viewerContent;
 }

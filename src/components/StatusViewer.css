@@ -1,5 +1,8 @@
 .status-viewer-modal {
   animation: statusViewerIn 200ms ease-out;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  background: #0a0a0a;
 }
 
 @keyframes statusViewerIn {
@@ -10,5 +13,151 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+.status-viewer-stage {
+  position: relative;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.status-viewer-shell {
+  position: relative;
+  width: min(92vw, 520px);
+  height: min(80vh, calc(92vw * 16 / 9));
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.status-viewer-frame {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: #111;
+}
+
+.status-viewer-top-overlay {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 90;
+  padding: 14px 16px 0;
+  pointer-events: none;
+}
+
+.status-viewer-progress-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.status-viewer-progress-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+}
+
+.status-viewer-progress-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.95);
+  transform-origin: left;
+}
+
+.status-viewer-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  pointer-events: auto;
+}
+
+.status-viewer-top-btn {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  line-height: 1;
+}
+
+.status-viewer-user-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-viewer-user-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.status-viewer-user-copy {
+  min-width: 0;
+}
+
+.status-viewer-user-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-viewer-user-time {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.status-viewer-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-viewer-top-time {
+  font-size: 0.75rem;
+  opacity: 0.82;
+}
+
+.status-viewer-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  color: white;
+  font-size: 15px;
+  text-align: center;
+}
+
+@media (min-width: 1200px) {
+  .status-viewer-modal {
+    padding: 20px 40px;
+  }
+
+  .status-viewer-stage {
+    padding: 0 40px;
+  }
+
+  .status-viewer-shell {
+    width: min(calc((100dvh - 40px) * 9 / 16), 48vw);
+    height: min(calc(100dvh - 40px), 88vh);
+  }
+
+  .status-viewer-frame {
+    border-radius: 2px;
+  }
+
+  .status-viewer-top-overlay {
+    padding: 18px 20px 0;
   }
 }

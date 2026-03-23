@@ -22,10 +22,10 @@
   flex: 1;
   min-width: 0;
   height: 42px;
-  border: 1px solid #cfd9e6;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: #eef3f8;
-  color: #1f2937;
+  background: #e8eef7;
+  color: #0f172a;
   padding: 0 16px;
   font-size: 14px;
   font-weight: 500;
@@ -50,7 +50,7 @@
   gap: 6px;
   padding: 5px;
   border-radius: 999px;
-  background: rgba(14, 18, 28, 0.9);
+  background: rgba(18, 23, 36, 0.94);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -100,13 +100,90 @@
 }
 
 #group-list-container {
-  background: #f7f9fc;
-  border-radius: 12px;
-  padding: 8px;
-  border: 1px solid #d9e2ef;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  border: 0;
+  min-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-#group-list-container .list-group-item.user-card {
+#group-list-container::-webkit-scrollbar {
+  display: none;
+}
+
+.group-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#group-list-container .group-list-card.user-card {
+  background: #161f33;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  color: #eef4ff;
+  margin-bottom: 0;
+  box-shadow: none;
+}
+
+#group-list-container .group-list-card.user-card.selected {
+  border-color: rgba(61, 138, 255, 0.75);
+  box-shadow: 0 0 0 1px rgba(61, 138, 255, 0.35);
+}
+
+#group-list-container .user-name {
+  color: #f8fbff;
+}
+
+#group-list-container .last-message,
+#group-list-container .timestamp {
+  color: #9aa7c1 !important;
+}
+
+#group-list-container .badge {
+  background: linear-gradient(180deg, #3d8aff 0%, #2f76f3 100%) !important;
+  color: #fff;
+}
+
+.group-request-avatar {
+  border: 2px solid rgba(255, 255, 255, 0.08);
+}
+
+.group-root--light .group-search-input {
+  border-color: #d7e0ec;
+  background: #eef3f8;
+  color: #1f2937;
+}
+
+.group-root--light .group-tabs-switch {
+  background: rgba(31, 41, 55, 0.92);
+}
+
+.group-root--light #group-list-container {
+  background: transparent;
+  border-color: transparent;
+}
+
+.group-root--light #group-list-container .group-list-card.user-card {
   background: #ffffff;
-  border: 1px solid #d9e2ef;
+  border-color: #d9e2ef;
+  color: #1f2937;
+}
+
+.group-root--light #group-list-container .user-name {
+  color: #1f2937;
+}
+
+.group-root--light #group-list-container .last-message,
+.group-root--light #group-list-container .timestamp {
+  color: #6f7d91 !important;
+}
+
+.group-root--dark .group-search-input {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #e8eef7;
+  color: #0f172a;
 }

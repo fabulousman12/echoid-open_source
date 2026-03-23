@@ -79,7 +79,7 @@ const filterByIdSet = (rows = [], allowedSet = null) => {
   if (!(allowedSet instanceof Set) || allowedSet.size === 0) return safeArray(rows);
   return safeArray(rows).filter((row) => allowedSet.has(String(row?.id || "").trim()));
 };
-const Status = () => {
+const Status = ({ variant = "default" }) => {
   const host = `https://${Maindata.SERVER_URL}`;
   const currentUser = globalThis.storage?.readJSON?.("currentuser", null);
   const usersMain = globalThis.storage?.readJSON?.("usersMain", []) || [];
@@ -1432,6 +1432,341 @@ const Status = () => {
     [feedStatusesRaw, openViewer, viewerIsOwn, viewerUser]
   );
 
+  const compactFeedStatuses = useMemo(
+    () => [...unreadFeedStatuses, ...readFeedStatuses],
+    [unreadFeedStatuses, readFeedStatuses]
+  );
+
+  const sharedStatusUi = (
+    <>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleMediaSelect}
+        accept="image/*,video/*"
+        style={{ display: "none" }}
+        multiple
+      />
+
+      {showMediaPreview && (
+        <div
+          className="fixed top-0 left-0 w-full h-full bg-black flex flex-col items-center justify-center"
+          style={{ zIndex: 100000 }}
+        >
+          <button
+            onClick={() => {
+              if (uploading) return;
+              setShowMediaPreview(false);
+              setMediaFiles([]);
+              setActiveMediaIndex(0);
+            }}
+            disabled={uploading}
+            className="absolute top-4 left-4 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
+          >
+            X
+          </button>
+
+          {mediaFiles.length > 0 && (
+            <button
+              onClick={() => {
+                if (uploading) return;
+                const updatedFiles = mediaFiles.filter((_, i) => i !== activeMediaIndex);
+                setMediaFiles(updatedFiles);
+                if (activeMediaIndex >= updatedFiles.length) {
+                  setActiveMediaIndex(Math.max(0, updatedFiles.length - 1));
+                }
+                if (updatedFiles.length === 0) {
+                  setShowMediaPreview(false);
+                }
+              }}
+              disabled={uploading}
+              className="absolute top-4 left-16 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
+            >
+              Del
+            </button>
+          )}
+
+          <div
+            className="flex-1 flex items-center justify-center w-full"
+            onTouchStart={handlePreviewTouchStart}
+            onTouchEnd={handlePreviewTouchEnd}
+          >
+            {activeMediaFile ? (
+              activeMediaFile.type?.startsWith("image/") ? (
+                <img
+                  src={activeMediaFile.previewUrl || activeMediaFile.preview}
+                  alt=""
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <video
+                  src={activeMediaFile.previewUrl || activeMediaFile.preview}
+                  controls
+                  className="max-h-full max-w-full object-contain"
+                />
+              )
+            ) : null}
+          </div>
+
+          <div
+            style={{
+              position: "absolute",
+              left: "12px",
+              right: "12px",
+              bottom: "86px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              zIndex: 60,
+            }}
+          >
+            <input
+              type="text"
+              value={activeMediaFile?.caption || ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                setMediaFiles((prev) =>
+                  prev.map((file, idx) =>
+                    idx === activeMediaIndex ? { ...file, caption: value } : file
+                  )
+                );
+              }}
+              placeholder="Add caption"
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                borderRadius: "999px",
+                background: "rgba(0,0,0,0.6)",
+                color: "white",
+                border: "1px solid rgba(255,255,255,0.2)",
+              }}
+            />
+            <button
+              type="button"
+              className="status-viewers-chip"
+              onClick={async () => {
+                if (statusViewerScope === "selected_contacts") {
+                  await buildStatusUploadDraft();
+                  history.push("/status-viewers", { fromStatusUpload: true });
+                  return;
+                }
+                const numbers = getAllChatNumbers();
+                setStatusViewerNumbers(numbers);
+                globalThis.storage?.setItem?.("status_viewers_numbers", JSON.stringify(numbers));
+                history.push("/Profile", { activeSection: null });
+              }}
+            >
+              {statusViewerScope === "all_chat_users"
+                ? `All Chat (${statusViewerNumbers.length})`
+                : `${statusViewerNumbers.length} viewers`}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!mediaFiles.length || uploading) return;
+                const filesToUpload = [...mediaFiles];
+                processStatusFilesSequentially(filesToUpload);
+                setShowMediaPreview(false);
+                setMediaFiles([]);
+                setActiveMediaIndex(0);
+              }}
+              disabled={uploading}
+              className="status-send-button"
+              aria-busy={uploading}
+            >
+              {uploading ? (
+                <>
+                  <span className="status-button-spinner" />
+                  Uploading
+                </>
+              ) : (
+                "Send"
+              )}
+            </button>
+          </div>
+
+          <div className="w-full py-2 z-50 px-3 bg-black overflow-x-auto flex gap-2 border-t border-gray-700">
+            {mediaFiles.map((file, index) => (
+              <div
+                key={index}
+                onClick={() => setActiveMediaIndex(index)}
+                className={`w-16 h-16 rounded-md overflow-hidden border-2 relative ${
+                  index === activeMediaIndex ? "border-white" : "border-gray-600"
+                }`}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (uploading) return;
+                    const updatedFiles = mediaFiles.filter((_, i) => i !== index);
+                    setMediaFiles(updatedFiles);
+                    if (index === activeMediaIndex) setActiveMediaIndex(0);
+                    if (updatedFiles.length === 0) setShowMediaPreview(false);
+                  }}
+                  disabled={uploading}
+                  className="absolute top-1 right-1 z-10 bg-black bg-opacity-60 hover:bg-opacity-90 text-white w-5 h-5 text-xs flex items-center justify-center rounded-full"
+                >
+                  x
+                </button>
+
+                {file.type.startsWith("image/") ? (
+                  <img
+                    src={file.previewUrl || file.preview}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <video
+                    src={file.previewUrl || file.preview}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {uploading && (
+            <div className="status-upload-pill">
+              <span className="status-upload-spinner" />
+              <span>{`Uploading ${uploadProgress}%`}</span>
+                <button
+                  type="button"
+                  className="status-upload-cancel"
+                  onClick={() => {
+                    uploadCancelRef.current = true;
+                    globalUploadState.cancelRequested = true;
+                    globalUploadState.xhr?.abort();
+                  }}
+                >
+                  Cancel
+                </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <StatusViewer
+        open={viewerOpen}
+        items={viewerItems}
+        user={viewerUser}
+        index={viewerIndex}
+        setIndex={setViewerIndex}
+        onClose={closeViewer}
+        onViewStatus={handleViewStatus}
+        onUserStatusesDone={handleViewerUserDone}
+        isOwn={viewerIsOwn}
+        onDeleteStatus={handleDeleteStatus}
+        usersMain={usersMain}
+      />
+    </>
+  );
+
+  if (variant === "home") {
+    const myStatusSummary = myStatuses[0] || null;
+
+    return (
+      <>
+        <div className="home-status-strip">
+          <div className="home-status-row" ref={scrollRef} onScroll={handleHorizontalScroll}>
+            <button
+              type="button"
+              className={`home-status-tile home-status-tile--mine ${myStatusSummary ? "has-story" : ""}`}
+              onClick={() => {
+                if (uploading) {
+                  uploadCancelRef.current = true;
+                  globalUploadState.cancelRequested = true;
+                  globalUploadState.xhr?.abort();
+                  return;
+                }
+                if (myStatusSummary) {
+                  const items = myStatusesRaw.filter((s) => s.userId === myStatusSummary.userId);
+                  openViewer(
+                    items,
+                    {
+                      userId: myStatusSummary.userId,
+                      username: currentUser?.name || "You",
+                      avatar: currentUser?.profilePhoto || currentUser?.avatar || "/img.jpg",
+                    },
+                    true
+                  );
+                  return;
+                }
+                handlePickMedia();
+              }}
+            >
+              <span className="home-status-avatar-wrap">
+                <img
+                  src={currentUser?.profilePhoto || currentUser?.avatar || "/img.jpg"}
+                  alt="Your story"
+                  className="home-status-avatar"
+                />
+                {!myStatusSummary && <span className="home-status-add">+</span>}
+              </span>
+              <span className="home-status-name">Your Story</span>
+            </button>
+
+            {myStatusSummary && (
+              <button
+                type="button"
+                className="home-status-tile home-status-tile--adder"
+                onClick={() => {
+                  if (uploading) {
+                    uploadCancelRef.current = true;
+                    globalUploadState.cancelRequested = true;
+                    globalUploadState.xhr?.abort();
+                    return;
+                  }
+                  handlePickMedia();
+                }}
+              >
+                <span className="home-status-avatar-wrap">
+                  <span className="home-status-add home-status-add--standalone">+</span>
+                </span>
+                <span className="home-status-name">Add Story</span>
+              </button>
+            )}
+
+            {compactFeedStatuses.map((status) => {
+              const isRead = Boolean(status?.allRead || status?.localRead);
+              const userMeta = {
+                userId: status.userId,
+                username: status.username,
+                avatar: status.avatar,
+              };
+
+              return (
+                <button
+                  type="button"
+                  key={status.id}
+                  className={`home-status-tile ${isRead ? "is-read" : "is-unread"}`}
+                  onClick={() => {
+                    const items = feedStatusesRaw.filter((s) => String(s.userId) === String(status.userId));
+                    openViewer(items, userMeta, false);
+                  }}
+                >
+                  <span className="home-status-avatar-wrap">
+                    <img
+                      src={status.avatar || status.mediaUrl || "/img.jpg"}
+                      alt={status.username || "Status"}
+                      className="home-status-avatar"
+                    />
+                  </span>
+                  <span className="home-status-name">{status.username || "Unknown"}</span>
+                </button>
+              );
+            })}
+
+            {(loadingFeed || loadingMore) && (
+              <div className="home-status-loading">
+                <span className="status-inline-spinner" />
+              </div>
+            )}
+          </div>
+        </div>
+        {sharedStatusUi}
+      </>
+    );
+  }
+
   return (
       <div className="status-page">
      
@@ -1634,16 +1969,6 @@ const Status = () => {
             </>
           )}
 
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleMediaSelect}
-          accept="image/*,video/*"
-          style={{ display: "none" }}
-          multiple
-        />
-
         {/* Floating Button + Sub Menu */}
         <div style={{ position: "fixed", bottom: "230px", right: "50px", zIndex: 1000 }}>
           {showStatusOptions && (
@@ -1690,215 +2015,7 @@ const Status = () => {
           </button>
         </div>
 
-        {showMediaPreview && (
-          <div
-            className="fixed top-0 left-0 w-full h-full bg-black flex flex-col items-center justify-center"
-            style={{ zIndex: 100000 }}
-          >
-            <button
-              onClick={() => {
-                if (uploading) return;
-                setShowMediaPreview(false);
-                setMediaFiles([]);
-                setActiveMediaIndex(0);
-              }}
-              disabled={uploading}
-              className="absolute top-4 left-4 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
-            >
-              X
-            </button>
-
-            {mediaFiles.length > 0 && (
-              <button
-                onClick={() => {
-                  if (uploading) return;
-                  const updatedFiles = mediaFiles.filter((_, i) => i !== activeMediaIndex);
-                  setMediaFiles(updatedFiles);
-                  if (activeMediaIndex >= updatedFiles.length) {
-                    setActiveMediaIndex(Math.max(0, updatedFiles.length - 1));
-                  }
-                  if (updatedFiles.length === 0) {
-                    setShowMediaPreview(false);
-                  }
-                }}
-                disabled={uploading}
-                className="absolute top-4 left-16 z-50 w-10 h-10 flex items-center justify-center bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full text-lg"
-              >
-                Del
-              </button>
-            )}
-
-            <div
-              className="flex-1 flex items-center justify-center w-full"
-              onTouchStart={handlePreviewTouchStart}
-              onTouchEnd={handlePreviewTouchEnd}
-            >
-              {activeMediaFile ? (
-                activeMediaFile.type?.startsWith("image/") ? (
-                  <img
-                    src={activeMediaFile.previewUrl || activeMediaFile.preview}
-                    alt=""
-                    className="max-h-full max-w-full object-contain"
-                  />
-                ) : (
-                  <video
-                    src={activeMediaFile.previewUrl || activeMediaFile.preview}
-                    controls
-                    className="max-h-full max-w-full object-contain"
-                  />
-                )
-              ) : null}
-            </div>
-
-            <div
-              style={{
-                position: "absolute",
-                left: "12px",
-                right: "12px",
-                bottom: "86px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                zIndex: 60,
-              }}
-            >
-              <input
-                type="text"
-                value={activeMediaFile?.caption || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMediaFiles((prev) =>
-                    prev.map((file, idx) =>
-                      idx === activeMediaIndex ? { ...file, caption: value } : file
-                    )
-                  );
-                }}
-                placeholder="Add caption"
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  borderRadius: "999px",
-                  background: "rgba(0,0,0,0.6)",
-                  color: "white",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                }}
-              />
-              <button
-                type="button"
-                className="status-viewers-chip"
-                onClick={async () => {
-                  if (statusViewerScope === "selected_contacts") {
-                    await buildStatusUploadDraft();
-                    history.push("/status-viewers", { fromStatusUpload: true });
-                    return;
-                  }
-                  const numbers = getAllChatNumbers();
-                  setStatusViewerNumbers(numbers);
-                  globalThis.storage?.setItem?.("status_viewers_numbers", JSON.stringify(numbers));
-                  history.push("/Profile", { activeSection: null });
-                }}
-              >
-                {statusViewerScope === "all_chat_users"
-                  ? `All Chat (${statusViewerNumbers.length})`
-                  : `${statusViewerNumbers.length} viewers`}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!mediaFiles.length || uploading) return;
-                  const filesToUpload = [...mediaFiles];
-                  processStatusFilesSequentially(filesToUpload);
-                  setShowMediaPreview(false);
-                  setMediaFiles([]);
-                  setActiveMediaIndex(0);
-                }}
-                disabled={uploading}
-                className="status-send-button"
-                aria-busy={uploading}
-              >
-                {uploading ? (
-                  <>
-                    <span className="status-button-spinner" />
-                    Uploading
-                  </>
-                ) : (
-                  "Send"
-                )}
-              </button>
-            </div>
-
-            <div className="w-full py-2 z-50 px-3 bg-black overflow-x-auto flex gap-2 border-t border-gray-700">
-              {mediaFiles.map((file, index) => (
-                <div
-                  key={index}
-                  onClick={() => setActiveMediaIndex(index)}
-                  className={`w-16 h-16 rounded-md overflow-hidden border-2 relative ${
-                    index === activeMediaIndex ? "border-white" : "border-gray-600"
-                  }`}
-                >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (uploading) return;
-                      const updatedFiles = mediaFiles.filter((_, i) => i !== index);
-                      setMediaFiles(updatedFiles);
-                      if (index === activeMediaIndex) setActiveMediaIndex(0);
-                      if (updatedFiles.length === 0) setShowMediaPreview(false);
-                    }}
-                    disabled={uploading}
-                    className="absolute top-1 right-1 z-10 bg-black bg-opacity-60 hover:bg-opacity-90 text-white w-5 h-5 text-xs flex items-center justify-center rounded-full"
-                  >
-                    x
-                  </button>
-
-                  {file.type.startsWith("image/") ? (
-                    <img
-                      src={file.previewUrl || file.preview}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <video
-                      src={file.previewUrl || file.preview}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-            {uploading && (
-              <div className="status-upload-pill">
-                <span className="status-upload-spinner" />
-                <span>{`Uploading ${uploadProgress}%`}</span>
-                  <button
-                    type="button"
-                    className="status-upload-cancel"
-                    onClick={() => {
-                      uploadCancelRef.current = true;
-                      globalUploadState.cancelRequested = true;
-                      globalUploadState.xhr?.abort();
-                    }}
-                  >
-                    Cancel
-                  </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <StatusViewer
-          open={viewerOpen}
-          items={viewerItems}
-          user={viewerUser}
-          index={viewerIndex}
-          setIndex={setViewerIndex}
-          onClose={closeViewer}
-          onViewStatus={handleViewStatus}
-          onUserStatusesDone={handleViewerUserDone}
-          isOwn={viewerIsOwn}
-          onDeleteStatus={handleDeleteStatus}
-          usersMain={usersMain}
-        />
+        {sharedStatusUi}
 
       </div>
   );

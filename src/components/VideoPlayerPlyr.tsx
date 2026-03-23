@@ -5,6 +5,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { ffmpeg_thumnail } from 'ionic-thumbnail';
 import imga from '../../public/favicon.png';
 import { Capacitor } from '@capacitor/core';
+import { createObjectUrlFromWebFileRef, isWebStoredFileRef, revokeResolvedObjectUrl } from '../services/webFileStore';
 interface Props {
   src: string;       // Sandbox path or Blob URL
   onClose: () => void;
@@ -17,14 +18,55 @@ interface Props {
 const VideoPlayerPlyr: React.FC<Props> = ({ src, onClose, controls = true, style, Name, Size }) => {
   const [poster, setPoster] = useState<string>(imga); // Default poster
   const [loading, setLoading] = useState(true);
-    const webPath = Capacitor.convertFileSrc(src);
+  const [resolvedSrc, setResolvedSrc] = useState<string>(src);
+
+  useEffect(() => {
+    let objectUrl = "";
+    const resolveSource = async () => {
+      if (isWebStoredFileRef(src)) {
+        objectUrl = await createObjectUrlFromWebFileRef(src);
+        setResolvedSrc(objectUrl || src);
+        return;
+      }
+      if (
+        src.startsWith("http://") ||
+        src.startsWith("https://") ||
+        src.startsWith("blob:") ||
+        src.startsWith("data:")
+      ) {
+        setResolvedSrc(src);
+        return;
+      }
+      try {
+        setResolvedSrc(Capacitor.convertFileSrc(src));
+      } catch {
+        setResolvedSrc(src);
+      }
+    };
+
+    resolveSource();
+
+    return () => {
+      revokeResolvedObjectUrl(objectUrl);
+    };
+  }, [src]);
+
   useEffect(() => {
 
 
     const generatePoster = async () => {
       setLoading(true);
       try {
-        const thumbnail = await captureThumbnail2(src, Name, Size);
+        const sourceForPoster =
+          !Capacitor.isNativePlatform() ||
+          isWebStoredFileRef(src) ||
+          resolvedSrc.startsWith("blob:") ||
+          resolvedSrc.startsWith("http://") ||
+          resolvedSrc.startsWith("https://") ||
+          resolvedSrc.startsWith("data:")
+            ? null
+            : src;
+        const thumbnail = sourceForPoster ? await captureThumbnail2(sourceForPoster, Name, Size) : null;
         setPoster(thumbnail || imga);
       } catch (err) {
         console.error('Error generating thumbnail:', err);
@@ -35,7 +77,7 @@ const VideoPlayerPlyr: React.FC<Props> = ({ src, onClose, controls = true, style
     };
 
     generatePoster();
-  }, [src]);
+  }, [src, resolvedSrc, Name, Size]);
 
   const captureThumbnail2 = async (
     nativePath: string,
@@ -86,7 +128,7 @@ const VideoPlayerPlyr: React.FC<Props> = ({ src, onClose, controls = true, style
     <Plyr
       source={{
         type: 'video',
-        sources: [{ src:webPath }],
+        sources: [{ src: resolvedSrc }],
         poster: poster,
       }}
       poster={poster}

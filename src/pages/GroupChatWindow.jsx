@@ -15,6 +15,7 @@ import { WebSocketContext } from "../services/websokcetmain";
 import { api } from "../services/api";
 import { authFetch } from "../services/apiClient";
 import { getUploadUrl, isValidUploadResult } from "../services/uploadValidation";
+import { createObjectUrlFromWebFileRef, isWebStoredFileRef, readWebStoredFileAsUint8Array, saveBlobToWebFileStore, saveDataUrlToWebFileStore } from "../services/webFileStore";
 import ImageRenderer from "../components/ImageRenderer";
 import VideoRenderer from "../components/VideoRenderer";
 import img from "/img.jpg";
@@ -156,14 +157,22 @@ const GroupChatWindow = ({
   mutedGroupIds = [],
   setMutedGroupIds,
   onActiveGroupChange,
+  appTheme = "dark",
+  embedded = false,
+  embeddedGroup = null,
+  onEmbeddedBack,
 }) => {
   const history = useHistory();
   const location = useLocation();
   const { host } = useContext(LoginContext);
   const { saveGroupMessageInSQLite, editGroupMessageInSQLite, deleteGroupMessageInSQLite } = useContext(WebSocketContext);
 
-  const group = location?.state?.groupdetails || null;
+  const group = embeddedGroup || location?.state?.groupdetails || null;
   const groupId = String(group?.id || group?._id || "");
+  const [viewportWidth, setViewportWidth] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    return window.innerWidth;
+  });
   const currentUser = globalThis.storage.readJSON("currentuser", null);
   const currentUserId = String(currentUser?._id || currentUser?.id || "");
   const [memberProfiles, setMemberProfiles] = useState(() => {
@@ -265,10 +274,32 @@ const GroupChatWindow = ({
   const [transferLoadingById, setTransferLoadingById] = useState({});
   const [groupActionError, setGroupActionError] = useState("");
   const [isGroupMuted, setIsGroupMuted] = useState(false);
+
+  const closePreviewMedia = () => {
+    setPreviewMedia((current) => {
+      if (typeof current?.src === "string" && current.src.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(current.src);
+        } catch {}
+      }
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof previewMedia?.src === "string" && previewMedia.src.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(previewMedia.src);
+        } catch {}
+      }
+    };
+  }, [previewMedia]);
   const [cropSrc, setCropSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const isProfileDocked = embedded && viewportWidth >= 1420;
   const listRef = useRef(null);
   const replyGlowTimeoutRef = useRef(null);
   const longPressTimeoutRef = useRef(null);
@@ -294,6 +325,20 @@ const GroupChatWindow = ({
     if (replyGlowTimeoutRef.current) clearTimeout(replyGlowTimeoutRef.current);
     if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [embedded]);
+
+  useEffect(() => {
+    if (isProfileDocked && isExpanded) {
+      setIsExpanded(false);
+    }
+  }, [isExpanded, isProfileDocked]);
 
   useEffect(() => {
     return () => {
@@ -1678,6 +1723,9 @@ const GroupChatWindow = ({
   const getBlobFromSandboxPath = async (path) => {
     if (!path) return null;
     try {
+      if (isWebStoredFileRef(path)) {
+        return await readWebStoredFileAsUint8Array(path);
+      }
       const cleanPath = String(path).replace("file://", "");
       let fileData;
       if (cleanPath.includes("/Documents/")) {
@@ -1703,7 +1751,24 @@ const GroupChatWindow = ({
 
   const saveFilePermanently = async (file) => {
     try {
-      if (!isPlatform("hybrid")) return file?.path || "";
+      if (!isPlatform("hybrid")) {
+        if (isWebStoredFileRef(file?.path || "")) return file.path;
+        if (file?.fileObject instanceof Blob) {
+          return await saveBlobToWebFileStore(file.fileObject, {
+            fileName: file?.name || "media",
+            mimeType: file?.type || file?.fileObject?.type || "",
+            folder: String(file?.type || "").startsWith("video/") ? "group_media/videos" : "group_media/files",
+          });
+        }
+        if (typeof file?.preview === "string" && file.preview.startsWith("data:")) {
+          return await saveDataUrlToWebFileStore(file.preview, {
+            fileName: file?.name || "media",
+            mimeType: file?.type || "",
+            folder: String(file?.type || "").startsWith("video/") ? "group_media/videos" : "group_media/files",
+          });
+        }
+        return file?.path || "";
+      }
       if (file?.path) return file.path;
 
       let base64 = "";
@@ -1835,7 +1900,14 @@ const GroupChatWindow = ({
   };
 
   const saveMediaLocally = async (dataUrl, filename, mimeType) => {
-    if (!dataUrl || !isPlatform("hybrid")) return "";
+    if (!dataUrl) return "";
+    if (!isPlatform("hybrid")) {
+      return await saveDataUrlToWebFileStore(dataUrl, {
+        fileName: filename,
+        mimeType,
+        folder: "group_media/downloads",
+      });
+    }
     try {
       const base64 = String(dataUrl).split(",")[1];
       if (!base64) return "";
@@ -2254,7 +2326,11 @@ const GroupChatWindow = ({
         const res = await fetch(msg.mediaUrl);
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         const blob = await res.blob();
-        localPath = URL.createObjectURL(blob);
+        localPath = await saveBlobToWebFileStore(blob, {
+          fileName: `group_${id}.${getFileExtension(msg?.messageType?.includes("image") ? "image/jpeg" : "video/mp4", "bin")}`,
+          mimeType: blob.type || "",
+          folder: "group_media/downloads",
+        });
       }
       if (!localPath) throw new Error("Download failed");
       await patchGroupMessageLocally(id, { mediaUrl: localPath, isDownload: true });
@@ -2453,12 +2529,16 @@ const GroupChatWindow = ({
               onClick={() => {
                 if (!isDownloaded) return;
                 if (src) {
-                  setPreviewMedia({
-                    kind: "video",
-                    src,
-                    name: msg?.id || "video",
-                    size: 0,
-                  });
+                  const openPreview = async () => {
+                    const previewSrc = isWebStoredFileRef(src) ? await createObjectUrlFromWebFileRef(src) : src;
+                    setPreviewMedia({
+                      kind: "video",
+                      src: previewSrc || src,
+                      name: msg?.id || "video",
+                      size: 0,
+                    });
+                  };
+                  openPreview();
                 }
               }}
             />
@@ -2670,7 +2750,7 @@ const GroupChatWindow = ({
 
   const handleForwardSelected = () => {
     if (!selectedMessages.length) return;
-    history.push("/forward", { forwardedMessages: selectedMessages });
+    history.push("/forwardScreen", { forwardedMessages: selectedMessages });
     setSelectionMode(false);
     setSelectedMessageIds([]);
     setShowSelectionMenu(false);
@@ -2700,18 +2780,27 @@ const GroupChatWindow = ({
   if (!groupId) {
     return (
       <div className="gchat-page gchat-empty">
-        <button type="button" className="btn btn-dark" onClick={() => history.push("/home")}>
+        <button
+          type="button"
+          className="btn btn-dark"
+          onClick={() => {
+            if (embedded) {
+              onEmbeddedBack?.();
+              return;
+            }
+            history.push("/home");
+          }}
+        >
           Back
         </button>
       </div>
     );
   }
 
-  if (isExpanded) {
-    const createdAt = profileGroup?.createdAt || profileGroup?.updatedAt || group?.updatedAt || null;
-    return (
-      <div className="gchat-page gprofile-page">
-        <header className="gprofile-header">
+  const createdAt = profileGroup?.createdAt || profileGroup?.updatedAt || group?.updatedAt || null;
+  const expandedProfileInner = (
+    <>
+      <header className="gprofile-header">
           <button
             type="button"
             className="gchat-icon-btn"
@@ -2723,6 +2812,10 @@ const GroupChatWindow = ({
                   description: profileGroup?.description || group?.description || "",
                   avatar: profileGroup?.avatar || group?.avatar || "",
                 });
+                return;
+              }
+              if (embedded) {
+                onEmbeddedBack?.();
                 return;
               }
               setIsExpanded(false);
@@ -2751,9 +2844,9 @@ const GroupChatWindow = ({
               Edit
             </button>
           )}
-        </header>
+      </header>
 
-        <div className="gprofile-body">
+      <div className="gprofile-body">
           <div className={`gprofile-hero ${isEditMode ? "is-editing" : ""}`}>
             <img src={editDraft.avatar || profileGroup?.avatar || group?.avatar || img} alt="Group" className="gprofile-avatar" />
             {isEditMode ? (
@@ -3044,10 +3137,13 @@ const GroupChatWindow = ({
               </div>
             </>
           )}
-        </div>
-        {renderExitAndTransferModals()}
       </div>
-    );
+      {renderExitAndTransferModals()}
+    </>
+  );
+
+  if (isExpanded && !isProfileDocked) {
+    return <div className={`gchat-page gprofile-page gchat-page--${appTheme}`}>{expandedProfileInner}</div>;
   }
 
   const introCreatedAt = profileGroup?.createdAt || group?.createdAt || profileGroup?.updatedAt || group?.updatedAt || null;
@@ -3182,7 +3278,8 @@ const GroupChatWindow = ({
   }
 
   return (
-    <div className="gchat-page">
+    <div className={`gchat-shell gchat-shell--${appTheme} ${isProfileDocked ? "is-profile-docked" : ""}`}>
+      <div className={`gchat-page gchat-page--${appTheme} ${embedded ? "gchat-page--embedded" : ""} ${isProfileDocked ? "gchat-page--with-docked-profile" : ""}`}>
       <header className={`gchat-header ${selectionMode ? "is-selection-mode" : ""}`}>
         <button
           type="button"
@@ -3192,6 +3289,10 @@ const GroupChatWindow = ({
               setSelectionMode(false);
               setSelectedMessageIds([]);
               setShowSelectionMenu(false);
+              return;
+            }
+            if (embedded) {
+              onEmbeddedBack?.();
               return;
             }
             history.push("/home");
@@ -3204,14 +3305,18 @@ const GroupChatWindow = ({
         <div
           className="gchat-title-wrap"
           onClick={() => {
-            if (!selectionMode) setIsExpanded((prev) => !prev);
+            if (!selectionMode && !isProfileDocked) setIsExpanded((prev) => !prev);
           }}
           role="button"
           tabIndex={0}
         >
           <h5 className="gchat-title">{selectionMode ? `${selectedMessageIds.length} selected` : (group?.name || "Group Chat")}</h5>
           <small className="gchat-sub">
-            {selectionMode ? "Message actions" : (group?.isActive === false ? "Inactive" : "Tap to expand")}
+            {selectionMode
+              ? "Message actions"
+              : (group?.isActive === false
+                ? "Inactive"
+                : ((embedded && viewportWidth >= 940) || isExpanded || isProfileDocked ? "" : "Tap to expand"))}
           </small>
         </div>
         {selectionMode && (
@@ -3428,7 +3533,7 @@ const GroupChatWindow = ({
       )}
 
       {previewMedia && (
-        <div className="gchat-preview" onClick={() => setPreviewMedia(null)}>
+        <div className="gchat-preview" onClick={closePreviewMedia}>
           <div className="gchat-preview-inner" onClick={(e) => e.stopPropagation()}>
             {previewMedia.kind === "image" ? (
               <ImageRenderer src={previewMedia.src} alt="preview" className="gchat-preview-image" />
@@ -3441,7 +3546,7 @@ const GroupChatWindow = ({
                 playsInline
               />
             )}
-            <button type="button" className="btn btn-light mt-2" onClick={() => setPreviewMedia(null)}>
+            <button type="button" className="btn btn-light mt-2" onClick={closePreviewMedia}>
               Close
             </button>
           </div>
@@ -3593,6 +3698,12 @@ const GroupChatWindow = ({
         </div>
       )}
     </div>
+      {isProfileDocked ? (
+        <aside className={`gprofile-panel gprofile-panel--docked gprofile-panel--${appTheme}`}>
+          {expandedProfileInner}
+        </aside>
+      ) : null}
+    </div>
   );
 };
 
@@ -3615,4 +3726,8 @@ GroupChatWindow.propTypes = {
   mutedGroupIds: PropTypes.array,
   setMutedGroupIds: PropTypes.func,
   onActiveGroupChange: PropTypes.func,
+  appTheme: PropTypes.string,
+  embedded: PropTypes.bool,
+  embeddedGroup: PropTypes.object,
+  onEmbeddedBack: PropTypes.func,
 };
