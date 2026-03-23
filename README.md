@@ -132,6 +132,47 @@ npm run dev
 
 ---
 
+## Android Native Helper Files
+
+If you add Android support with Capacitor, also copy the Java helper files from:
+
+`src/additatinalfiles/swipe`
+
+into:
+
+`android/app/src/main/java/<your-package>/`
+
+This includes files such as:
+
+- `MainActivity.java`
+- `MyApplication.java`
+- `MyFirebaseMessagingService.java`
+- `PushyMessagingService.java`
+- `NotificationHelper.java`
+- `AppLifecycleTracker.java`
+- `Constants.java`
+- `AuthBridgePlugin.java`
+
+If your package name is not `com.swipe`, update the package declarations and imports before building.
+
+---
+
+## Separate Plugin Requirement
+
+This app also depends on the separate thumbnail plugin package:
+
+`https://github.com/fabulousman12/ionic-thumnail`
+
+Download or install that package before using thumbnail-related features.
+
+Example:
+
+```bash
+npm install github:fabulousman12/ionic-thumnail
+npx cap sync
+```
+
+---
 ## Available Scripts
 
 ```bash
@@ -186,3 +227,4 @@ This project was built primarily as a real-world learning and development effort
 ## License
 
 This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
+
