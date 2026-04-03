@@ -145,15 +145,33 @@ const WebSocketContext = createContext();
               []
             );
             tx.executeSql(
-              `ALTER TABLE group_messages ADD COLUMN is_reply_to TEXT DEFAULT null;`,
+              `PRAGMA table_info(group_messages);`,
               [],
-              () => {},
-              () => false
-            );
-            tx.executeSql(
-              `ALTER TABLE group_messages ADD COLUMN is_download INTEGER DEFAULT 0;`,
-              [],
-              () => {},
+              (_, result) => {
+                const columns = [];
+                const rowCount = Number(result?.rows?.length || 0);
+                for (let index = 0; index < rowCount; index += 1) {
+                  columns.push(result.rows.item(index)?.name);
+                }
+
+                if (!columns.includes("is_reply_to")) {
+                  tx.executeSql(
+                    `ALTER TABLE group_messages ADD COLUMN is_reply_to TEXT DEFAULT null;`,
+                    [],
+                    () => {},
+                    () => false
+                  );
+                }
+
+                if (!columns.includes("is_download")) {
+                  tx.executeSql(
+                    `ALTER TABLE group_messages ADD COLUMN is_download INTEGER DEFAULT 0;`,
+                    [],
+                    () => {},
+                    () => false
+                  );
+                }
+              },
               () => false
             );
             tx.executeSql(

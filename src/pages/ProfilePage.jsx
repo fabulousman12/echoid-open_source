@@ -15,6 +15,7 @@ import { MdClose } from "react-icons/md";
 import { api } from "../services/api";
 import { getRefreshToken, clearTokens } from "../services/authTokens";
 import { getDeviceId, getDeviceIdSync } from "../services/deviceInfo";
+import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
 import data from "../data";
 import ImageRenderer from "../components/ImageRenderer";
 const ProfilePage = ({host}) => {
@@ -290,7 +291,15 @@ if (
   stripBase64(profilePhoto) !== stripBase64(originalPhoto) &&
   profilePhoto.startsWith('data:image')
 ) {
-  updatedFields.profilePhoto = profilePhoto; // base64 string
+  try {
+    const uploadResult = await uploadProfileImageInChunks(host, profilePhoto, {
+      authenticated: true,
+    });
+    updatedFields.profileUploadId = uploadResult.uploadId;
+  } catch (uploadError) {
+    console.warn("Profile chunk upload unavailable, falling back to inline profilePhoto", uploadError);
+    updatedFields.profilePhoto = profilePhoto; // base64 fallback
+  }
 }
 
 

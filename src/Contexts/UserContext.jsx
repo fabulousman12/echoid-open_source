@@ -8,6 +8,7 @@ import Maindata from "../data";
 import { setTokens } from "../services/authTokens";
 import { api } from "../services/api";
 import { getDeviceInfo } from "../services/deviceInfo";
+import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
 import Swal from 'sweetalert2';
 // Create the context
 const LoginContext = createContext();
@@ -47,13 +48,27 @@ const LoginProvider = (props) => {
   }) => {
   try {
     const deviceInfo = await getDeviceInfo();
+    let profileUploadId = null;
+
+    if (profilePhoto) {
+      try {
+        const uploadResult = await uploadProfileImageInChunks(host, profilePhoto, {
+          authenticated: false,
+        });
+        profileUploadId = uploadResult.uploadId || null;
+      } catch (uploadError) {
+        console.warn("Profile chunk upload unavailable, falling back to inline signup image", uploadError);
+      }
+    }
+
     const payload = {
       username: name,
       email,
       password,
       phoneNumber,
       otpCode,
-      image: profilePhoto || null, // base64 string
+      image: profileUploadId ? null : (profilePhoto || null), // base64 fallback
+      profileUploadId,
       accepted_terms: !!accepted_terms,
       accepted_terms_at,
       accepted_terms_version,

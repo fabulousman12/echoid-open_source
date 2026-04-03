@@ -734,7 +734,7 @@ const handleCallNotification = (data) => {
           .map(u => ({
             id: u.id,
             name: u.name,
-            avatar: u.profilePic || img,
+            avatar: u.profilePic || u.avatar || img,
             lastMessage: 'No messages yet',
             timestamp: '',
             unreadCount: 0,
@@ -907,14 +907,14 @@ const handleCallNotification = (data) => {
         // Fetch the user's details if they don't exist in `usersMain`
         const response = await api.fetchUser(host, otherUserId);
         const data = await response.json();
-
+console.log("Fetched user details for missing user:", data);
         if (response.ok && data.success) {
           const { userResponse } = data;
   
           const newUser = {
             id: userResponse.id,
             name: userResponse.name,
-            avatar: userResponse.profilePhoto || img,  // Assuming profilePhoto contains the image URL or base64 string
+            avatar: userResponse.profilePic || img,  // Assuming profilePhoto contains the image URL or base64 string
             lastMessage: message.content,
             timestamp: message.timestamp,
             unreadCount: 1, // This message is unread for the new user

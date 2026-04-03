@@ -51,6 +51,7 @@ import { getAccessToken } from "../services/authTokens";
 import { api } from "../services/api";
 import { authFetch } from "../services/apiClient";
 import { getUploadUrl, isValidUploadResult } from "../services/uploadValidation";
+import { uploadMediaInChunks } from "../services/chunkedMediaUpload";
 import { createObjectUrlFromWebFileRef, isWebStoredFileRef, readWebStoredFileAsUint8Array, saveBlobToWebFileStore } from "../services/webFileStore";
 //import { Http } from '@capacitor-community/http';
 import VideoPlayerPlyrWithResolve from '../components/VideoPlayerPlyr';
@@ -2663,36 +2664,47 @@ const uploadFile = async (file, token) => {
       "First 20 bytes:", Array.from(uint8View.slice(0, 20)).join(', ')
     );
 
-    // 🔹 Send binary data directly to API
     const host = `https://${Maindata.SERVER_URL}`;
-    const response = await authFetch(
-      `${host}/messages/upload-to-b2`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Filename': file.name,
-          'X-Filesize': file.size?.toString() || uint8View.length.toString(),
-          'Content-Type': 'application/octet-stream',
+    let responseJson = null;
+    try {
+      responseJson = await uploadMediaInChunks(host, uint8View, {
+        fileName: file.name,
+        contentType: file.type || 'application/octet-stream',
+      });
+    } catch (chunkError) {
+      console.warn("Chunked upload unavailable for normal chat, falling back to raw upload", chunkError);
+      const response = await authFetch(
+        `${host}/messages/upload-to-b2`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Filename': file.name,
+            'X-Filesize': file.size?.toString() || uint8View.length.toString(),
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: uint8View,
         },
-        body: uint8View,
-      },
-      host
-    );
+        host
+      );
 
-    // 🔹 Handle upload result
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Upload failed: ${response.status} - ${errorText}`);
-      return null;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Upload failed: ${response.status} - ${errorText}`);
+        return null;
+      }
+      responseJson = await response.json();
     }
 
-    const result = await response.json();
-    console.log("✅ Upload success:", JSON.stringify(result, null, 2));
+    if (!responseJson || !isValidUploadResult(responseJson)) {
+      console.error("❌ Upload failed: invalid upload result", responseJson);
+      return null;
+    }
+    console.log("✅ Upload success:", JSON.stringify(responseJson, null, 2));
 
     return {
-      fileId: result.fileId,
-      fileName: result.fileName,
-      fileUrl: result.fileUrl,
+      fileId: responseJson.fileId,
+      fileName: responseJson.fileName,
+      fileUrl: responseJson.fileUrl,
     };
   } catch (error) {
     console.error('🚨 Error uploading file:', error.message, error);

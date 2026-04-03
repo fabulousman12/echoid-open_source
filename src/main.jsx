@@ -8,7 +8,7 @@ import { BrowserRouter as Router, Route, Switch, Redirect,useLocation  } from 'r
 import './services/notificationBootstrap';
 import { initPrefStorage, storage } from "./services/prefStorage";
 import { getDeviceId } from "./services/deviceInfo";
-const production = true
+const production = false
 if (production) {
   // Silence noisy console output in production builds without changing app logic.
   console.log = () => {};

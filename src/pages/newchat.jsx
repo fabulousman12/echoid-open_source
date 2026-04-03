@@ -136,7 +136,7 @@ const NewChat = () => {
   };
 
   return (
-    <IonContent className="new-chat-page">
+    <div className="new-chat-page">
       <div className="new-chat-shell">
         <header
           ref={headerRef}
@@ -241,7 +241,7 @@ const NewChat = () => {
       </div>
 
       <IonLoading isOpen={loading} message="Loading..." duration={0} />
-    </IonContent>
+    </div>
   );
 };
 

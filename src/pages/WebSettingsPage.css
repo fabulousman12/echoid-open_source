@@ -1,9 +1,11 @@
 .web-settings {
   min-height: 100dvh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 18px;
   padding: 16px;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(81, 109, 255, 0.12), transparent 32%),
     #1d1f21;
@@ -43,6 +45,8 @@
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .web-settings-sidebar__top {
@@ -153,6 +157,8 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .web-settings-main__header {

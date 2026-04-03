@@ -278,7 +278,7 @@ setIsloading(true)
   
 
   return (
-    <IonContent
+    <div
       style={{
         minHeight: '100dvh',
         background:
@@ -451,7 +451,7 @@ setIsloading(true)
           </div>
         </form>
       </div>
-    </IonContent>
+    </div>
   );
 };
 

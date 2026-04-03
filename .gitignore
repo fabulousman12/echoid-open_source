@@ -15,7 +15,17 @@
 /src/data.private.ts
 /src/data.secrets.ts
 
-
+/src/additatinalfiles/.gradle
+/src/additatinalfiles/com
+/src/additatinalfiles/abctest.pdf
+/src/additatinalfiles/Application.ActivityLifecycleCallbacks
+/src/additatinalfiles/istocktest.jpg
+/src/additatinalfiles/Application.ActivityLifecycleCallbacks
+/src/additatinalfiles/MyFirebaseMessagingService.java
+/src/additatinalfiles/rock_party.mp3
+/src/additatinalfiles/TestChatComponent.jsx
+/src/additatinalfiles/WaveformPlayer.jsx
+/src/additatinalfiles/webrtcworking.txt
 # misc
 /src/firebase-config.js
 /src/firebase-config.ts

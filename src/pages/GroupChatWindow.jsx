@@ -15,6 +15,7 @@ import { WebSocketContext } from "../services/websokcetmain";
 import { api } from "../services/api";
 import { authFetch } from "../services/apiClient";
 import { getUploadUrl, isValidUploadResult } from "../services/uploadValidation";
+import { uploadMediaInChunks } from "../services/chunkedMediaUpload";
 import { createObjectUrlFromWebFileRef, isWebStoredFileRef, readWebStoredFileAsUint8Array, saveBlobToWebFileStore, saveDataUrlToWebFileStore } from "../services/webFileStore";
 import ImageRenderer from "../components/ImageRenderer";
 import VideoRenderer from "../components/VideoRenderer";
@@ -402,9 +403,21 @@ const GroupChatWindow = ({
   );
 
   const memberIds = useMemo(() => {
-    const raw = memberIdsByGroup?.[groupId];
-    return Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
-  }, [groupId, memberIdsByGroup]);
+    const cached = Array.isArray(memberIdsByGroup?.[groupId])
+      ? memberIdsByGroup[groupId].map(String).filter(Boolean)
+      : [];
+    if (cached.length > 0) return cached;
+
+    const fromProfile = (Array.isArray(profileGroup?.members) ? profileGroup.members : [])
+      .filter((member) => {
+        const status = String(member?.status || "ACTIVE").toUpperCase();
+        return status === "ACTIVE" || status === "";
+      })
+      .map((member) => String(member?.userId?._id || member?.userId || member?._id || member?.id || member || ""))
+      .filter(Boolean);
+
+    return [...new Set(fromProfile)];
+  }, [groupId, memberIdsByGroup, profileGroup?.members]);
   const membersToRender = useMemo(() => {
     const ids = [...memberIds];
     if (currentUserId) {
@@ -983,9 +996,9 @@ const GroupChatWindow = ({
   }, [groupId, hydrateGroupInvites, location?.state?.refreshInvites]);
 
   useEffect(() => {
-    if (!isExpanded || !groupId || activePeopleTab !== "invites") return;
+    if (!groupId || activePeopleTab !== "invites") return;
     hydrateGroupInvites();
-  }, [activePeopleTab, groupId, hydrateGroupInvites, isExpanded]);
+  }, [activePeopleTab, groupId, hydrateGroupInvites]);
 
   useEffect(() => {
     if (!isExpanded || !groupId) return;
@@ -1652,21 +1665,30 @@ const GroupChatWindow = ({
     if (!blob) return "";
     const buffer = await blob.arrayBuffer();
     const body = new Uint8Array(buffer);
-    const response = await authFetch(
-      `${host}/messages/upload-to-b2`,
-      {
-        method: "POST",
-        headers: {
-          "X-Filename": filename,
-          "X-Filesize": String(body.length),
-          "Content-Type": "application/octet-stream",
+    let json = null;
+    try {
+      json = await uploadMediaInChunks(host, body, {
+        fileName: filename,
+        contentType: blob.type || "application/octet-stream",
+      });
+    } catch (chunkError) {
+      console.warn("Chunked upload unavailable for group media, falling back to raw upload", chunkError);
+      const response = await authFetch(
+        `${host}/messages/upload-to-b2`,
+        {
+          method: "POST",
+          headers: {
+            "X-Filename": filename,
+            "X-Filesize": String(body.length),
+            "Content-Type": blob.type || "application/octet-stream",
+          },
+          body,
         },
-        body,
-      },
-      host
-    );
-    if (!response?.ok) return "";
-    const json = await response.json().catch(() => ({}));
+        host
+      );
+      if (!response?.ok) return "";
+      json = await response.json().catch(() => ({}));
+    }
     if (!isValidUploadResult(json)) return "";
     return getUploadUrl(json);
   };
@@ -1838,6 +1860,20 @@ const GroupChatWindow = ({
       const safeVideoName = sanitizeUploadName(filenameBase, `group_video_${now}.mp4`);
       const thumbBase = safeVideoName.replace(/\.[^.]+$/, "");
       const thumbName = sanitizeUploadName(`thumb_${thumbBase}_${now}.jpg`, `thumb_${now}.jpg`);
+
+      const directMediaUrl = await uploadBlobToB2(
+        new Blob([videoBytes], { type: type || "application/octet-stream" }),
+        safeVideoName
+      );
+      const directPreviewUrl = await uploadBlobToB2(previewBlob, thumbName);
+      if (directMediaUrl && directPreviewUrl) {
+        return {
+          mediaUrl: directMediaUrl,
+          previewUrl: directPreviewUrl,
+          localPath,
+        };
+      }
+
       const initData = await requestGroupVideoUploadInit({
         groupId,
         mediaName: safeVideoName,

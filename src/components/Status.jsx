@@ -323,8 +323,8 @@ const Status = ({ variant = "default" }) => {
           fetchedUsers.push({
             id: userResponse.id || id,
             name: userResponse.name,
-            avatar: userResponse.profilePhoto || "/img.jpg",
-            profilePhoto: userResponse.profilePhoto || "/img.jpg",
+            avatar: userResponse.profilePic || "/img.jpg",
+            profilePhoto: userResponse.profilePic || "/img.jpg",
             phoneNumber: userResponse.phoneNumber || null,
             updatedAt: userResponse.updatedAt,
             gender: userResponse.gender,
