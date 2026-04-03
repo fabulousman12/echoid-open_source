@@ -156,7 +156,9 @@ This includes files such as:
 If your package name is not `com.swipe`, update the package declarations and imports before building.
 
 ---
-
+# Versions 
+Java <= 19
+Gradle = 8.2.1
 ## Separate Plugin Requirement
 
 This app also depends on the separate thumbnail plugin package:
