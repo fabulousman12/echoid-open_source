@@ -3,6 +3,15 @@ import { createPortal } from "react-dom";
 import { MdDeleteSweep } from "react-icons/md";
 import "./StatusViewer.css";
 
+const STATUS_CAPTION_PREVIEW_LENGTH = 16;
+
+function getCaptionPreview(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length <= STATUS_CAPTION_PREVIEW_LENGTH) return text;
+  return `${text.slice(0, STATUS_CAPTION_PREVIEW_LENGTH)}..`;
+}
+
 function ImageWithTimeout({ src, duration, onDone, onProgress, paused, onLoad, onError, styleOverride }) {
   const onDoneRef = useRef(onDone);
   const onProgressRef = useRef(onProgress);
@@ -96,6 +105,7 @@ export default function StatusViewer({
   const [sheetHeight, setSheetHeight] = useState(40);
   const [isMediaLoading, setIsMediaLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
   const [skipCount, setSkipCount] = useState(0);
   const dragStartRef = useRef(null);
   const viewedIdsRef = useRef(new Set());
@@ -112,6 +122,10 @@ export default function StatusViewer({
   const touchStartYRef = useRef(null);
   const videoRef = useRef(null);
   const timeLabel = formatTime24(current?.createdAt);
+  const fullCaption = String(current?.caption || "").trim();
+  const truncatedCaption = getCaptionPreview(fullCaption);
+  const hasExpandableCaption = fullCaption.length > STATUS_CAPTION_PREVIEW_LENGTH;
+  const hideViewerChrome = isPaused && !captionExpanded && !viewerSheetOpen && !isMediaLoading;
 
   useEffect(() => {
     setProgress(0);
@@ -120,6 +134,7 @@ export default function StatusViewer({
     setIsPaused(false);
     setViewerSheetOpen(false);
     setIsMediaLoading(true);
+    setCaptionExpanded(false);
   }, [index, current?.id]);
 
   useEffect(() => {
@@ -198,6 +213,16 @@ export default function StatusViewer({
       resumePlayback();
     }
   }, [viewerSheetOpen]);
+
+  useEffect(() => {
+    if (captionExpanded) {
+      pausePlayback();
+      return;
+    }
+    if (!viewerSheetOpen && !isMediaLoading && isPaused) {
+      resumePlayback();
+    }
+  }, [captionExpanded, viewerSheetOpen, isMediaLoading]);
 
   useEffect(() => {
     if (isMediaLoading) {
@@ -325,7 +350,7 @@ export default function StatusViewer({
         onMouseLeave={resumePlayback}
       >
         <div className="status-viewer-shell">
-          <div className="status-viewer-top-overlay">
+          <div className={`status-viewer-top-overlay ${hideViewerChrome ? "is-hidden" : ""}`}>
             <div className="status-viewer-progress-row">
               {safeItems.map((_, i) => {
                 const isPast = i < index;
@@ -486,16 +511,59 @@ export default function StatusViewer({
           )}
         </div>
 
-        {current?.caption ? (
+        {fullCaption && (!hideViewerChrome || captionExpanded) ? (
           <div
-            className="status-viewer-caption"
+            className={`status-viewer-caption ${captionExpanded ? "is-expanded" : ""} ${isOwn ? "is-own" : ""} ${hasExpandableCaption ? "is-clickable" : ""}`}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
+            onMouseUp={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!hasExpandableCaption) return;
+              setCaptionExpanded((prev) => !prev);
+            }}
+            role={hasExpandableCaption ? "button" : undefined}
+            tabIndex={hasExpandableCaption ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (!hasExpandableCaption) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setCaptionExpanded((prev) => !prev);
+              }
+            }}
           >
-            {current.caption}
+            <div
+              className="status-viewer-caption-text"
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              {captionExpanded ? fullCaption : truncatedCaption}
+            </div>
           </div>
         ) : null}
 
-        {isOwn ? (
+        {isOwn && !hideViewerChrome ? (
           <div
+            className="status-viewer-own-views"
             onClick={(e) => {
               e.stopPropagation();
               setViewerSheetOpen(true);
@@ -503,10 +571,9 @@ export default function StatusViewer({
             role="button"
             tabIndex={0}
             style={{
-              color: "rgba(255,255,255,0.9)",
               position:'absolute',
+              right: "14px",
               bottom:'10px',
-              fontSize: "16px",
               display: "flex",
               alignItems: "center",
               gap: "8px",
@@ -520,33 +587,19 @@ export default function StatusViewer({
         ) : null}
 
         <div
+          className={`status-viewer-nav-zone status-viewer-nav-zone--left ${captionExpanded ? "is-disabled" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
+            if (captionExpanded) return;
             goPrev();
-          }}
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: "50%",
-            cursor: "pointer",
-            zIndex: 10,
           }}
         />
         <div
+          className={`status-viewer-nav-zone status-viewer-nav-zone--right ${captionExpanded ? "is-disabled" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
+            if (captionExpanded) return;
             goNext();
-          }}
-          style={{
-            position: "absolute",
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: "50%",
-            cursor: "pointer",
-            zIndex: 10,
           }}
         />
         {isMediaLoading && (

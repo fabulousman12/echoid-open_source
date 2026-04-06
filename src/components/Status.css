@@ -553,6 +553,19 @@
   z-index: 90;
 }
 
+.status-upload-pill--global {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: calc(100vw - 24px);
+  justify-content: center;
+  z-index: 100100;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
 .status-upload-spinner {
   width: 18px;
   height: 18px;

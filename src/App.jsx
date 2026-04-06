@@ -222,7 +222,6 @@ const showAuthSwal = (title, text) => {
     width: 320,
     padding: '1.2rem',
     backdrop: 'rgba(0,0,0,0.4)',
-    borderRadius:'10px',
     customClass: {
       popup: 'mobile-alert'
     }
@@ -3409,7 +3408,6 @@ const connect = async (url) => {
   width: 300,
   padding: '1.2rem',
   backdrop: 'rgba(0,0,0,0.4)',
-  borderRadius:'10px',
   customClass: {
     popup: 'mobile-alert'
   }
@@ -3555,6 +3553,10 @@ case "ice-restart-answer": {
       const tokenExpiredCode = event.code === 4401;
       const deviceMismatch = event.code === 4402;
       const userNotFound = event.code === 4404;
+      const silentSocketClose =
+        event.code === 1006 ||
+        event.code === 1005 ||
+        (!event.wasClean && !reasonText);
 
       if (tokenExpired && !wsRefreshInFlight.current && !wsRefreshTried.current) {
         suppressWsStatusSwalRef.current = true;
@@ -3588,6 +3590,9 @@ case "ice-restart-answer": {
       }
 
       if (isAcitve.current) {
+        if (silentSocketClose) {
+          suppressWsStatusSwalRef.current = true;
+        }
         reconnect(url);
       } else {
         socket.current = null;
@@ -5660,7 +5665,6 @@ const reconnect = (url) => {
   width: 300,
   padding: '1.2rem',
   backdrop: 'rgba(0,0,0,0.4)',
-  borderRadius:'10px',
   customClass: {
     popup: 'mobile-alert'
   }

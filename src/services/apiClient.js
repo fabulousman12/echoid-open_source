@@ -44,7 +44,6 @@ export async function refreshAccessToken(host) {
             width: 320,
             padding: "1.2rem",
             backdrop: "rgba(0,0,0,0.4)",
-            borderRadius: "10px",
             customClass: {
               popup: "mobile-alert"
             }

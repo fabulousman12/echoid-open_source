@@ -18,6 +18,11 @@ import { getDeviceId, getDeviceIdSync } from "../services/deviceInfo";
 import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
 import data from "../data";
 import ImageRenderer from "../components/ImageRenderer";
+
+const PROFILE_NAME_MAX_LENGTH = 30;
+const PROFILE_ABOUT_MAX_LENGTH = 120;
+const PROFILE_LOCATION_MAX_LENGTH = 35;
+
 const ProfilePage = ({host}) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -153,8 +158,9 @@ const ProfilePage = ({host}) => {
     setIsEditing(false);
   };
 
-  const handleNameChange = (e) => setName(e.target.value);
-  const handleAboutChange = (e) => setAbout(e.target.value);
+  const handleNameChange = (e) => setName(e.target.value.slice(0, PROFILE_NAME_MAX_LENGTH));
+  const handleAboutChange = (e) => setAbout(e.target.value.slice(0, PROFILE_ABOUT_MAX_LENGTH));
+  const handleLocationChange = (e) => setLocation(e.target.value.slice(0, PROFILE_LOCATION_MAX_LENGTH));
 
   const handleProfilePhotoChange = (e) => {
     const file = e.target.files[0];
@@ -267,24 +273,27 @@ const handlePickNative = async () => {
   // Handle image load to start cropping
   const saveChanges = async () => {
     setLoading(true);
+    const normalizedName = String(name || "").slice(0, PROFILE_NAME_MAX_LENGTH);
+    const normalizedAbout = String(about || "").slice(0, PROFILE_ABOUT_MAX_LENGTH);
+    const normalizedLocation = String(location || "").slice(0, PROFILE_LOCATION_MAX_LENGTH);
     const updatedUser = {
       ...currentUser,
-      name,
-      About: about,
+      name: normalizedName,
+      About: normalizedAbout,
       profilePhoto,
       gender,
       dob,
-      location
+      location: normalizedLocation
     };
 
 
 const updatedFields = { email: currentUser.email }; // Always send email for identification
 
-if (name !== originalName) updatedFields.name = name;
-if (about !== originalAbout) updatedFields.About = about;
+if (normalizedName !== originalName) updatedFields.name = normalizedName;
+if (normalizedAbout !== originalAbout) updatedFields.About = normalizedAbout;
 if (gender !== currentUser.gender) updatedFields.gender = gender;
 if (dob !== currentUser.dob) updatedFields.dob = dob;
-if (location !== currentUser.location) updatedFields.location = location;
+if (normalizedLocation !== currentUser.location) updatedFields.location = normalizedLocation;
 
 const stripBase64 = (data) => data?.replace(/^data:image\/\w+;base64,/, '');
 if (
@@ -583,7 +592,7 @@ if (
           <div className="profile-web-info-card">
             <span className="profile-web-label">Full Name</span>
             {isEditing ? (
-              <input type="text" value={name} onChange={handleNameChange} className="profile-web-input" />
+              <input type="text" value={name} onChange={handleNameChange} maxLength={PROFILE_NAME_MAX_LENGTH} className="profile-web-input" />
             ) : (
               <div className="profile-web-value">{name || "Not set"}</div>
             )}
@@ -605,9 +614,10 @@ if (
             <span>About</span>
           </div>
           {isEditing ? (
-            <textarea
+              <textarea
               value={about}
               onChange={handleAboutChange}
+              maxLength={PROFILE_ABOUT_MAX_LENGTH}
               rows={4}
               className="profile-web-input profile-web-textarea"
             />
@@ -629,7 +639,7 @@ if (
           <div className="profile-web-info-card">
             <span className="profile-web-label">Location</span>
             {isEditing ? (
-              <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="profile-web-input" />
+              <input type="text" value={location} onChange={handleLocationChange} maxLength={PROFILE_LOCATION_MAX_LENGTH} className="profile-web-input" />
             ) : (
               <div className="profile-web-value">{location || "Not set"}</div>
             )}
@@ -1195,7 +1205,7 @@ if (
                   <div className="profile-web-info-card">
                     <span className="profile-web-label">Full Name</span>
                     {isEditing ? (
-                      <input type="text" value={name} onChange={handleNameChange} className="profile-web-input" />
+                      <input type="text" value={name} onChange={handleNameChange} maxLength={PROFILE_NAME_MAX_LENGTH} className="profile-web-input" />
                     ) : (
                       <div className="profile-web-value">{name || "Not set"}</div>
                     )}
@@ -1220,6 +1230,7 @@ if (
                     <textarea
                       value={about}
                       onChange={handleAboutChange}
+                      maxLength={PROFILE_ABOUT_MAX_LENGTH}
                       rows={4}
                       className="profile-web-input profile-web-textarea"
                     />
@@ -1241,7 +1252,7 @@ if (
                   <div className="profile-web-info-card">
                     <span className="profile-web-label">Location</span>
                     {isEditing ? (
-                      <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="profile-web-input" />
+                      <input type="text" value={location} onChange={handleLocationChange} maxLength={PROFILE_LOCATION_MAX_LENGTH} className="profile-web-input" />
                     ) : (
                       <div className="profile-web-value">{location || "Not set"}</div>
                     )}

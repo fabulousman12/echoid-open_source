@@ -11,6 +11,23 @@ import { FaPlus } from "react-icons/fa";
 import { GrMultimedia } from "react-icons/gr";
 import Lottie from "lottie-react";
 import sticker from "../assets/empty ghost.json";
+
+const STATUS_CAPTION_WORD_LIMIT = 250;
+
+const countStatusCaptionWords = (value) =>
+  String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+const normalizeStatusCaption = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= STATUS_CAPTION_WORD_LIMIT) return words.join(" ");
+  return words.slice(0, STATUS_CAPTION_WORD_LIMIT).join(" ");
+};
+
 const globalUploadState =
   globalThis.__statusUploadState ||
   (globalThis.__statusUploadState = {
@@ -1525,9 +1542,13 @@ const Status = ({ variant = "default" }) => {
               value={activeMediaFile?.caption || ""}
               onChange={(e) => {
                 const value = e.target.value;
+                const nextValue =
+                  countStatusCaptionWords(value) <= STATUS_CAPTION_WORD_LIMIT
+                    ? value
+                    : normalizeStatusCaption(value);
                 setMediaFiles((prev) =>
                   prev.map((file, idx) =>
-                    idx === activeMediaIndex ? { ...file, caption: value } : file
+                    idx === activeMediaIndex ? { ...file, caption: nextValue } : file
                   )
                 );
               }}
@@ -1641,6 +1662,24 @@ const Status = ({ variant = "default" }) => {
                 </button>
             </div>
           )}
+        </div>
+      )}
+
+      {uploading && !showMediaPreview && (
+        <div className="status-upload-pill status-upload-pill--global">
+          <span className="status-upload-spinner" />
+          <span>{`Uploading ${uploadProgress}%`}</span>
+          <button
+            type="button"
+            className="status-upload-cancel"
+            onClick={() => {
+              uploadCancelRef.current = true;
+              globalUploadState.cancelRequested = true;
+              globalUploadState.xhr?.abort();
+            }}
+          >
+            Cancel
+          </button>
         </div>
       )}
 

@@ -32,7 +32,8 @@ vi.mock("lucide-react", () => ({
   Edit2: () => <span />,
   Save: () => <span />,
   X: () => <span />,
-  Camera: () => <span />
+  Camera: () => <span />,
+  ChevronRight: () => <span />
 }));
 
 vi.mock("react-easy-crop", () => ({
@@ -104,4 +105,28 @@ test("logout clears storage, tokens, and routes to login", async () => {
   expect(globalThis.storage.removeItem).toHaveBeenCalledWith("privateKey");
   expect(globalThis.storage.removeItem).toHaveBeenCalledWith("device_token");
   expect(pushMock).toHaveBeenCalledWith("/login");
+});
+
+test("profile edit fields expose the expected max lengths", async () => {
+  const { findByText, container } = render(<ProfilePage host="https://example.com" />);
+
+  const profileDetailBtn = await findByText("Profile detail");
+  await act(async () => {
+    fireEvent.click(profileDetailBtn);
+  });
+
+  const editBtn = await findByText("Edit Profile");
+  await act(async () => {
+    fireEvent.click(editBtn);
+  });
+
+  const textInputs = Array.from(container.querySelectorAll('input[type="text"]'));
+  const textareas = Array.from(container.querySelectorAll("textarea"));
+  const fullNameInput = textInputs.find((input) => input.value === "Me");
+  const locationInput = textInputs.find((input) => input.value === "");
+  const aboutInput = textareas[0];
+
+  expect(fullNameInput?.maxLength).toBe(30);
+  expect(aboutInput?.maxLength).toBe(120);
+  expect(locationInput?.maxLength).toBe(35);
 });

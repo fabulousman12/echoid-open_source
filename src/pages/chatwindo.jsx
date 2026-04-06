@@ -545,6 +545,13 @@ async function pickMediaAndSaveToShared() {
 const handlePickMedia = async () => {
   console.log("test before take 6")
 
+  if (!Capacitor.isNativePlatform()) {
+    if (imageVideoInputRef?.current) {
+      imageVideoInputRef.current.click();
+    }
+    return;
+  }
+
   const selectedFiles = await pickMediaAndSaveToShared();
   if (selectedFiles.length) {
     console.log('Picked files:',  JSON.stringify(selectedFiles, null, 2));
@@ -2346,6 +2353,7 @@ async function encryptMessageHybrid(newMessage, recipientPublicKeyPem) {
       type: file.type,
       path: file.path || '',  // optional, if you have this custom prop
       preview: file.preview,       // base64 (if provided by native picker)
+      fileObject: file instanceof Blob ? file : null,
       previewUrl: (() => {
         const raw = file.preview;
         if (typeof raw === "string" && raw.startsWith("data:")) return raw;
@@ -2613,24 +2621,31 @@ function convertBlobToBase64(blob) {
 const saveFilePermanently = async (file) => {
   try {
     if (!Capacitor.isNativePlatform()) {
-      if (isWebStoredFileRef(file?.path || '')) return file.path;
+      if (isWebStoredFileRef(file?.path || '')) {
+        return {
+          ...file,
+          path: file.path,
+        };
+      }
       if (file?.fileObject instanceof Blob) {
-        return await saveBlobToWebFileStore(file.fileObject, {
+        const storedPath = await saveBlobToWebFileStore(file.fileObject, {
           fileName: file?.name || 'media',
           mimeType: file?.type || file?.fileObject?.type || '',
           folder: String(file?.type || '').startsWith('video/') ? 'chat_media/videos' : 'chat_media/files',
         });
+        return storedPath ? { ...file, path: storedPath } : null;
       }
       if (typeof file?.preview === 'string' && file.preview.startsWith('data:')) {
         const response = await fetch(file.preview);
         const blob = await response.blob();
-        return await saveBlobToWebFileStore(blob, {
+        const storedPath = await saveBlobToWebFileStore(blob, {
           fileName: file?.name || 'media',
           mimeType: file?.type || blob.type || '',
           folder: String(file?.type || '').startsWith('video/') ? 'chat_media/videos' : 'chat_media/files',
         });
+        return storedPath ? { ...file, path: storedPath } : null;
       }
-      return file?.path || '';
+      return file?.path ? { ...file, path: file.path } : null;
     }
 
     const isVideo = file.type.startsWith('video/');
@@ -3297,8 +3312,12 @@ const handleCancel = () => {
 const getFilesByType = (type) => {
   //console.log("type",type)
   //console.log("localchat_messages.current",localchat_messages.current.filter((msg) => msg.file_type === type &&msg.isDownload ===1 ))
-  return localchat_messages.current.filter((msg) => msg.file_type === type &&msg.isDownload ===1 );
+  return (localchat_messages.current || []).filter((msg) => msg.file_type === type && msg.isDownload === 1);
 };
+const profileImageMedia = localchat_messages.current?.filter(
+  (msg) => msg.file_type === "image" && msg.isDownload === 1
+) || [];
+const profileVideoMedia = getFilesByType("video");
 const handleBack = () => {
   setShowAll(false);
 };
@@ -3873,10 +3892,9 @@ const expandedProfilePanel = userdetails ? (
         </button>
         <h2 className="chat-profile-name">{userdetails.name || "User"}</h2>
         <p className="chat-profile-role">{userdetails.bio || userdetails.About || "Senior Product Designer"}</p>
-        <p className="chat-profile-status">
-          Online
-          {userdetails.phoneNumber ? ` • ${userdetails.phoneNumber}` : ""}
-        </p>
+        {userdetails.phoneNumber && (
+          <p className="chat-profile-status">{userdetails.phoneNumber}</p>
+        )}
       </div>
 
       <div className="chat-profile-actions-row">
@@ -3978,6 +3996,194 @@ const expandedProfilePanel = userdetails ? (
         </div>
       </section>
     </div>
+
+    {showAll && (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: embedded ? "absolute" : "fixed",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          background: colors.background,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          zIndex: 80,
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b border-gray-300"
+          style={{
+            backgroundColor: colors.panel,
+            minHeight: "68px",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={handleBack}
+            className="text-black hover:underline p-2 flex items-center text-xl"
+            style={{ color: colors.textPrimary }}
+          >
+            <IonIcon icon={arrowBackOutline} size="small" />
+          </button>
+
+          <div className="flex justify-center gap-4">
+            {["images", "videos"].map((tab) => (
+              <button
+                key={tab}
+                style={{
+                  fontSize: "15px",
+                  color: selectedTab === tab ? "#ffffff" : colors.textPrimary,
+                  backgroundColor: selectedTab === tab ? colors.accent : "transparent",
+                  border: selectedTab === tab ? `1px solid ${colors.accent}` : `1px solid ${colors.border}`,
+                  borderRadius: "999px",
+                  padding: "8px 14px",
+                  boxShadow: selectedTab === tab ? "0 8px 18px rgba(0,0,0,0.18)" : "none",
+                }}
+                onClick={() => setSelectedTab(tab)}
+                className="font-semibold transition-all"
+              >
+                {tab === "images" ? `Photos (${profileImageMedia.length})` : `Videos (${profileVideoMedia.length})`}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ width: 28 }} />
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {selectedTab === "images" && (
+            profileImageMedia.length ? (
+            <div className="grid grid-cols-2 gap-3 p-3">
+              {profileImageMedia.map((msg, index) => (
+                  <div
+                    key={index}
+                    className="w-full aspect-square bg-gray-100 overflow-hidden rounded-xl relative cursor-pointer"
+                    onClick={() => {
+                      if (msg.isDownload !== 0) {
+                        handleImageClick(msg.file_path);
+                      } else if (!isDownloading[msg.id] && msg.isError === 0) {
+                        handleFileDownload(msg);
+                      }
+                    }}
+                    onMouseDown={() => handlePressStart1(msg)}
+                    onMouseUp={handlePressEnd1}
+                    onMouseLeave={handlePressEnd1}
+                    onTouchStart={() => handlePressStart1(msg)}
+                    onTouchEnd={handlePressEnd1}
+                    style={{
+                      boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
+                    }}
+                  >
+                    <ImageRenderer
+                      src={msg.file_path}
+                      alt={`file ${index + 1}`}
+                      className="w-full h-full object-cover select-none"
+                      zoomable={false}
+                      onClick={() => {}}
+                      style={{
+                        pointerEvents: "none",
+                        userSelect: "none",
+                        WebkitUserDrag: "none",
+                        maxWidth: "100%",
+                        maxHeight: "none",
+                        aspectRatio: "auto",
+                      }}
+                    />
+                  </div>
+                ))}
+            </div>
+            ) : (
+              <div
+                style={{
+                  minHeight: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "32px 20px",
+                  color: colors.subtext,
+                  textAlign: "center",
+                  fontWeight: 600,
+                }}
+              >
+                No picture to show
+              </div>
+            )
+          )}
+
+          {selectedTab === "videos" && (
+            profileVideoMedia.length ? (
+            <div className="grid grid-cols-2 gap-3 p-3">
+              {profileVideoMedia.map((msg, index) => (
+                <div
+                  key={index}
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    aspectRatio: "1/1",
+                    overflow: "hidden",
+                    borderRadius: 12,
+                    cursor: "pointer",
+                    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
+                  }}
+                  onMouseDown={() => handlePressStart1(msg)}
+                  onMouseUp={handlePressEnd1}
+                  onMouseLeave={handlePressEnd1}
+                  onTouchStart={() => handlePressStart1(msg)}
+                  onTouchEnd={handlePressEnd1}
+                  onClick={() => handleVideoClick(msg)}
+                >
+                  <VideoRenderer
+                    src={msg.file_path}
+                    muted
+                    Name={msg.file_name}
+                    Size={msg.file_size}
+                    playsInline
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      pointerEvents: "none",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      backgroundColor: "rgba(0, 0, 0, 0.5)",
+                      borderRadius: "50%",
+                      padding: "10px",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <IonIcon icon={playCircleOutline} style={{ color: "white", fontSize: 40 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            ) : (
+              <div
+                style={{
+                  minHeight: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "32px 20px",
+                  color: colors.subtext,
+                  textAlign: "center",
+                  fontWeight: 600,
+                }}
+              >
+                No video to show
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    )}
   </div>
 ) : null;
 
@@ -4745,31 +4951,35 @@ onClick={() => isExpanded ? toglebigscreen() : toggleHeader()}
 
  <div className="flex-1 overflow-y-auto">
            {selectedTab === 'images' && (
-             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 p-2 ">
+             <div className="grid grid-cols-2 gap-3 p-3 ">
              {localchat_messages.current?.filter(msg => msg.file_type === "image" && msg.isDownload === 1).map((msg, index) => (
   <div
     key={index}
-    className="w-full aspect-square bg-gray-100 overflow-hidden rounded-lg relative"
-    onClick={() => handleFileClick(msg)}
+    className="w-full aspect-square bg-gray-100 overflow-hidden rounded-xl relative cursor-pointer"
+    onClick={() => handleImageClick(msg.file_path)}
 onMouseDown={() => handlePressStart1(msg)}
   onMouseUp={handlePressEnd1}
   onMouseLeave={handlePressEnd1}
   onTouchStart={() => handlePressStart1(msg)}
   onTouchEnd={handlePressEnd1}
+  style={{
+    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
+  }}
   >
     <ImageRenderer
       src={msg.file_path}
       alt={`file ${index + 1}`}
-      className="w-full h-full object-cover"
-      zoomable
-      maxZoom={3.5}
-        onClick={() => {
-                    if (msg.isDownload !== 0) {
-                      handleImageClick(msg.file_path);
-                    } else if (!isDownloading[msg.id] && msg.isError === 0) {
-                      handleFileDownload(msg);
-                    }
-                  }}
+      className="w-full h-full object-cover select-none"
+      zoomable={false}
+      onClick={() => {}}
+      style={{
+        pointerEvents: "none",
+        userSelect: "none",
+        WebkitUserDrag: "none",
+        maxWidth: "100%",
+        maxHeight: "none",
+        aspectRatio: "auto",
+      }}
     />
     {/* Checkmark if selected */}
     {selectedFiles.some(f => f.id === msg.id) && (
@@ -4784,23 +4994,22 @@ onMouseDown={() => handlePressStart1(msg)}
            )}
      
            {selectedTab === 'videos' && (
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
+             <div className="grid grid-cols-2 gap-3 p-3">
                {getFilesByType('video').map((msg, index) => (
-                 <div key={index} style={{ position: "relative", width: "100%", aspectRatio: "1/1", overflow: "hidden", borderRadius: 8 }}
+                 <div key={index} style={{ position: "relative", width: "100%", aspectRatio: "1/1", overflow: "hidden", borderRadius: 12, cursor: "pointer", boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)" }}
                  onMouseDown={() => handlePressStart1(msg)}
   onMouseUp={handlePressEnd1}
   onMouseLeave={handlePressEnd1}
   onTouchStart={() => handlePressStart1(msg)}
   onTouchEnd={handlePressEnd1}
                 
-                onClick={() => handleFileClick(msg)}
+                onClick={() => handleVideoClick(msg)}
                 >
                    <VideoRenderer
                      src={msg.file_path}
                      muted
                      Name={msg.file_name}
                      Size={msg.file_size}
-                     onClick={() => handleVideoClick(msg)}
                    
                      playsInline
                      style={{
@@ -4820,9 +5029,10 @@ onMouseDown={() => handlePressStart1(msg)}
                        backgroundColor: "rgba(0, 0, 0, 0.5)",
                        borderRadius: "50%",
                        padding: "10px",
+                       pointerEvents: "none",
                      }}
                    >
-                     <IonIcon icon={playCircleOutline} style={{ color: "white", fontSize: 40 }} onClick={() => handleVideoClick(msg)} />
+                     <IonIcon icon={playCircleOutline} style={{ color: "white", fontSize: 40 }} />
                    </div>
                    {selectedFiles.some(f => f.id === msg.id) && (
       <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full p-1">
@@ -6445,6 +6655,7 @@ top: '50%',
 };
 
 export default Chatwindo;
+
 
 
 
