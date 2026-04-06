@@ -516,8 +516,8 @@ flex-direction: row;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  background: var(--primary);
-  color: #e5e9ee;
+  background: #f8fafc;
+  color: #1f2937;
   z-index: 20;
   box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
   transition: transform 0.2s ease;
@@ -542,7 +542,7 @@ flex-direction: row;
 .profile-header-title {
   font-size: 16px;
   font-weight: 600;
-  color: #ebeff3;
+  color: #1f2937;
 }
 
 .profile-header-spacer {
@@ -1269,6 +1269,61 @@ flex-direction: row;
 
   .profile-web-name {
     font-size: 1.7rem;
+  }
+}
+
+.profile-mobile-detail-shell {
+  padding: 0 14px 18px;
+}
+
+.profile-mobile-detail-card {
+  width: 100%;
+  border-radius: 24px;
+  padding-bottom: 6px;
+}
+
+.profile-mobile-detail-hero {
+  padding-top: 18px;
+}
+
+.profile-mobile-detail-grid {
+  width: calc(100% - 28px);
+}
+
+.profile-mobile-edit-actions {
+  width: min(100%, 320px);
+  justify-content: center;
+}
+
+.profile-mobile-detail-signout {
+  width: calc(100% - 28px);
+}
+
+.profile-mobile-break {
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .profile-mobile-detail-shell {
+    padding: 0 10px 16px;
+  }
+
+  .profile-mobile-detail-card {
+    border-radius: 20px;
+  }
+
+  .profile-mobile-edit-actions {
+    flex-direction: column;
+  }
+
+  .profile-mobile-edit-actions .profile-web-edit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .profile-mobile-detail-grid,
+  .profile-mobile-detail-signout {
+    width: calc(100% - 20px);
   }
 }
 

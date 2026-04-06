@@ -878,7 +878,7 @@ if (
         onScroll={handleHeaderScroll}
       >
         {!isDesktopWebProfile && <div className="profile-header-offset" />}
-        {!isDesktopWebProfile && (!activeSection || activeSection === "profile") && (
+        {!isDesktopWebProfile && !activeSection && (
         <div className="profile-hero">
           <div className="profile-avatar-wrapper">
             {profilePhoto ? (
@@ -1139,158 +1139,144 @@ if (
           {activeSection === "profile" && isDesktopWebProfile && renderDesktopProfileDetails()}
 
           {activeSection === "profile" && !isDesktopWebProfile && (
-            <div className="profile-details-card">
-              <div className="profile-details-header">
-                <h2 className="text-base font-semibold text-slate-900">
-                  Profile Details
-                </h2>
-                {!isEditing ? (
-                  <button
-                    onClick={toggleEdit}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 border border-blue-200"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    Edit
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={saveChanges}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      Save
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Cancel
-                    </button>
+            <div className={`profile-web-shell profile-web-shell--${profileThemeClass} profile-mobile-detail-shell`}>
+              <div className="profile-web-card profile-mobile-detail-card">
+                <div className="profile-web-hero profile-mobile-detail-hero">
+                  <div className="profile-web-avatar-wrap">
+                    {profilePhoto ? (
+                      <img
+                        src={profilePhoto}
+                        alt="Profile"
+                        className="profile-web-avatar"
+                        onClick={() => setIsFullScreen(true)}
+                      />
+                    ) : (
+                      <div className="profile-web-avatar profile-web-avatar--fallback">
+                        <User size={34} />
+                      </div>
+                    )}
+                    {isEditing ? (
+                      <label htmlFor="profile-picture-upload-mobile" className="profile-web-avatar-edit">
+                        <Camera size={14} />
+                        <input
+                          id="profile-picture-upload-mobile"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleProfilePhotoChange}
+                          onClick={handlePhotoPickRequest}
+                          className="hidden"
+                        />
+                      </label>
+                    ) : null}
                   </div>
-                )}
-              </div>
 
-              <div className="bg-white rounded-lg border border-slate-200 divide-y shadow-sm">
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Full Name</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={handleNameChange}
-                      className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
+                  <h2 className="profile-web-name">{name || "Profile"}</h2>
+                  <div className="profile-web-email">{currentUser?.email || ""}</div>
+
+                  {!isEditing ? (
+                    <button type="button" className="profile-web-edit-btn" onClick={toggleEdit}>
+                      Edit Profile
+                    </button>
                   ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <User className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm">{name}</span>
+                    <div className="profile-web-edit-actions profile-mobile-edit-actions">
+                      <button type="button" className="profile-web-edit-btn is-primary" onClick={saveChanges}>
+                        <Save size={14} />
+                        <span>Save</span>
+                      </button>
+                      <button type="button" className="profile-web-edit-btn" onClick={handleCancelEdit}>
+                        <X size={14} />
+                        <span>Cancel</span>
+                      </button>
                     </div>
                   )}
                 </div>
 
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Email Address</label>
-                  {isEditing ? (
-                    <input
-                      type="email"
-                      value={currentUser?.email}
-                      disabled
-                      className="w-full px-4 py-3 text-sm border border-slate-200 rounded-md bg-slate-50 text-slate-400 cursor-not-allowed"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <Mail className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm break-all">{currentUser?.email}</span>
-                    </div>
-                  )}
+                <div className="profile-web-grid profile-mobile-detail-grid">
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Full Name</span>
+                    {isEditing ? (
+                      <input type="text" value={name} onChange={handleNameChange} className="profile-web-input" />
+                    ) : (
+                      <div className="profile-web-value">{name || "Not set"}</div>
+                    )}
+                  </div>
+
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Email Address</span>
+                    {isEditing ? (
+                      <input type="email" value={currentUser?.email || ""} disabled className="profile-web-input is-disabled" />
+                    ) : (
+                      <div className="profile-web-value profile-mobile-break">{currentUser?.email || "Not set"}</div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Phone Number</label>
-                  {isEditing ? (
-                    <input
-                      type="tel"
-                      value={currentUser?.phoneNumber}
-                      disabled
-                      className="w-full px-4 py-3 text-sm border border-slate-200 rounded-md bg-slate-50 text-slate-400 cursor-not-allowed"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <Phone className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm">{currentUser?.phoneNumber}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">About</label>
+                <div className="profile-web-panel">
+                  <div className="profile-web-panel-label">
+                    <span className="profile-web-panel-icon"><Edit2 size={14} /></span>
+                    <span>About</span>
+                  </div>
                   {isEditing ? (
                     <textarea
                       value={about}
                       onChange={handleAboutChange}
                       rows={4}
-                      className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                      className="profile-web-input profile-web-textarea"
                     />
                   ) : (
-                    <p className="text-sm text-slate-900 leading-relaxed">{about || "Not set"}</p>
+                    <p className="profile-web-about">{about || "Not set"}</p>
                   )}
                 </div>
 
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Date of Birth</label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      value={dob}
-                      onChange={(e) => setDob(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <Calendar className="w-5 h-5 text-blue-500" />
-                      <p className="text-sm">{dob || "not set"}</p>
-                    </div>
-                  )}
+                <div className="profile-web-grid profile-mobile-detail-grid">
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Phone Number</span>
+                    {isEditing ? (
+                      <input type="tel" value={currentUser?.phoneNumber || ""} disabled className="profile-web-input is-disabled" />
+                    ) : (
+                      <div className="profile-web-value">{currentUser?.phoneNumber || "Not set"}</div>
+                    )}
+                  </div>
+
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Location</span>
+                    {isEditing ? (
+                      <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="profile-web-input" />
+                    ) : (
+                      <div className="profile-web-value">{location || "Not set"}</div>
+                    )}
+                  </div>
+
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Date of Birth</span>
+                    {isEditing ? (
+                      <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="profile-web-input" />
+                    ) : (
+                      <div className="profile-web-value">{dob || "Not set"}</div>
+                    )}
+                  </div>
+
+                  <div className="profile-web-info-card">
+                    <span className="profile-web-label">Gender</span>
+                    {isEditing ? (
+                      <select value={gender} onChange={(e) => setGender(e.target.value)} className="profile-web-input">
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-binary">Retard</option>
+                        <option value="Prefer not to say">Prefer not to say(Low iq)</option>
+                      </select>
+                    ) : (
+                      <div className="profile-web-value">{gender || "Not set"}</div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Gender</label>
-                  {isEditing ? (
-                    <select
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Non-binary">Retard</option>
-                      <option value="Prefer not to say">Prefer not to say(Low iq)</option>
-                    </select>
-                  ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <User className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm">{gender || "not set"}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-5">
-                  <label className="block text-xs font-medium text-blue-600 mb-3 uppercase tracking-wide">Location</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3 text-slate-900">
-                      <MapPin className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm">{location || "not set"}</span>
-                    </div>
-                  )}
+                <div className="profile-web-signout-wrap profile-mobile-detail-signout">
+                  <button type="button" className="profile-web-signout" onClick={handleLogout}>
+                    <LogOut size={15} />
+                    <span>Sign Out</span>
+                  </button>
+                  <div className="profile-web-version">EchoId Version</div>
                 </div>
               </div>
             </div>

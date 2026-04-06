@@ -96,6 +96,7 @@ const HomeScreen = ({
   unblockUser,
   storeMessageInSQLite,
   setCustomSounds,
+  clearDirectNotificationForUser,
 }) => {
 //  const { socket,messages,db,setMessages,connect,setSelectedUser,setCurrenuser,getmessages,setUnreadCounts } = useWebSocket(); // Use WebSocket context methods
  const {
@@ -1152,6 +1153,7 @@ console.log("Fetched user details for missing user:", data);
   
   const handleUserClick = async(user) => {
     //console.log("click the main user ",JSON.stringify(user.id))
+    await clearDirectNotificationForUser?.(user?.id);
     setSelectedUser1(user);
     selectedUser1.current = user.id
 
@@ -1649,6 +1651,7 @@ console.log("Fetched user details for missing user:", data);
         host={host}
         customSounds={customSounds}
         setCustomSounds={setCustomSounds}
+        clearDirectNotificationForUser={clearDirectNotificationForUser}
           embedded
           embeddedUser={desktopSelectedUser}
           onEmbeddedUserChange={setDesktopSelectedUser}

@@ -1537,7 +1537,7 @@ useEffect(() => {
           await sendPublicKeyToBackend(token);
           setInitialRoute('/home');
 
-          await ensureOverlayPermission();
+        //  await ensureOverlayPermission();
         
           currentuserRef.current =(globalThis.storage.readJSON('currentuser', null)) ;
           //console.log("current user",currentuserRef.current._id)
@@ -2439,6 +2439,7 @@ useEffect(() => {
     cordova.plugins.notification.local.on('click', (notification) => {
       const senderId = notification.data?.senderId;
       console.log('?? Notification clicked:', senderId);
+      clearDirectNotificationForUser(senderId);
 
       if (selectedUser.current !== senderId) {
         setSelectedUser1(senderId);
@@ -2523,6 +2524,7 @@ stopCallRingtone();
     if (!senderId) return;
 
     console.log('?? Chat notification clicked:', senderId);
+    await clearDirectNotificationForUser(senderId);
 
     if (selectedUser.current !== senderId) {
       setSelectedUser1(senderId);
@@ -2586,6 +2588,38 @@ const getStableGroupNotificationId = (groupId) => {
     hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
   }
   return 200000 + (Math.abs(hash) % 700000);
+};
+
+const getStableDirectNotificationId = (senderId) => {
+  const text = String(senderId || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return 10000 + (Math.abs(hash) % 90000);
+};
+
+const clearDirectNotificationForUser = async (senderId) => {
+  if (!senderId) return;
+  const notificationId = getStableDirectNotificationId(senderId);
+
+  try {
+    if (window.cordova && cordova.plugins?.notification?.local?.cancel) {
+      await new Promise((resolve) => {
+        try {
+          cordova.plugins.notification.local.cancel(notificationId, resolve);
+        } catch {
+          resolve();
+        }
+      });
+    }
+
+    await LocalNotifications.cancel({
+      notifications: [{ id: notificationId }],
+    });
+  } catch (err) {
+    console.error("? clearDirectNotificationForUser error:", err);
+  }
 };
 
 const buildGroupNotificationBody = (senderName, messagePreview) => {
@@ -2663,11 +2697,12 @@ const showGroupNotification = async ({
   
 const showVisualNotification = async (id, sender, content, base64Image, sound) => {
   try {
+    const notificationId = getStableDirectNotificationId(id);
     // ---- 1?? Schedule notification ----
     if (window.cordova && cordova.plugins?.notification?.local) {
       // Cordova Local Notification
       cordova.plugins.notification.local.schedule({
-        id: Math.floor(Date.now() % 100000),
+        id: notificationId,
         title: `New message from ${sender}`,
         text: content,
         attachments: base64Image ? [base64Image] : [],
@@ -2686,7 +2721,7 @@ const showVisualNotification = async (id, sender, content, base64Image, sound) =
       await LocalNotifications.schedule({
         notifications: [
           {
-            id: Math.floor(Date.now() % 100000),
+            id: notificationId,
             title: `New message from ${sender}`,
             body: content,
             attachments: base64Image ? [{ id: 'img', url: base64Image }] : [],
@@ -4329,6 +4364,7 @@ const newMessages = androidMessages.filter(
         
         // 2. Save all processed messages into SQLite
         const privateKeyPem = globalThis.storage.getItem('privateKey'); // Must be stored locally
+        const initialUsersMain = globalThis.storage.readJSON('usersMain', []) || [];
         for (const message of newMessages) {
 
           let decryptedContent = " new message " + message.file_type
@@ -4362,6 +4398,42 @@ const newMessages = androidMessages.filter(
           }
 
           await storeMessageInSQLite(db, message);
+
+          const isSenderInInitialUsersMain = initialUsersMain.some(user => user.id === message.sender);
+          if (!isSenderInInitialUsersMain) {
+            try {
+              const response = await api.fetchUser(host, message.sender);
+              const data = await response.json();
+
+              if (data.success) {
+                const { userResponse } = data;
+
+                const newUser = {
+                  id: userResponse.id,
+                  name: userResponse.name,
+                  avatar: userResponse.profilePic || img,
+                  lastMessage: message.content,
+                  timestamp: message.timestamp,
+                  phoneNumber: userResponse.phoneNumber,
+                  unreadCount: 1,
+                  About: userResponse.About,
+                  updatedAt: userResponse.updatedAt,
+                  DOB: userResponse.DOB,
+                  Location: userResponse.Location,
+                  gender: userResponse.gender,
+                  publicKey: userResponse.publicKey
+                };
+
+                initialUsersMain.push(newUser);
+                globalThis.storage.setItem('usersMain', JSON.stringify(initialUsersMain));
+                setUsersMain(initialUsersMain);
+                setUsersMaintest(initialUsersMain);
+              }
+
+            } catch (error) {
+              console.error("Error fetching new user:", error);
+            }
+          }
 
         
             if (message.sender === selectedUser.current && isAcitve.current === true) {
@@ -4441,48 +4513,7 @@ const newMessages = androidMessages.filter(
         for (let msg of newMessages) {
           const isSenderInUserMain = userMainArray.some(user => user.id === msg.sender);
     
-          if (!isSenderInUserMain) {
-            try {
-              const response = await api.fetchUser(host, msg.sender);
-    
-              const data = await response.json();
-    
-              if (data.success) {
-                const { userResponse } = data;
-    
-                const newUser = {
-                  id: userResponse.id,
-                  name: userResponse.name,
-                  avatar: userResponse.profilePic || img, // Assuming profilePic contains the image URL
-                  lastMessage: msg.content,
-                  timestamp: msg.timestamp,
-                  phoneNumber: userResponse.phoneNumber,
-                  unreadCount: 1, // This message is unread for the new user
-                  About: userResponse.About,
-                  updatedAt:userResponse.updatedAt,
-                  DOB:userResponse.DOB,
-                  Location:userResponse.Location,
-                  gender:userResponse.gender,
-                  publicKey:userResponse.publicKey
-                };
-    
-                // Update usersMain by adding the new user and removing duplicates
-                const updatedUsers = [...userMainArray, newUser].filter((user, index, self) =>
-                  index === self.findIndex((u) => u.id === user.id)
-                );
-    
-                // Update usersMain in localStorage and state
-                globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-                globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-                userMainArray.push(newUser);
-                setUsersMain(updatedUsers);
-                setUsersMaintest(updatedUsers); // Assuming Zustand or another state management library
-              }
-    
-            } catch (error) {
-              console.error("Error fetching new user:", error);
-            }
-          }else {
+          if (isSenderInUserMain) {
             // ? Case: Existing user � update last message, timestamp, unread count, reset partial
             const updatedUsers = userMainArray.map(user => {
               if (user.id === msg.sender) {
@@ -6379,6 +6410,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               getunread={getunread}
               saveMessagesToLocalStorage={saveMessagesToLocalStorage}
               resetunread={resetunread}
+              clearDirectNotificationForUser={clearDirectNotificationForUser}
               selectedUser1={selectedUser}
               userDetails={currentUser}
                 mutedGroupIds={mutedGroupIds}
@@ -6550,6 +6582,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               setCustomSounds = {setCustomSounds}
               setmutedList={setmutedList}
               resetunread={resetunread}
+              clearDirectNotificationForUser={clearDirectNotificationForUser}
               selectedUser={selectedUser}/>} 
             />
             <Route

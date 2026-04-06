@@ -253,6 +253,7 @@ const Chatwindo = ({
   host,
   customSounds,
   setCustomSounds,
+  clearDirectNotificationForUser,
   embedded = false,
   embeddedUser = null,
   onEmbeddedUserChange,
@@ -385,6 +386,12 @@ useEffect(() => {
     onEmbeddedUserChange(userdetails);
   }
 }, [embedded, onEmbeddedUserChange, userdetails]);
+
+useEffect(() => {
+  if (userdetails?.id) {
+    clearDirectNotificationForUser?.(userdetails.id);
+  }
+}, [clearDirectNotificationForUser, userdetails?.id]);
 
 useEffect(() => {
   if (userdetails?.id && selectedUser?.current !== undefined) {
@@ -3939,13 +3946,8 @@ const expandedProfilePanel = userdetails ? (
           </button>
           <button type="button" className="chat-profile-media-card" onClick={() => { handleViewAll(); setSelectedTab('videos'); }}>
             <span className="chat-profile-media-icon">◉</span>
-            <strong>Shots</strong>
-            <small>{mediaCounts.videos}</small>
-          </button>
-          <button type="button" className="chat-profile-media-card" onClick={() => { handleViewAll(); setSelectedTab('documents'); }}>
-            <span className="chat-profile-media-icon">▣</span>
             <strong>Videos</strong>
-            <small>{mediaCounts.docs}</small>
+            <small>{mediaCounts.videos}</small>
           </button>
         </div>
       </section>
@@ -4702,7 +4704,7 @@ onClick={() => isExpanded ? toglebigscreen() : toggleHeader()}
       </div>
       
       <div className="flex justify-center w-full space-x-3 mt-4">
-        {['images', 'videos', 'documents', 'audio'].map((tab) => (
+        {['images', 'videos', 'audio'].map((tab) => (
           <button
             key={tab}
             style={{ fontSize: '18px' }}
@@ -4726,7 +4728,7 @@ onClick={() => isExpanded ? toglebigscreen() : toggleHeader()}
       </button>
 
       <div className="flex justify-center w-full space-x-3 mt-4">
-        {['images', 'videos', 'documents'].map((tab) => (
+        {['images', 'videos'].map((tab) => (
           <button
             key={tab}
             style={{ fontSize: '18px' }}
@@ -4832,28 +4834,6 @@ onMouseDown={() => handlePressStart1(msg)}
              </div>
            )}
      
-           {selectedTab === 'documents' && (
-             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 p-2">
-               {localchat_messages.current?.filter(msg => msg.file_type !== "audio" && msg.file_type !== "video" && msg.file_type !== "image" && msg.isDownload === 1).map((msg, index) => (
-                 <div key={index} className="w-full aspect-square bg-gray-100 flex flex-col items-center justify-center rounded-lg overflow-hidden" 
-                    onMouseDown={() => handlePressStart1(msg)}
-  onMouseUp={handlePressEnd1}
-  onMouseLeave={handlePressEnd1}
-  onTouchStart={() => handlePressStart1(msg)}
-  onTouchEnd={handlePressEnd1}
-                onClick={() => handleFileOpen(msg)}>
-                   <IonIcon icon={documentOutline} size="large" className="text-red-500" />
-                   <p className="text-xs text-gray-400 mt-1 text-center px-1">{msg.file_name}</p>
-                 </div>
-               ))}
-                     {selectedFiles.some(f => f.id === msg.id) && (
-      <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full p-1">
-        ✓
-      </div>
-    )}
-             </div>
-           )}
-     
           
          </div>
        </div>
@@ -4910,21 +4890,6 @@ setSelectedTab('videos')
 }
                 >
                   <span className="text-2xl">📷</span>
-                  <span className="text-sm">Shots</span>
-                </button>
-                <button
-                  className="flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl text-white font-semibold text-xs transition-all transform hover:scale-105 active:scale-95 shadow-sm"
-                  style={{
-                    backgroundColor: colors.bubbleYou,
-                  }}
-onClick={() => { 
-
-handleViewAll()
-setSelectedTab('documents')
-}
-}
-                >
-                  <span className="text-2xl">🎥</span>
                   <span className="text-sm">Videos</span>
                 </button>
               </div>
@@ -6480,5 +6445,8 @@ top: '50%',
 };
 
 export default Chatwindo;
+
+
+
 
 
