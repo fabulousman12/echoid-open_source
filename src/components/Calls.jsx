@@ -52,8 +52,9 @@ const formatDate = (value) => {
   return date.toLocaleDateString();
 };
 
-const INITIAL_BATCH = 15;
+const INITIAL_BATCH = 10;
 const LOAD_BATCH = 10;
+const LOAD_MORE_THRESHOLD_PX = 160;
 
 const Calls = ({
   calls,
@@ -79,10 +80,28 @@ const Calls = ({
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
   const [expandedId, setExpandedId] = useState(null);
   const pressTimerRef = useRef(null);
+  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     setVisibleCount(INITIAL_BATCH);
   }, [calls]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (remaining <= LOAD_MORE_THRESHOLD_PX) {
+        setVisibleCount((prev) => Math.min(prev + LOAD_BATCH, normalizedCalls.length));
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [normalizedCalls.length]);
 
   useEffect(() => {
     if (!setCalls) return;
@@ -100,7 +119,6 @@ const Calls = ({
     }
   }, [calls, setCalls]);
 
-  const canLoadMore = visibleCount < normalizedCalls.length;
   const visibleCalls = normalizedCalls.slice(0, visibleCount);
 
   const renderStatusIcon = (call) => {
@@ -166,7 +184,7 @@ const Calls = ({
 
   return (
     <div className="calls-container">
-      <div className="calls-scroll">
+      <div className="calls-scroll" ref={scrollContainerRef}>
         {normalizedCalls.length === 0 && (
           <div className="calls-empty">No calls yet.
              <Lottie
@@ -197,7 +215,7 @@ const Calls = ({
               onTouchEnd={cancelPress}
               onTouchCancel={cancelPress}
             >
-              <img className="call-avatar" src={avatar} alt={name} />
+              <img className="call-avatar" src={avatar} alt={name} loading="lazy" decoding="async" />
               <div className="call-meta">
                 <div className="call-name-row">
                   <div className="call-name">{name}</div>
@@ -237,19 +255,6 @@ const Calls = ({
             </div>
           );
         })}
-        {canLoadMore && (
-          <button
-            type="button"
-            className="load-more-btn"
-            onClick={() =>
-              setVisibleCount((prev) =>
-                Math.min(prev + LOAD_BATCH, normalizedCalls.length)
-              )
-            }
-          >
-            Load more
-          </button>
-        )}
       </div>
     </div>
   );

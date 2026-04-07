@@ -413,13 +413,20 @@ useEffect(() => {
 
 useEffect(() => {
   if (embedded) return undefined;
-  const backHandler = CapacitorApp.addListener('backButton', () => {
+  let backHandler = null;
+  Promise.resolve(CapacitorApp.addListener('backButton', () => {
     selectedUser.current = null; // Clear selected user
     history.push('/home'); // or history.push('/home') if you want to allow back to Chatwindo later
-  });
+  }))
+    .then((handle) => {
+      backHandler = handle;
+    })
+    .catch(() => {});
 
   return () => {
-    backHandler.remove();
+    if (backHandler && typeof backHandler.remove === "function") {
+      backHandler.remove();
+    }
   };
 }, [embedded, history, selectedUser]);
 
@@ -3891,7 +3898,7 @@ const expandedProfilePanel = userdetails ? (
           <span className="chat-profile-avatar-dot" />
         </button>
         <h2 className="chat-profile-name">{userdetails.name || "User"}</h2>
-        <p className="chat-profile-role">{userdetails.bio || userdetails.About || "Senior Product Designer"}</p>
+        <p className="chat-profile-role">{userdetails.bio || userdetails.About || "Nalla Kalla"}</p>
         {userdetails.phoneNumber && (
           <p className="chat-profile-status">{userdetails.phoneNumber}</p>
         )}
@@ -4541,7 +4548,7 @@ const expandedProfilePanel = userdetails ? (
             {userdetails.name?.length > 15 ? `${userdetails.name.slice(0, 15)}...` : userdetails.name}
           </h4>
           <div className="chat-thread-user-status">
-            {userdetails.isActive !== false ? "Active now" : "Online"}
+            {userdetails.phoneNumber || "Unknown number"}
           </div>
         </div>
       </button>

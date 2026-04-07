@@ -1554,7 +1554,7 @@ console.log("Fetched user details for missing user:", data);
       mutedUsers={mutedUsers}
       setmutedList={setmutedList}
       goBackToUserList={goBackToUserList}
-      statusSection={<Status variant="home" />}
+      statusSection={<Status variant="home" isActive={activeFooter === "Chats"} />}
       onMarkAllRead={markAllChatsRead}
       appTheme={appTheme}
     />

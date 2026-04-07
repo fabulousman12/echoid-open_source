@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import { FaSearch } from "react-icons/fa";
 import UserRow from './UserRow';
+import useListWorker from '../hooks/useListWorker';
 import './UserRow.css';
 import Lottie from "lottie-react";
 import sticker from "../assets/Astronaut - Light Theme.json";
+
+const INITIAL_VISIBLE_USERS = 10;
+const VISIBLE_USERS_STEP = 10;
+const LOAD_MORE_THRESHOLD_PX = 160;
 
 const SearchBar = React.memo(({ value, visible, onChange, onKeyDown, onClear, inputRef }) => (
   <div
@@ -56,29 +61,8 @@ const UserMain = ({
   const deferredSearch = useDeferredValue(searchTerm);
   const [swipeFeedback, setSwipeFeedback] = useState('');
   const [showSearchBar, setShowSearchBar] = useState(true);
-
-  useEffect(() => {
-    const container = document.getElementById('user-list-container');
-    if (!container) return;
-
-    let lastScrollTop = 0;
-    let scrollTimeout;
-
-    const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-
-      if (scrollTop > lastScrollTop + 10) setShowSearchBar(false);
-      else if (scrollTop < lastScrollTop - 10) setShowSearchBar(true);
-
-      lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
-
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => setShowSearchBar(true), 400);
-    };
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_USERS);
+  const listContainerRef = useRef(null);
 
   const searchInputRef = useRef(null);
   useEffect(() => {
@@ -103,7 +87,7 @@ const UserMain = ({
     return haystacks.some((val) => val.includes(term));
   }, []);
 
-  const filteredAndSortedUsers = useMemo(() => {
+  const buildFilteredAndSortedUsersFallback = useCallback(() => {
     const term = (deferredSearch || '').toLowerCase();
     return (usersMain || [])
       .filter((user) =>
@@ -117,6 +101,61 @@ const UserMain = ({
       }))
       .sort((a, b) => b._sortTimestamp - a._sortTimestamp);
   }, [usersMain, deferredSearch, currentUserId, matchesUser]);
+
+  const filteredAndSortedUsers = useListWorker({
+    type: "userMain",
+    payload: useMemo(() => ({
+      users: usersMain || [],
+      currentUserId,
+      term: deferredSearch || "",
+    }), [usersMain, currentUserId, deferredSearch]),
+    fallback: buildFilteredAndSortedUsersFallback,
+  });
+
+  useEffect(() => {
+    const container = listContainerRef.current;
+    if (!container) return;
+
+    let lastScrollTop = 0;
+    let scrollTimeout;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+
+      if (scrollTop > lastScrollTop + 10) setShowSearchBar(false);
+      else if (scrollTop < lastScrollTop - 10) setShowSearchBar(true);
+
+      lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+
+      const remaining = container.scrollHeight - scrollTop - container.clientHeight;
+      if (remaining <= LOAD_MORE_THRESHOLD_PX) {
+        setVisibleCount((prev) =>
+          Math.min(prev + VISIBLE_USERS_STEP, (filteredAndSortedUsers || []).length)
+        );
+      }
+
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => setShowSearchBar(true), 400);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, [filteredAndSortedUsers]);
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_USERS);
+    if (listContainerRef.current) {
+      listContainerRef.current.scrollTop = 0;
+    }
+  }, [deferredSearch, currentUserId, usersMain]);
+
+  const visibleUsers = useMemo(
+    () => (filteredAndSortedUsers || []).slice(0, visibleCount),
+    [filteredAndSortedUsers, visibleCount]
+  );
 
   const handleSearchChange = useCallback((value) => {
     setSearchInput(value);
@@ -198,9 +237,9 @@ const UserMain = ({
         </button>
       </div>
 
-      <div className="user-list-container" id="user-list-container">
+      <div className="user-list-container" id="user-list-container" ref={listContainerRef}>
         <div className="list-group">
-          {filteredAndSortedUsers && filteredAndSortedUsers.map(user => (
+          {visibleUsers && visibleUsers.map(user => (
             <UserRow
               key={user.id}
               user={user}

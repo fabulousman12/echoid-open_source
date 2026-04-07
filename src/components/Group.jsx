@@ -5,10 +5,14 @@ import { useHistory } from 'react-router';
 import { api } from "../services/api";
 import { LoginContext } from '../Contexts/UserContext';
 import { WebSocketContext } from '../services/websokcetmain';
+import useListWorker from '../hooks/useListWorker';
 import img from '/img.jpg';
 import './Group.css';
 
 const GROUP_REQUESTS_LAST_SEEN_KEY = "groupRequestsLastSeenAt";
+const INITIAL_VISIBLE_GROUPS = 10;
+const VISIBLE_GROUPS_STEP = 10;
+const GROUP_LOAD_MORE_THRESHOLD_PX = 160;
 
 function normalizeGroup(raw) {
   if (!raw) return null;
@@ -106,7 +110,9 @@ const Group = ({
   const [requests, setRequests] = useState([]);
   const [hasNewRequests, setHasNewRequests] = useState(false);
   const [selectedGroupInfo, setSelectedGroupInfo] = useState(null);
+  const [visibleGroupCount, setVisibleGroupCount] = useState(INITIAL_VISIBLE_GROUPS);
   const longPressTimerRef = useRef(null);
+  const listContainerRef = useRef(null);
   const initialLastSeen = Number(globalThis.storage.readJSON(GROUP_REQUESTS_LAST_SEEN_KEY, 0) || 0);
   const lastSeenRequestsRef = useRef(initialLastSeen);
   const mutedGroupSet = useMemo(() => {
@@ -236,7 +242,7 @@ const Group = ({
     }
   }, [activeTab, fetchRequests, markRequestsSeen]);
 
-  const filteredGroups = useMemo(() => {
+  const buildFilteredGroupsFallback = useCallback(() => {
     const groups = sortGroups((displayedGroups || []).map(normalizeGroup).filter(Boolean));
     const q = searchQuery.trim().toLowerCase();
     const activeGroups = groups.filter(
@@ -249,6 +255,15 @@ const Group = ({
         .some((value) => String(value).toLowerCase().includes(q))
     );
   }, [displayedGroups, searchQuery]);
+
+  const filteredGroups = useListWorker({
+    type: "groupMain",
+    payload: useMemo(() => ({
+      groups: displayedGroups || [],
+      searchQuery,
+    }), [displayedGroups, searchQuery]),
+    fallback: buildFilteredGroupsFallback,
+  });
 
   const filteredRequests = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -264,6 +279,37 @@ const Group = ({
   }, [requests, searchQuery]);
 
   const groupsToRender = filteredGroups;
+  const visibleGroups = useMemo(
+    () => groupsToRender.slice(0, visibleGroupCount),
+    [groupsToRender, visibleGroupCount]
+  );
+
+  useEffect(() => {
+    setVisibleGroupCount(INITIAL_VISIBLE_GROUPS);
+    if (listContainerRef.current) {
+      listContainerRef.current.scrollTop = 0;
+    }
+  }, [activeTab, searchQuery, displayedGroups, groupsMain]);
+
+  useEffect(() => {
+    const container = listContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (activeTab !== "groups") return;
+      const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (remaining <= GROUP_LOAD_MORE_THRESHOLD_PX) {
+        setVisibleGroupCount((prev) =>
+          Math.min(prev + VISIBLE_GROUPS_STEP, groupsToRender.length)
+        );
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [activeTab, groupsToRender.length]);
 
   const handleInviteResponse = useCallback(async (inviteId, action) => {
     try {
@@ -356,10 +402,10 @@ const Group = ({
         </div>
       </div>
 
-      <div className="user-list-container" id="group-list-container">
+      <div className="user-list-container" id="group-list-container" ref={listContainerRef}>
         {activeTab === "groups" && (
           <div className="group-list-stack">
-            {groupsToRender.map((group) => (
+            {visibleGroups.map((group) => (
               <div
                 key={group.id}
                 className={`group-list-card user-card d-flex justify-content-between align-items-center ${String(selectedGroupId || "") === String(group.id) ? "selected" : ""}`}
@@ -379,6 +425,8 @@ const Group = ({
                 <img
                   src={group.isActive === false ? img : (group.avatar || img)}
                   alt={group.name}
+                  loading="lazy"
+                  decoding="async"
                   className="rounded-circle"
                   style={{ marginRight: '10px', width: '48px', height: '48px', aspectRatio: '4/3' }}
                 />

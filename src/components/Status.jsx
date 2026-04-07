@@ -12,6 +12,28 @@ import { GrMultimedia } from "react-icons/gr";
 import Lottie from "lottie-react";
 import sticker from "../assets/empty ghost.json";
 
+const HomeStatusTile = React.memo(function HomeStatusTile({
+  className = "",
+  onClick,
+  avatarSrc,
+  alt,
+  label,
+  showStandaloneAdd = false,
+}) {
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      <span className="home-status-avatar-wrap">
+        {showStandaloneAdd ? (
+          <span className="home-status-add home-status-add--standalone">+</span>
+        ) : (
+          <img src={avatarSrc} alt={alt} className="home-status-avatar" />
+        )}
+      </span>
+      <span className="home-status-name">{label}</span>
+    </button>
+  );
+});
+
 const STATUS_CAPTION_WORD_LIMIT = 250;
 
 const countStatusCaptionWords = (value) =>
@@ -43,6 +65,7 @@ const STATUS_FEED_CACHE_KEY = "status_feed_cache_v1";
 const STATUS_MY_CACHE_KEY = "status_my_cache_v1";
 const STATUS_READ_MAP_KEY = "status_read_map_v1";
 const STATUS_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const STATUS_BACKGROUND_REFRESH_MIN_INTERVAL_MS = 60 * 1000;
 
 const safeArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -85,28 +108,16 @@ const pickRemoteAuthoritativeStatuses = (localRows = [], remoteRows = []) => {
     });
 };
 
-const toIdSet = (input) =>
-  new Set(
-    safeArray(input)
-      .map((id) => String(id || "").trim())
-      .filter(Boolean)
-  );
-
-const filterByIdSet = (rows = [], allowedSet = null) => {
-  if (!(allowedSet instanceof Set) || allowedSet.size === 0) return safeArray(rows);
-  return safeArray(rows).filter((row) => allowedSet.has(String(row?.id || "").trim()));
-};
-
 const scheduleStatusBackgroundTask = (task) => {
   if (typeof window === "undefined") {
-    return setTimeout(task, 0);
+    return setTimeout(task, 400);
   }
 
   if (typeof window.requestIdleCallback === "function") {
-    return window.requestIdleCallback(task, { timeout: 1200 });
+    return window.requestIdleCallback(task, { timeout: 1800 });
   }
 
-  return window.setTimeout(task, 120);
+  return window.setTimeout(task, 450);
 };
 
 const cancelScheduledStatusTask = (handle) => {
@@ -118,7 +129,9 @@ const cancelScheduledStatusTask = (handle) => {
   }
   clearTimeout(handle);
 };
-const Status = ({ variant = "default" }) => {
+
+const STATUS_REFRESH_DEDUPE_MS = 1800;
+const Status = ({ variant = "default", isActive = true }) => {
   const host = `https://${Maindata.SERVER_URL}`;
   const currentUser = globalThis.storage?.readJSON?.("currentuser", null);
   const usersMain = globalThis.storage?.readJSON?.("usersMain", []) || [];
@@ -158,6 +171,12 @@ const Status = ({ variant = "default" }) => {
 
   const usersById = useRef(new Map());
   const readMapRef = useRef({});
+  const hasHydratedCacheRef = useRef(false);
+  const lastBackgroundRefreshAtRef = useRef(0);
+  const didInitialBootRefreshRef = useRef(false);
+  const persistCacheTaskRef = useRef(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshRequestAtRef = useRef(0);
 
   const applyLocalReadToStatuses = useCallback((statuses = []) => {
     const map = pruneReadMap(readMapRef.current);
@@ -203,22 +222,30 @@ const Status = ({ variant = "default" }) => {
   );
 
   const persistStatusCaches = useCallback((myRaw, feedRaw) => {
+    if (persistCacheTaskRef.current !== null) {
+      cancelScheduledStatusTask(persistCacheTaskRef.current);
+      persistCacheTaskRef.current = null;
+    }
+
     const nextMy = applyLocalReadToStatuses(myRaw);
     const nextFeed = applyLocalReadToStatuses(feedRaw);
-    globalThis.storage?.setItem?.(
-      STATUS_MY_CACHE_KEY,
-      JSON.stringify({
-        savedAt: Date.now(),
-        statuses: nextMy,
-      })
-    );
-    globalThis.storage?.setItem?.(
-      STATUS_FEED_CACHE_KEY,
-      JSON.stringify({
-        savedAt: Date.now(),
-        statuses: nextFeed,
-      })
-    );
+    persistCacheTaskRef.current = scheduleStatusBackgroundTask(() => {
+      persistCacheTaskRef.current = null;
+      globalThis.storage?.setItem?.(
+        STATUS_MY_CACHE_KEY,
+        JSON.stringify({
+          savedAt: Date.now(),
+          statuses: nextMy,
+        })
+      );
+      globalThis.storage?.setItem?.(
+        STATUS_FEED_CACHE_KEY,
+        JSON.stringify({
+          savedAt: Date.now(),
+          statuses: nextFeed,
+        })
+      );
+    });
   }, [applyLocalReadToStatuses]);
 
   useEffect(() => {
@@ -259,6 +286,15 @@ const Status = ({ variant = "default" }) => {
     });
     persistStatusCaches(nextMy, nextFeed);
   }, [myStatusesRaw, feedStatusesRaw, applyLocalReadToStatuses, persistStatusCaches]);
+
+  useEffect(() => {
+    return () => {
+      if (persistCacheTaskRef.current !== null) {
+        cancelScheduledStatusTask(persistCacheTaskRef.current);
+        persistCacheTaskRef.current = null;
+      }
+    };
+  }, []);
 
   const normalizePhoneNumber = (value) => {
     if (!value) return "";
@@ -441,72 +477,12 @@ const Status = ({ variant = "default" }) => {
     setViewerIsOwn(false);
   };
 
-  const syncStatusIdsAndPruneCache = useCallback(async () => {
-    try {
-      const res = await api.statusIds(host);
-      if (!res?.ok) return false;
-      const json = await res.json().catch(() => ({}));
-
-      const globalIds = toIdSet(json?.statusIds || json?.ids || []);
-      const myIds = toIdSet(json?.myStatusIds || json?.myIds || json?.ownIds || []);
-      const feedIds = toIdSet(json?.feedStatusIds || json?.feedIds || []);
-
-      setMyStatusesRaw((prev) => {
-        const base = applyLocalReadToStatuses(prev);
-        const allow = myIds.size > 0 ? myIds : globalIds;
-        return filterByIdSet(base, allow);
-      });
-
-      setFeedStatusesRaw((prev) => {
-        const base = applyLocalReadToStatuses(prev);
-        const allow = feedIds.size > 0 ? feedIds : globalIds;
-        return filterByIdSet(base, allow);
-      });
-      return true;
-    } catch (err) {
-      console.warn("Failed to sync status IDs cache", err);
-      return false;
-    }
-  }, [applyLocalReadToStatuses, host]);
-
-  // =========================
-  // INITIAL LOAD
-  // =========================
-  useEffect(() => {
-    const cachedRead = globalThis.storage?.readJSON?.(STATUS_READ_MAP_KEY, {});
-    persistReadMap(cachedRead);
-
-    const cachedMyPayload = globalThis.storage?.readJSON?.(STATUS_MY_CACHE_KEY, null);
-    const cachedFeedPayload = globalThis.storage?.readJSON?.(STATUS_FEED_CACHE_KEY, null);
-    const cachedMy = applyLocalReadToStatuses(cachedMyPayload?.statuses || []);
-    const cachedFeed = applyLocalReadToStatuses(cachedFeedPayload?.statuses || []);
-    if (cachedMy.length || cachedFeed.length) {
-      setMyStatusesRaw(cachedMy);
-      setMyStatuses(cachedMy);
-      setFeedStatusesRaw(cachedFeed);
-      setFeedStatuses(groupFeedByUser(cachedFeed));
-      persistStatusCaches(cachedMy, cachedFeed);
-    } else {
-      persistStatusCaches([], []);
-    }
-
-    const scheduledTask = scheduleStatusBackgroundTask(() => {
-      fetchMyStatuses();
-      fetchFeed();
-      syncStatusIdsAndPruneCache();
-    });
-
-    return () => {
-      cancelScheduledStatusTask(scheduledTask);
-    };
-  }, [applyLocalReadToStatuses, persistReadMap, persistStatusCaches, syncStatusIdsAndPruneCache]);
-
   // =========================
   // FETCH MY STATUS
   // =========================
-  const fetchMyStatuses = async () => {
+  const fetchMyStatuses = async ({ silent = false } = {}) => {
     try {
-      setLoadingMy(true);
+      if (!silent) setLoadingMy(true);
       const res = await api.myfeed(host);
       if (!res.ok) {
         throw new Error(`Failed to fetch my statuses: ${res.status}`);
@@ -522,24 +498,24 @@ const Status = ({ variant = "default" }) => {
       const authoritative = pickRemoteAuthoritativeStatuses(myStatusesRaw, enriched);
       const nextMy = applyLocalReadToStatuses(authoritative);
       startTransition(() => {
-        setMyStatusesRaw(nextMy);
-        setMyStatuses(nextMy);
+        setMyStatusesRaw(nextMy || []);
+        setMyStatuses(nextMy || []);
       });
-      persistStatusCaches(nextMy, feedStatusesRaw);
+      persistStatusCaches(nextMy || [], feedStatusesRaw);
       
     } catch (err) {
       console.error("Failed to fetch my statuses", err);
     } finally {
-      setLoadingMy(false);
+      if (!silent) setLoadingMy(false);
     }
   };
 
   // =========================
   // FETCH FEED
   // =========================
-  const fetchFeed = async (cursor = null) => {
+  const fetchFeed = async (cursor = null, { silent = false } = {}) => {
     try {
-      if (!cursor) setLoadingFeed(true);
+      if (!cursor && !silent) setLoadingFeed(true);
       if (cursor) setLoadingMore(true);
 
       const res = await api.statusFeed(host, cursor);
@@ -573,16 +549,79 @@ const Status = ({ variant = "default" }) => {
       }
 
       setNextCursor(data.nextCursor || null);
-      if (!cursor) {
-        await syncStatusIdsAndPruneCache();
-      }
     } catch (err) {
       console.error("Failed to fetch feed", err);
     } finally {
-      if (!cursor) setLoadingFeed(false);
+      if (!cursor && !silent) setLoadingFeed(false);
       setLoadingMore(false);
     }
   };
+
+  const refreshStatusesInBackground = useCallback(async ({ silent = true } = {}) => {
+    const now = Date.now();
+    if (refreshInFlightRef.current) return;
+    if (now - lastRefreshRequestAtRef.current < STATUS_REFRESH_DEDUPE_MS) return;
+
+    refreshInFlightRef.current = true;
+    lastRefreshRequestAtRef.current = now;
+    lastBackgroundRefreshAtRef.current = now;
+
+    try {
+      await Promise.all([
+        fetchMyStatuses({ silent }),
+        fetchFeed(null, { silent }),
+      ]);
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }, [fetchFeed]);
+
+  // =========================
+  // INITIAL LOAD
+  // =========================
+  useEffect(() => {
+    const cachedRead = globalThis.storage?.readJSON?.(STATUS_READ_MAP_KEY, {});
+    persistReadMap(cachedRead);
+
+    const cachedMyPayload = globalThis.storage?.readJSON?.(STATUS_MY_CACHE_KEY, null);
+    const cachedFeedPayload = globalThis.storage?.readJSON?.(STATUS_FEED_CACHE_KEY, null);
+    const cachedMy = applyLocalReadToStatuses(cachedMyPayload?.statuses || []);
+    const cachedFeed = applyLocalReadToStatuses(cachedFeedPayload?.statuses || []);
+    if (cachedMy.length || cachedFeed.length) {
+      hasHydratedCacheRef.current = true;
+      setMyStatusesRaw(cachedMy);
+      setMyStatuses(cachedMy);
+      setFeedStatusesRaw(cachedFeed);
+      setFeedStatuses(groupFeedByUser(cachedFeed));
+      persistStatusCaches(cachedMy, cachedFeed);
+    } else {
+      persistStatusCaches([], []);
+    }
+
+    const scheduledTask = scheduleStatusBackgroundTask(() => {
+      didInitialBootRefreshRef.current = true;
+      refreshStatusesInBackground({ silent: hasHydratedCacheRef.current });
+    });
+
+    return () => {
+      if (scheduledTask !== null) {
+        cancelScheduledStatusTask(scheduledTask);
+      }
+    };
+  }, [applyLocalReadToStatuses, persistReadMap, persistStatusCaches, refreshStatusesInBackground]);
+
+  useEffect(() => {
+    if (variant !== "home" || !isActive) return;
+    if (!didInitialBootRefreshRef.current) return;
+
+    const scheduledTask = scheduleStatusBackgroundTask(() => {
+      refreshStatusesInBackground({ silent: true });
+    });
+
+    return () => {
+      cancelScheduledStatusTask(scheduledTask);
+    };
+  }, [refreshStatusesInBackground, variant, isActive]);
 
   // =========================
   // HORIZONTAL INFINITE SCROLL
@@ -1782,8 +1821,7 @@ const Status = ({ variant = "default" }) => {
             </button>
 
             {myStatusSummary && (
-              <button
-                type="button"
+              <HomeStatusTile
                 className="home-status-tile home-status-tile--adder"
                 onClick={() => {
                   if (uploading) {
@@ -1794,12 +1832,10 @@ const Status = ({ variant = "default" }) => {
                   }
                   handlePickMedia();
                 }}
-              >
-                <span className="home-status-avatar-wrap">
-                  <span className="home-status-add home-status-add--standalone">+</span>
-                </span>
-                <span className="home-status-name">Add Story</span>
-              </button>
+                label="Add Story"
+                alt="Add story"
+                showStandaloneAdd
+              />
             )}
 
             {compactFeedStatuses.map((status) => {
@@ -1811,24 +1847,17 @@ const Status = ({ variant = "default" }) => {
               };
 
               return (
-                <button
-                  type="button"
+                <HomeStatusTile
                   key={status.id}
                   className={`home-status-tile ${isRead ? "is-read" : "is-unread"}`}
                   onClick={() => {
                     const items = feedStatusesRaw.filter((s) => String(s.userId) === String(status.userId));
                     openViewer(items, userMeta, false);
                   }}
-                >
-                  <span className="home-status-avatar-wrap">
-                    <img
-                      src={status.avatar || status.mediaUrl || "/img.jpg"}
-                      alt={status.username || "Status"}
-                      className="home-status-avatar"
-                    />
-                  </span>
-                  <span className="home-status-name">{status.username || "Unknown"}</span>
-                </button>
+                  avatarSrc={status.avatar || status.mediaUrl || "/img.jpg"}
+                  alt={status.username || "Status"}
+                  label={status.username || "Unknown"}
+                />
               );
             })}
 

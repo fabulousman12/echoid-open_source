@@ -124,7 +124,8 @@ const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, sel
       <img
         src={user.avatar || img}
         alt={`${user.name}'s avatar`}
-         loading="lazy"
+        loading="lazy"
+        decoding="async"
         className="user-row-avatar"
       />
       <div className="flex-grow-1 user-row-copy">

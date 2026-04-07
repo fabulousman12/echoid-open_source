@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useRef } from 'react';
 import { isPlatform } from '@ionic/react';
 import {  CapacitorSQLite,SQLiteDBConnection } from '@capacitor-community/sqlite';
 import Maindata from '../data';
+import { runStorageWorker } from './storageWorkerBridge';
 const WebSocketContext = createContext();
 
  const WebSocketProvider = ({ children }) => {
@@ -12,7 +13,7 @@ const WebSocketContext = createContext();
   
   const storeMessageInSQLite = async (db, message) => {
     console.log("onto savibg",db,message)
-    
+    const preparedValues = await runStorageWorker("prepareDirectMessageWrite", { message });
 
     return new Promise((resolve, reject) => {
       try {
@@ -35,29 +36,7 @@ const WebSocketContext = createContext();
               id, sender, recipient, content, timestamp, status, read, isDeleted, isDownload,
               type, file_name, file_type, file_size, thumbnail, file_path, isSent, isError, encryptedMessage,encryptedAESKey,eniv,isReplyTo
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?)
-          `, [
-            message.id,
-            message.sender,
-            message.recipient,
-            message.content || null,
-            new Date(message.timestamp).toISOString(),
-            message.status || 'pending',
-            message.read ? 1 : 0,
-            message.isDeleted ? 1 : 0,
-            message.isDownload ? 1 : 0,
-            message.type || 'messages',
-            message.file_name || null,
-            message.file_type || null,
-            message.file_size || null,
-            message.thumbnail || null,
-            message.file_path || null,
-            message.isSent ? 1 : 0,
-            message.isError ? 1 : 0,
-            message.encryptedMessage || null,
-            message.encryptedAESKey || null,
-            message.eniv || null,
-            message.isReplyTo || null
-          ], 
+          `, preparedValues, 
           () => {
       
             // After inserting the message, fetch and log all messages
@@ -202,8 +181,7 @@ const WebSocketContext = createContext();
   };
 
   const saveGroupMessageInSQLite = async (db, message) => {
-    const ts = new Date(message.timestamp || Date.now()).toISOString();
-    const readBy = Array.isArray(message.readBy) ? message.readBy : [];
+    const preparedValues = await runStorageWorker("prepareGroupMessageWrite", { message });
     return new Promise((resolve, reject) => {
       try {
         if (!db || typeof db.transaction !== "function") {
@@ -216,21 +194,7 @@ const WebSocketContext = createContext();
               id, group_id, sender, message_type, content, media_url, preview_url, is_download,
               is_reply_to, timestamp, status, read_by, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              String(message.id || message._id),
-              String(message.groupId || message.group_id),
-              String(message.sender),
-              String(message.messageType || message.type || "text"),
-              message.content || null,
-              message.mediaUrl || null,
-              message.previewUrl || null,
-              message.isDownload ? 1 : 0,
-              message.isReplyTo || message.is_reply_to || null,
-              ts,
-              message.status || "sent",
-              JSON.stringify(readBy),
-              new Date().toISOString(),
-            ],
+            preparedValues,
             () => resolve(true),
             (_, error) => reject(error)
           );
@@ -313,26 +277,13 @@ const WebSocketContext = createContext();
            ) recent_rows
            ORDER BY timestamp ASC, id ASC`,
           params,
-          (_, result) => {
-            const out = [];
+          async (_, result) => {
+            const rows = [];
             for (let i = 0; i < result.rows.length; i++) {
-              const row = result.rows.item(i);
-              out.push({
-                id: row.id,
-                groupId: row.group_id,
-                sender: row.sender,
-                messageType: row.message_type || "text",
-                content: row.content,
-                mediaUrl: row.media_url,
-                previewUrl: row.preview_url,
-                isDownload: Number(row.is_download || 0) === 1,
-                isReplyTo: row.is_reply_to || null,
-                timestamp: row.timestamp,
-                status: row.status,
-                readBy: JSON.parse(row.read_by || "[]"),
-              });
+              rows.push(result.rows.item(i));
             }
-            resolve(out);
+            const out = await runStorageWorker("transformGroupMessageRows", { rows });
+            resolve(out || []);
           },
           (_, error) => reject(error)
         );
@@ -447,39 +398,25 @@ const WebSocketContext = createContext();
           reject(new Error("Database is undefined or invalid"));
           return;
         }
-        const normalized = Array.isArray(groups) ? groups : [];
+        runStorageWorker("prepareGroupSummaryWrites", { groups })
+          .then((normalized) => {
         db.transaction(
           (tx) => {
-            for (const group of normalized) {
-              const gid = String(group?.id || group?._id || "").trim();
-              if (!gid) continue;
+            for (const groupValues of normalized || []) {
               tx.executeSql(
                 `INSERT OR REPLACE INTO group_summaries (
                   id, name, description, avatar, owner, unread_count,
                   latest_message, latest_message_timestamp, member_count, is_active, is_deleted, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                  gid,
-                  group?.name || "",
-                  group?.description || "",
-                  group?.avatar || "",
-                  String(group?.owner || group?.createdBy || ""),
-                  Number(group?.unreadCount || 0),
-                  group?.latestMessage || "",
-                  group?.latestMessageTimestamp
-                    ? new Date(group.latestMessageTimestamp).toISOString()
-                    : null,
-                  Number(group?.memberCount || 0),
-                  group?.isActive === false ? 0 : 1,
-                  group?.isDelete === true || group?.isDeleted === true ? 1 : 0,
-                  group?.updatedAt ? new Date(group.updatedAt).toISOString() : new Date().toISOString(),
-                ]
+                groupValues
               );
             }
           },
           (error) => reject(error),
           () => resolve(true)
         );
+          })
+          .catch(reject);
       } catch (error) {
         reject(error);
       }
@@ -637,36 +574,12 @@ const WebSocketContext = createContext();
                    ORDER BY timestamp DESC
                    LIMIT ?`,
                   [currentUser, userId, userId, currentUser, limitPerUser],
-                  (tx, results) => {
-                    const messages = [];
+                  async (tx, results) => {
+                    const rows = [];
                     for (let i = 0; i < results.rows.length; i++) {
-                      const row = results.rows.item(i);
-                      messages.push({
-                        id: row.id,
-                        sender: row.sender,
-                        recipient: row.recipient,
-                        content: row.content,
-                        timestamp: new Date(row.timestamp).toISOString(),
-                        status: row.status,
-                        read: row.read ,
-                        isDeleted: row.isDeleted ,
-                        isDownload: row.isDownload ,
-                        type: row.type,
-                        file_name: row.file_name === 'null' ? null : row.file_name,
-                        file_type: row.file_type === 'null' ? null : row.file_type,
-                        file_size: row.file_size,
-                        thumbnail: row.thumbnail === 'null' ? null : row.thumbnail,
-                        file_path: row.file_path === 'null' ? null : row.file_path,
-                        isSent: row.isSent ,
-                        isError: row.isError ,
-                        encryptedMessage: row.encryptedMessage === 'null' ? null : row.encryptedMessage,
-                        encryptedAESKey: row.encryptedAESKey === 'null' ? null : row.encryptedAESKey,
-                        eniv : row.eniv === 'null' ? null : row.eniv,
-                        isReplyTo: row.isReplyTo === 'null' ? null : row.isReplyTo
-                      });
+                      rows.push(results.rows.item(i));
                     }
-                  //  console.log(`Messages for user ${userId}:`, messages); // Log the messages for each user
-                    resolveMessages(messages);
+                    resolveMessages(rows);
                   },
                   (tx, error) => {
                     console.error("Error fetching messages for user", userId, error); // Log errors specific to each user fetch
@@ -678,16 +591,11 @@ const WebSocketContext = createContext();
   
             // Wait for all the messages to be fetched for each user
             Promise.all(messagesPromises)
-              .then(allMessages => {
-                // Flatten the messages array from all users
-                const flatMessages = allMessages.flat();
-          //      console.log("All messages fetched (before sorting):", flatMessages); // Log all messages before sorting
-  
-                // Sort messages by timestamp ASC
-                flatMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                
-             //   console.log("All messages fetched and sorted:",flatMessages); // Log the final sorted messages
-                resolve(flatMessages); // Resolve with the array of messages
+              .then(async (allMessages) => {
+                const flatMessages = await runStorageWorker("transformDirectMessageRows", {
+                  rowGroups: allMessages,
+                });
+                resolve(flatMessages || []);
               })
               .catch(error => {
                 console.error("Error fetching all messages:", JSON.stringify(error)); // Log if there's an issue in fetching all messages

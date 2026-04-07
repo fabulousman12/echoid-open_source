@@ -254,6 +254,7 @@ const GroupChatWindow = ({
   const [isAtTop, setIsAtTop] = useState(false);
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [previewMedia, setPreviewMedia] = useState(null);
+  const [groupProfilePreviewSrc, setGroupProfilePreviewSrc] = useState("");
   const [glowMessageId, setGlowMessageId] = useState(null);
   const [replyTarget, setReplyTarget] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -1473,7 +1474,13 @@ const GroupChatWindow = ({
   const handleAvatarFile = (file) => {
     if (!isImageFile(file)) return;
     const reader = new FileReader();
-    reader.onloadend = () => setCropSrc(reader.result);
+    reader.onloadend = () => {
+      const nextAvatar = typeof reader.result === "string" ? reader.result : "";
+      if (!nextAvatar) return;
+      setZoom(1);
+      setCrop({ x: 0, y: 0 });
+      setCropSrc(nextAvatar);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -1499,6 +1506,8 @@ const GroupChatWindow = ({
     });
     const first = files?.[0];
     if (!first?.preview) return;
+    setZoom(1);
+    setCrop({ x: 0, y: 0 });
     setCropSrc(first.preview);
   };
 
@@ -2901,7 +2910,16 @@ const GroupChatWindow = ({
 
       <div className="gprofile-body">
           <div className={`gprofile-hero ${isEditMode ? "is-editing" : ""}`}>
-            <img src={editDraft.avatar || profileGroup?.avatar || group?.avatar || img} alt="Group" className="gprofile-avatar" />
+            <button
+              type="button"
+              className="gprofile-avatar-button"
+              onClick={() => {
+                const avatarSrc = editDraft.avatar || profileGroup?.avatar || group?.avatar || img;
+                if (avatarSrc) setGroupProfilePreviewSrc(avatarSrc);
+              }}
+            >
+              <img src={editDraft.avatar || profileGroup?.avatar || group?.avatar || img} alt="Group" className="gprofile-avatar" />
+            </button>
             {isEditMode ? (
               <div className="gprofile-edit-stack">
                 <button
@@ -3195,10 +3213,6 @@ const GroupChatWindow = ({
     </>
   );
 
-  if (isExpanded && !isProfileDocked) {
-    return <div className={`gchat-page gprofile-page gchat-page--${appTheme}`}>{expandedProfileInner}</div>;
-  }
-
   const introCreatedAt = profileGroup?.createdAt || group?.createdAt || profileGroup?.updatedAt || group?.updatedAt || null;
   const introAvatar = profileGroup?.avatar || group?.avatar || img;
   const introName = profileGroup?.name || group?.name || "Group";
@@ -3212,6 +3226,62 @@ const GroupChatWindow = ({
       0
   );
   const introCreatedLabel = introCreatedAt ? new Date(introCreatedAt).toLocaleDateString() : "Date unavailable";
+  const cropModal = cropSrc ? (
+    <div className="gprofile-crop-overlay" onClick={() => setCropSrc(null)}>
+      <div className="gprofile-crop-card" onClick={(e) => e.stopPropagation()}>
+        <div className="gprofile-crop-stage">
+          <Cropper
+            image={cropSrc}
+            crop={crop}
+            zoom={zoom}
+            aspect={1}
+            onCropChange={setCrop}
+            onZoomChange={setZoom}
+            onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+          />
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={3}
+          step={0.1}
+          value={zoom}
+          onChange={(e) => setZoom(Number(e.target.value))}
+          className="w-100 mt-3"
+        />
+        <div className="d-flex gap-2 mt-3">
+          <button className="btn btn-outline-light" onClick={() => setCropSrc(null)}>Cancel</button>
+          <button
+            className="btn btn-light"
+            onClick={async () => {
+              if (!croppedAreaPixels) return;
+              const cropped = await getCroppedImg(cropSrc, croppedAreaPixels);
+              setEditDraft((prev) => ({ ...prev, avatar: cropped }));
+              setCropSrc(null);
+            }}
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const groupProfilePreviewModal = groupProfilePreviewSrc ? (
+    <div className="gprofile-crop-overlay" onClick={() => setGroupProfilePreviewSrc("")}>
+      <div className="gprofile-crop-card" onClick={(e) => e.stopPropagation()}>
+        <div className="gprofile-preview-stage">
+          <ImageRenderer src={groupProfilePreviewSrc} alt="Group preview" className="gchat-preview-image" />
+        </div>
+        <button type="button" className="btn btn-light mt-3" onClick={() => setGroupProfilePreviewSrc("")}>
+          Close
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  if (isExpanded && !isProfileDocked) {
+    return <div className={`gchat-page gprofile-page gchat-page--${appTheme}`}>{expandedProfileInner}{cropModal}{groupProfilePreviewModal}</div>;
+  }
 
   function renderExitAndTransferModals() {
     return (
@@ -3544,47 +3614,6 @@ const GroupChatWindow = ({
 
       {renderExitAndTransferModals()}
 
-      {cropSrc && (
-        <div className="gchat-preview" onClick={() => setCropSrc(null)}>
-          <div className="gchat-preview-inner" onClick={(e) => e.stopPropagation()}>
-            <div style={{ position: "relative", height: 320, width: "100%", background: "#111", borderRadius: 12 }}>
-              <Cropper
-                image={cropSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
-              />
-            </div>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.1}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-100 mt-3"
-            />
-            <div className="d-flex gap-2 mt-3">
-              <button className="btn btn-outline-light" onClick={() => setCropSrc(null)}>Cancel</button>
-              <button
-                className="btn btn-light"
-                onClick={async () => {
-                  if (!croppedAreaPixels) return;
-                  const cropped = await getCroppedImg(cropSrc, croppedAreaPixels);
-                  setEditDraft((prev) => ({ ...prev, avatar: cropped }));
-                  setCropSrc(null);
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {previewMedia && (
         <div className="gchat-preview" onClick={closePreviewMedia}>
           <div className="gchat-preview-inner" onClick={(e) => e.stopPropagation()}>
@@ -3754,6 +3783,8 @@ const GroupChatWindow = ({
       {isProfileDocked ? (
         <aside className={`gprofile-panel gprofile-panel--docked gprofile-panel--${appTheme}`}>
           {expandedProfileInner}
+          {cropModal}
+          {groupProfilePreviewModal}
         </aside>
       ) : null}
     </div>
