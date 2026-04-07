@@ -226,7 +226,28 @@ This project was built primarily as a real-world learning and development effort
 
 📝 Dev.to: https://dev.to/jit_chakraborty_4222410eb/i-built-echoid-a-privacy-focused-messaging-app-with-encrypted-chat-and-voice-calls-2ang
 
+## Development Journey
+
+EchoId started as my first serious mobile project, and the beginning was rough.
+
+Getting the base working, including SQLite message storage, user sync, and a basic chat flow, took around 6 months. Since this was my first Android app, I underestimated the complexity and ended up going through multiple rewrites along the way.
+
+Things changed once I started using tools like Codex and Stitch. The development process became much faster and smoother, especially for repetitive work and larger structural changes.
+
+Right now, EchoId supports:
+
+- E2E messaging
+- Group chats
+- Voice and video calling with WebRTC
+- Temporary chat rooms with user-controlled deletion
+- Push delivery with FCM
+
+The goal is to build something privacy-focused while learning real-time systems deeply through actual implementation.
+
+I am still figuring out what really matters to users versus what is just overengineering. Honest feedback is genuinely welcome, especially around what feels unnecessary, what feels missing, and what should be improved first.
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
-
