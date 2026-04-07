@@ -16,6 +16,7 @@ import { api } from "../services/api";
 import { authFetch } from "../services/apiClient";
 import { getUploadUrl, isValidUploadResult } from "../services/uploadValidation";
 import { uploadMediaInChunks } from "../services/chunkedMediaUpload";
+import { uploadGroupAvatarInChunks } from "../services/profileChunkUpload";
 import { createObjectUrlFromWebFileRef, isWebStoredFileRef, readWebStoredFileAsUint8Array, saveBlobToWebFileStore, saveDataUrlToWebFileStore } from "../services/webFileStore";
 import ImageRenderer from "../components/ImageRenderer";
 import VideoRenderer from "../components/VideoRenderer";
@@ -1128,7 +1129,23 @@ const GroupChatWindow = ({
       }
 
       if (String(editDraft.avatar || "").trim() !== String(profileGroup?.avatar || "").trim()) {
-        const res = await api.updateGroupAvatar(host, { groupId, avatar: String(editDraft.avatar || "").trim() });
+        let avatarUploadId = null;
+        let avatarPayload = String(editDraft.avatar || "").trim();
+        if (avatarPayload.startsWith("data:image")) {
+          try {
+            const uploadResult = await uploadGroupAvatarInChunks(host, avatarPayload);
+            avatarUploadId = uploadResult.uploadId || null;
+            avatarPayload = "";
+          } catch (uploadError) {
+            console.warn("Group avatar chunk upload unavailable, falling back to inline avatar", uploadError);
+          }
+        }
+
+        const res = await api.updateGroupAvatar(host, {
+          groupId,
+          avatar: avatarPayload,
+          avatarUploadId,
+        });
         if (res?.ok) {
           const json = await res.json();
           latestGroup = json?.group || latestGroup;

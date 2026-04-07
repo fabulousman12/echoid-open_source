@@ -1562,7 +1562,7 @@ console.log("Fetched user details for missing user:", data);
 
   const mainBodyContent = (
     <>
-      {activeFooter === 'Group' && (
+      <div style={{ display: activeFooter === 'Group' ? 'block' : 'none' }}>
         <Group
           groupsMain={groupsMain}
           setGroupsMain={setGroupsMain}
@@ -1574,11 +1574,13 @@ console.log("Fetched user details for missing user:", data);
           selectedGroupId={desktopSelectedGroup?.id || null}
           appTheme={appTheme}
         />
-      )}
+      </div>
 
-      {activeFooter === 'Chats' && chatsContent}
+      <div style={{ display: activeFooter === 'Chats' ? 'block' : 'none' }}>
+        {chatsContent}
+      </div>
 
-      {activeFooter === 'Calls' && (
+      <div style={{ display: activeFooter === 'Calls' ? 'block' : 'none' }}>
         <Calls
           calls={calls}
           setCalls={setCalls}
@@ -1588,7 +1590,7 @@ console.log("Fetched user details for missing user:", data);
           selectedCallIds={selectedCallIds}
           setSelectedCallIds={setSelectedCallIds}
         />
-      )}
+      </div>
     </>
   );
 

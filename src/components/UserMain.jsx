@@ -105,13 +105,17 @@ const UserMain = ({
 
   const filteredAndSortedUsers = useMemo(() => {
     const term = (deferredSearch || '').toLowerCase();
-    return [...(usersMain || [])]
-      .filter(user =>
+    return (usersMain || [])
+      .filter((user) =>
         matchesUser(user, term) &&
         !user.isArchive &&
         user.id !== currentUserId
       )
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      .map((user) => ({
+        ...user,
+        _sortTimestamp: new Date(user?.timestamp || 0).getTime() || 0,
+      }))
+      .sort((a, b) => b._sortTimestamp - a._sortTimestamp);
   }, [usersMain, deferredSearch, currentUserId, matchesUser]);
 
   const handleSearchChange = useCallback((value) => {

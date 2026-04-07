@@ -28,23 +28,23 @@ const buildClientFileName = (mimeType = "image/jpeg") => {
   return `profile_${Date.now()}.${ext}`;
 };
 
-const buildFetchers = (host, authenticated) => {
+const buildFetchers = (host, authenticated, endpointBase) => {
   if (authenticated) {
     return {
       init: (payload) =>
-        authFetch(`${host}/user/profile-upload/init-auth`, {
+        authFetch(`${host}${endpointBase}/init-auth`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }, host),
       chunk: (payload) =>
-        authFetch(`${host}/user/profile-upload/chunk-auth`, {
+        authFetch(`${host}${endpointBase}/chunk-auth`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }, host),
       commit: (payload) =>
-        authFetch(`${host}/user/profile-upload/commit-auth`, {
+        authFetch(`${host}${endpointBase}/commit-auth`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -54,19 +54,19 @@ const buildFetchers = (host, authenticated) => {
 
   return {
     init: (payload) =>
-      fetch(`${host}/user/profile-upload/init`, {
+      fetch(`${host}${endpointBase}/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
     chunk: (payload) =>
-      fetch(`${host}/user/profile-upload/chunk`, {
+      fetch(`${host}${endpointBase}/chunk`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
     commit: (payload) =>
-      fetch(`${host}/user/profile-upload/commit`, {
+      fetch(`${host}${endpointBase}/commit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -74,15 +74,23 @@ const buildFetchers = (host, authenticated) => {
   };
 };
 
-async function uploadProfileImageInChunks(host, imageDataUrl, { authenticated = false } = {}) {
+async function uploadImageInChunks(
+  host,
+  imageDataUrl,
+  {
+    authenticated = false,
+    endpointBase = "/user/profile-upload",
+    fileNamePrefix = "profile",
+  } = {}
+) {
   const blob = await dataUrlToBlob(imageDataUrl);
   if (!blob) {
-    throw new Error("Could not prepare profile image");
+    throw new Error("Could not prepare image");
   }
 
-  const fileName = buildClientFileName(blob.type || "image/jpeg");
+  const fileName = buildClientFileName(blob.type || "image/jpeg").replace(/^profile_/, `${fileNamePrefix}_`);
   const totalChunks = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE_BYTES));
-  const transport = buildFetchers(host, authenticated);
+  const transport = buildFetchers(host, authenticated, endpointBase);
 
   const initRes = await transport.init({
     fileName,
@@ -135,4 +143,21 @@ async function uploadProfileImageInChunks(host, imageDataUrl, { authenticated = 
   };
 }
 
-export { uploadProfileImageInChunks };
+async function uploadProfileImageInChunks(host, imageDataUrl, options = {}) {
+  return uploadImageInChunks(host, imageDataUrl, {
+    ...options,
+    endpointBase: "/user/profile-upload",
+    fileNamePrefix: "profile",
+  });
+}
+
+async function uploadGroupAvatarInChunks(host, imageDataUrl, options = {}) {
+  return uploadImageInChunks(host, imageDataUrl, {
+    authenticated: true,
+    ...options,
+    endpointBase: "/api/groups/avatar-upload",
+    fileNamePrefix: "group_avatar",
+  });
+}
+
+export { uploadProfileImageInChunks, uploadGroupAvatarInChunks };

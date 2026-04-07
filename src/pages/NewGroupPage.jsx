@@ -5,6 +5,7 @@ import Cropper from "react-easy-crop";
 import PropTypes from "prop-types";
 import { LoginContext } from "../Contexts/UserContext";
 import { api } from "../services/api";
+import { uploadGroupAvatarInChunks } from "../services/profileChunkUpload";
 import img from "/img.jpg";
 import "./NewGroupPage.css";
 
@@ -241,10 +242,23 @@ const NewGroupPage = ({ usersMain = [], groupsMain = [], setGroupsMain }) => {
     setLoading(true);
     setError("");
     try {
+      let avatarUploadId = null;
+      let avatarPayload = avatar;
+      if (typeof avatar === "string" && avatar.startsWith("data:image")) {
+        try {
+          const uploadResult = await uploadGroupAvatarInChunks(host, avatar);
+          avatarUploadId = uploadResult.uploadId || null;
+          avatarPayload = "";
+        } catch (uploadError) {
+          console.warn("Group avatar chunk upload unavailable, falling back to inline avatar", uploadError);
+        }
+      }
+
       const payload = {
         name: name.trim(),
         description: description.trim(),
-        avatar,
+        avatar: avatarPayload,
+        avatarUploadId,
         members: selectedIds,
         settings,
       };

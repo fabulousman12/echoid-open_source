@@ -1,5 +1,5 @@
 // pages/Status.jsx
-import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef, startTransition } from "react";
 import { useHistory } from "react-router-dom";
 import StatusCard from "../components/FInalStatusCard";
 import StatusViewer from "../components/StatusViewer";
@@ -95,6 +95,28 @@ const toIdSet = (input) =>
 const filterByIdSet = (rows = [], allowedSet = null) => {
   if (!(allowedSet instanceof Set) || allowedSet.size === 0) return safeArray(rows);
   return safeArray(rows).filter((row) => allowedSet.has(String(row?.id || "").trim()));
+};
+
+const scheduleStatusBackgroundTask = (task) => {
+  if (typeof window === "undefined") {
+    return setTimeout(task, 0);
+  }
+
+  if (typeof window.requestIdleCallback === "function") {
+    return window.requestIdleCallback(task, { timeout: 1200 });
+  }
+
+  return window.setTimeout(task, 120);
+};
+
+const cancelScheduledStatusTask = (handle) => {
+  if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function") {
+    try {
+      window.cancelIdleCallback(handle);
+      return;
+    } catch {}
+  }
+  clearTimeout(handle);
 };
 const Status = ({ variant = "default" }) => {
   const host = `https://${Maindata.SERVER_URL}`;
@@ -231,8 +253,10 @@ const Status = ({ variant = "default" }) => {
   useEffect(() => {
     const nextMy = applyLocalReadToStatuses(myStatusesRaw);
     const nextFeed = applyLocalReadToStatuses(feedStatusesRaw);
-    setMyStatuses(nextMy);
-    setFeedStatuses(groupFeedByUser(nextFeed));
+    startTransition(() => {
+      setMyStatuses(nextMy);
+      setFeedStatuses(groupFeedByUser(nextFeed));
+    });
     persistStatusCaches(nextMy, nextFeed);
   }, [myStatusesRaw, feedStatusesRaw, applyLocalReadToStatuses, persistStatusCaches]);
 
@@ -466,9 +490,15 @@ const Status = ({ variant = "default" }) => {
       persistStatusCaches([], []);
     }
 
-    fetchMyStatuses();
-    fetchFeed();
-    syncStatusIdsAndPruneCache();
+    const scheduledTask = scheduleStatusBackgroundTask(() => {
+      fetchMyStatuses();
+      fetchFeed();
+      syncStatusIdsAndPruneCache();
+    });
+
+    return () => {
+      cancelScheduledStatusTask(scheduledTask);
+    };
   }, [applyLocalReadToStatuses, persistReadMap, persistStatusCaches, syncStatusIdsAndPruneCache]);
 
   // =========================
@@ -491,8 +521,10 @@ const Status = ({ variant = "default" }) => {
       );
       const authoritative = pickRemoteAuthoritativeStatuses(myStatusesRaw, enriched);
       const nextMy = applyLocalReadToStatuses(authoritative);
-      setMyStatusesRaw(nextMy);
-      setMyStatuses(nextMy);
+      startTransition(() => {
+        setMyStatusesRaw(nextMy);
+        setMyStatuses(nextMy);
+      });
       persistStatusCaches(nextMy, feedStatusesRaw);
       
     } catch (err) {
@@ -525,14 +557,18 @@ const Status = ({ variant = "default" }) => {
       if (cursor) {
         setFeedStatusesRaw((prev) => {
           const mergedRaw = mergeStatusesById(prev, enrichedWithRead);
-          setFeedStatuses(groupFeedByUser(mergedRaw));
+          startTransition(() => {
+            setFeedStatuses(groupFeedByUser(mergedRaw));
+          });
           persistStatusCaches(myStatusesRaw, mergedRaw);
           return mergedRaw;
         });
       } else {
         const mergedRaw = mergeStatusesById([], enrichedWithRead);
-        setFeedStatusesRaw(mergedRaw);
-        setFeedStatuses(groupFeedByUser(mergedRaw));
+        startTransition(() => {
+          setFeedStatusesRaw(mergedRaw);
+          setFeedStatuses(groupFeedByUser(mergedRaw));
+        });
         persistStatusCaches(myStatusesRaw, mergedRaw);
       }
 
@@ -1194,8 +1230,10 @@ const Status = ({ variant = "default" }) => {
       setUploadProgress(0);
       globalThis.storage?.setItem?.("status_upload_draft", JSON.stringify(null));
       globalThis.storage?.setItem?.("status_upload_return", JSON.stringify(false));
-      fetchMyStatuses();
-      fetchFeed();
+      scheduleStatusBackgroundTask(() => {
+        fetchMyStatuses();
+        fetchFeed();
+      });
     }
   };
 

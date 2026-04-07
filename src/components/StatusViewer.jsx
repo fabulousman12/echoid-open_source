@@ -107,6 +107,7 @@ export default function StatusViewer({
   const [isDeleting, setIsDeleting] = useState(false);
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [skipCount, setSkipCount] = useState(0);
+  const [mediaUnavailable, setMediaUnavailable] = useState(false);
   const dragStartRef = useRef(null);
   const viewedIdsRef = useRef(new Set());
   const filteredItems = safeItems.filter((item) => {
@@ -135,7 +136,37 @@ export default function StatusViewer({
     setViewerSheetOpen(false);
     setIsMediaLoading(true);
     setCaptionExpanded(false);
+    setMediaUnavailable(false);
   }, [index, current?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!current?.mediaUrl) {
+      setMediaUnavailable(true);
+      setIsMediaLoading(false);
+      return;
+    }
+    setMediaUnavailable(false);
+  }, [open, current?.mediaUrl]);
+
+  useEffect(() => {
+    if (!mediaUnavailable) return;
+    setProgress(0);
+    setTimeLeft(3);
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const nextProgress = Math.min(1, elapsed / 3000);
+      setProgress(nextProgress);
+      setTimeLeft(Math.max(0, Math.ceil((3000 - elapsed) / 1000)));
+      if (elapsed >= 3000) {
+        window.clearInterval(interval);
+        goNext();
+      }
+    }, 100);
+
+    return () => window.clearInterval(interval);
+  }, [mediaUnavailable]);
 
   useEffect(() => {
     if (!open) {
@@ -451,7 +482,24 @@ export default function StatusViewer({
             justifyContent: "center",
           }}
         >
-          {isVideo ? (
+          {mediaUnavailable ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                height: "100%",
+                color: "rgba(255,255,255,0.88)",
+                fontSize: "18px",
+                fontWeight: 500,
+                textAlign: "center",
+                padding: "24px",
+              }}
+            >
+              Status doesn&apos;t exist
+            </div>
+          ) : isVideo ? (
             <video
               key={current?.id}
               src={current?.mediaUrl}
@@ -462,7 +510,10 @@ export default function StatusViewer({
               preload="auto"
               ref={videoRef}
               onLoadedData={() => setIsMediaLoading(false)}
-              onError={() => setIsMediaLoading(false)}
+              onError={() => {
+                setMediaUnavailable(true);
+                setIsMediaLoading(false);
+              }}
               onLoadedMetadata={(e) => {
                 const duration = e.currentTarget.duration || 0;
                 if (duration > 0) {
@@ -494,7 +545,10 @@ export default function StatusViewer({
               duration={imageDurationMs}
               paused={isPaused}
               onLoad={() => setIsMediaLoading(false)}
-              onError={() => setIsMediaLoading(false)}
+              onError={() => {
+                setMediaUnavailable(true);
+                setIsMediaLoading(false);
+              }}
               onProgress={(p, t) => {
                 setProgress(p);
                 setTimeLeft(t);
