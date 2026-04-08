@@ -4227,84 +4227,83 @@ const expandedProfilePanel = userdetails ? (
             {/* Header with user details and Back Button */}
             {
   selectionMode ? (
-    // Header for selection mode
-      <div className="flex items-center justify-between w-full max-w-3xl px-4 py-2 relative bg-primary text-white" style={{ height: '70px' ,position: embedded ? 'absolute' : 'fixed'}}>
-    {/* Left: Back Button */}
-    <div className="flex items-center space-x-3">
-      <button
-        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/20 z-10"
-        title="Cancel Selection"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleDeselectAll();
-        }}
-      >
-        <IonIcon icon={closeOutline} size="medium" />
-      </button>
-
-      <div className="ml-12 text-lg font-semibold">Selected</div>
-    </div>
-
-    {/* Right: Action Buttons */}
-    <div className="flex items-center space-x-4">
-      <button
-        className="p-2 rounded-full hover:bg-white/20"
-        onClick={handleCopy}
-        title="Copy"
-      >
-        <IonIcon icon={copyOutline} size="small" />
-      </button>
-
-      <button
-        className="p-2 rounded-full hover:bg-white/20"
-        onClick={handleDelete}
-        title="Delete"
-      >
-        <IonIcon icon={trashOutline} size="small" />
-      </button>
-
-      <button
-        className="p-2 rounded-full hover:bg-white/20"
-        onClick={handleForward}
-        title="Forward"
-      >
-        <IonIcon icon={arrowRedoOutline} size="small" />
-      </button>
-
-      <div className="relative">
+    <div className="chat-thread-header chat-thread-header--selection">
+      <div className="chat-thread-header-main">
         <button
-          className="p-2 rounded-full hover:bg-white/20"
-          onClick={handleMoreOptions}
-          title="More"
+          className="chat-thread-icon-btn"
+          title="Cancel Selection"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeselectAll();
+          }}
         >
-          <IonIcon icon={ellipsisVerticalOutline} size="small" />
+          <IonIcon icon={closeOutline} size="small" />
         </button>
 
-        {showMoreOptions && (
-          <div className="absolute top-12 right-0 bg-white text-black rounded shadow-lg z-10 w-40">
-            <button
-              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-              onClick={() => handleOptionClick('Mark as Read')}
-            >
-              Mark as Read
-            </button>
-            <button
-              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-              onClick={handleArchive}
-            >
-              {isArchive ? 'Unarchive' : 'Move to Archive'}
-            </button>
-            <button
-              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-              onClick={() => handleOptionClick('Report')}
-            >
-              Report
-            </button>
-          </div>
-        )}
+        <div className="chat-thread-user-copy">
+          <h4 className="chat-thread-user-name">{selectedChats.length} selected</h4>
+        </div>
+      </div>
+
+      <div className="chat-thread-header-actions chat-thread-header-actions--selection">
+        <button
+          className="chat-thread-icon-btn"
+          onClick={handleCopy}
+          title="Copy"
+        >
+          <IonIcon icon={copyOutline} size="small" />
+        </button>
+
+        <button
+          className="chat-thread-icon-btn"
+          onClick={handleDelete}
+          title="Delete"
+        >
+          <IonIcon icon={trashOutline} size="small" />
+        </button>
+
+        <button
+          className="chat-thread-icon-btn"
+          onClick={handleForward}
+          title="Forward"
+        >
+          <IonIcon icon={arrowRedoOutline} size="small" />
+        </button>
+
+        <div className="relative">
+          <button
+            className="chat-thread-icon-btn"
+            onClick={handleMoreOptions}
+            title="More"
+          >
+            <IonIcon icon={ellipsisVerticalOutline} size="small" />
+          </button>
+
+          {showMoreOptions && (
+            <div className="absolute top-12 right-0 bg-white text-black rounded shadow-lg z-10 w-40">
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => handleOptionClick('Mark as Read')}
+              >
+                Mark as Read
+              </button>
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={handleArchive}
+              >
+                {isArchive ? 'Unarchive' : 'Move to Archive'}
+              </button>
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => handleOptionClick('Report')}
+              >
+                Report
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
 
   ) : (
              <div
