@@ -10,6 +10,7 @@ import { api } from "../services/api";
 import { getDeviceInfo } from "../services/deviceInfo";
 import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
 import Swal from 'sweetalert2';
+import { showBannedAccountModal, isUserBannedResponse } from "../services/apiClient";
 // Create the context
 const LoginContext = createContext();
 
@@ -129,6 +130,12 @@ const LoginProvider = (props) => {
 
         return json.userResponse;
         }else{
+          if (isUserBannedResponse(response.status, json)) {
+            await showBannedAccountModal(
+              json?.error || json?.message || "You have been banned. If you feel this is a mistake, email the devs."
+            );
+            return false;
+          }
           const msg = (json?.error || json?.message || "").toLowerCase();
           const revoked = response.status === 401 || response.status === 403 || msg.includes("revoke") || msg.includes("revocation") || (msg.includes("token") && msg.includes("invalid")) || msg.includes("logout");
           if (revoked) {

@@ -16,6 +16,8 @@ import { api } from "../services/api";
 import { getRefreshToken, clearTokens } from "../services/authTokens";
 import { getDeviceId, getDeviceIdSync } from "../services/deviceInfo";
 import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
+import { clearAnonymousProfile, readAnonymousProfile, saveAnonymousProfile } from "../services/anonymousProfileStorage";
+import Swal from "sweetalert2";
 import data from "../data";
 import ImageRenderer from "../components/ImageRenderer";
 
@@ -65,6 +67,11 @@ const ProfilePage = ({host}) => {
   );
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 0));
   const [appTheme, setAppTheme] = useState(() => globalThis.storage?.getItem?.("appTheme") || "light");
+  const [anonymousProfile, setAnonymousProfile] = useState(() => readAnonymousProfile());
+  const [anonymousLoading, setAnonymousLoading] = useState(false);
+  const [anonymousSyncing, setAnonymousSyncing] = useState(false);
+  const [anonymousMissing, setAnonymousMissing] = useState(false);
+  const [anonymousError, setAnonymousError] = useState("");
   const lastScrollTopRef = useRef(0);
   
   useEffect(() => {
@@ -148,6 +155,86 @@ const ProfilePage = ({host}) => {
       window.removeEventListener("app-theme-changed", syncTheme);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (activeSection !== "anonymous") return undefined;
+
+    const cachedAnonymous = readAnonymousProfile();
+    if (cachedAnonymous) {
+      setAnonymousProfile(cachedAnonymous);
+      setAnonymousMissing(false);
+      setAnonymousError("");
+      setAnonymousLoading(false);
+      setAnonymousSyncing(true);
+    } else {
+      setAnonymousProfile(null);
+      setAnonymousMissing(false);
+      setAnonymousError("");
+      setAnonymousLoading(true);
+      setAnonymousSyncing(false);
+    }
+
+    const syncAnonymousProfile = async () => {
+      try {
+        const res = await api.anonymousMe(host);
+        const json = await res.json();
+        if (!active) return;
+
+        if (res.status === 403 && json?.banned) {
+          await Swal.fire({
+            title: "Anonymous account banned",
+            text: json?.message || "Your anonymous account has been banned. If you feel this is a mistake, email the devs.",
+            icon: "error",
+            confirmButtonText: "OK",
+            width: 320,
+            padding: "1.2rem",
+            backdrop: "rgba(0,0,0,0.4)",
+            customClass: { popup: "mobile-alert" },
+          });
+          clearAnonymousProfile();
+          setAnonymousProfile(null);
+          setAnonymousMissing(false);
+          setActiveSection(null);
+          return;
+        }
+
+        if (res.status === 404) {
+          clearAnonymousProfile();
+          setAnonymousProfile(null);
+          setAnonymousMissing(true);
+          setAnonymousError("");
+          return;
+        }
+
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.message || "Failed to load anonymous profile.");
+        }
+
+        const nextAnonymous = json.userResponse || null;
+        if (nextAnonymous) {
+          saveAnonymousProfile(nextAnonymous);
+          setAnonymousProfile(nextAnonymous);
+          setAnonymousMissing(false);
+          setAnonymousError("");
+        }
+      } catch (err) {
+        if (active) {
+          setAnonymousError(err?.message || "Failed to load anonymous profile.");
+        }
+      } finally {
+        if (active) {
+          setAnonymousLoading(false);
+          setAnonymousSyncing(false);
+        }
+      }
+    };
+
+    syncAnonymousProfile();
+    return () => {
+      active = false;
+    };
+  }, [activeSection, host]);
 
   const toggleEdit = () => setIsEditing(true);
 
@@ -455,6 +542,239 @@ if (
     setRevokePassword("");
     setRevokeError("");
     setRevokeModalOpen(true);
+  };
+
+  const openAnonymousEditor = (mode = "create") => {
+    history.push("/anonymous/create", { mode });
+  };
+
+  const openAnonymousLogin = () => {
+    history.push("/anonymous/login");
+  };
+
+  const handleDeleteAnonymousProfile = async () => {
+    const confirmed = await Swal.fire({
+      title: "Delete anonymous profile?",
+      text: "This will permanently remove your anonymous profile.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      width: 320,
+      padding: "1.2rem",
+      backdrop: "rgba(0,0,0,0.4)",
+      customClass: { popup: "mobile-alert" },
+    });
+    if (!confirmed.isConfirmed) return;
+
+    setAnonymousSyncing(true);
+    setAnonymousError("");
+    try {
+      const res = await api.deleteAnonymousUser(host);
+      const json = await res.json();
+
+      if (res.status === 403 && json?.banned) {
+        await Swal.fire({
+          title: "Anonymous account banned",
+          text: json?.message || "Your anonymous account has been banned. If you feel this is a mistake, email the devs.",
+          icon: "error",
+          confirmButtonText: "OK",
+          width: 320,
+          padding: "1.2rem",
+          backdrop: "rgba(0,0,0,0.4)",
+          customClass: { popup: "mobile-alert" },
+        });
+        clearAnonymousProfile();
+        setAnonymousProfile(null);
+        setActiveSection(null);
+        history.replace("/home");
+        return;
+      }
+
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || "Failed to delete anonymous profile.");
+      }
+
+      clearAnonymousProfile();
+      setAnonymousProfile(null);
+      setAnonymousMissing(true);
+    } catch (err) {
+      setAnonymousError(err?.message || "Failed to delete anonymous profile.");
+    } finally {
+      setAnonymousSyncing(false);
+    }
+  };
+
+  const renderAnonymousSection = () => {
+    if (anonymousLoading && !anonymousProfile) {
+      return (
+        <div className="profile-details-card">
+          <div className="profile-details-header">
+            <h2 className="text-base font-semibold text-slate-900">Anonymous profile</h2>
+          </div>
+          <div className="anonymous-shell">
+            <div className="anonymous-card anonymous-card--center">
+              <StarLoader />
+              <div className="anonymous-muted">Loading your anonymous identity...</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (anonymousMissing) {
+      return (
+        <div className="profile-details-card">
+          <div className="profile-details-header">
+            <h2 className="text-base font-semibold text-slate-900">Anonymous profile</h2>
+          </div>
+          <div className="anonymous-shell">
+            <div className="anonymous-card">
+              <div className="anonymous-hero">
+                <div>
+                  <div className="anonymous-title">Create anonymous profile now?</div>
+                  <p className="anonymous-subtitle">
+                    You do not have an anonymous identity yet. Create one to chat or appear separately from your main account.
+                  </p>
+                </div>
+              </div>
+              <div className="anonymous-actions">
+                <button
+                  type="button"
+                  className="anonymous-primary-btn"
+                  onClick={() => openAnonymousEditor("create")}
+                >
+                  Create account
+                </button>
+                <button
+                  type="button"
+                  className="anonymous-secondary-btn"
+                  onClick={openAnonymousLogin}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  className="anonymous-ghost-btn"
+                  onClick={() => setActiveSection(null)}
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!anonymousProfile) {
+      return (
+        <div className="profile-details-card">
+          <div className="profile-details-header">
+            <h2 className="text-base font-semibold text-slate-900">Anonymous profile</h2>
+          </div>
+          <div className="anonymous-shell">
+            <div className="anonymous-card anonymous-card--error">
+              <div className="anonymous-title">We could not load this profile.</div>
+              <div className="anonymous-error-text">
+                {anonymousError || "Could not load anonymous profile."}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="profile-details-card">
+        <div className="profile-details-header">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Anonymous profile</h2>
+            <div className="text-xs text-slate-500 mt-1">
+              {anonymousSyncing ? "Syncing latest details..." : "Your hidden identity is ready."}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="anonymous-edit-btn"
+            onClick={() => openAnonymousEditor("edit")}
+          >
+            Edit
+          </button>
+        </div>
+
+        <div className="anonymous-shell">
+          <div className="anonymous-card">
+            <div className="anonymous-identity">
+              <div className="anonymous-photo">
+                {anonymousProfile.profilePic ? (
+                  <img
+                    src={anonymousProfile.profilePic}
+                    alt="Anonymous profile"
+                    className="anonymous-photo-img"
+                  />
+                ) : (
+                  <div className="anonymous-photo-fallback">
+                    <User size={30} />
+                  </div>
+                )}
+              </div>
+            <div className="anonymous-meta">
+              <div className="anonymous-name">{anonymousProfile.name || "Anonymous"}</div>
+              {anonymousProfile.username ? (
+                <div className="anonymous-username">@{anonymousProfile.username}</div>
+              ) : null}
+        
+              <div className="anonymous-status-pill">Mask identity</div>
+            </div>
+            </div>
+
+            <div className="anonymous-info-grid">
+              <div className="anonymous-info-card">
+                <div className="anonymous-info-label">About</div> 
+                <div className="anonymous-info-value">{anonymousProfile.about || "Not set"}</div>
+              </div>
+
+              <div className="anonymous-info-card">
+                <div className="anonymous-info-label">Gender</div>
+                <div className="anonymous-info-value">{anonymousProfile.gender || "Not set"}</div>
+              </div>
+            </div>
+
+            {anonymousError ? (
+              <div className="anonymous-warning">{anonymousError}</div>
+            ) : null}
+
+            <div className="anonymous-client-id">
+              Client ID: {anonymousProfile.clientId || "Not set"}
+            </div>
+
+            <div className="anonymous-actions">
+              <button
+                type="button"
+                className="anonymous-danger-btn"
+                onClick={handleDeleteAnonymousProfile}
+                disabled={anonymousSyncing}
+              >
+                {anonymousSyncing ? "Deleting..." : "Delete anonymous account"}
+              </button>
+              <button
+                type="button"
+                className="anonymous-ghost-btn anonymous-ghost-btn--strong"
+                onClick={() => {
+                  clearAnonymousProfile();
+                  setAnonymousProfile(null);
+                  setAnonymousMissing(true);
+                  setAnonymousError("");
+                }}
+              >
+                Sign out anonymous
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
   
   const closeRevokeModal = () => {
@@ -1294,16 +1614,7 @@ if (
           )}
 
 
-          {activeSection === "anonymous" && (
-            <div className="profile-details-card">
-              <div className="profile-details-header">
-                <h2 className="text-base font-semibold text-slate-900">Anonymous profile</h2>
-              </div>
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 text-sm text-slate-600">
-                Anonymous profile settings are coming soon.
-              </div>
-            </div>
-          )}
+          {activeSection === "anonymous" && renderAnonymousSection()}
 
           {activeSection === "privacy" && (
             <div className="profile-details-card">

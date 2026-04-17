@@ -1,0 +1,114 @@
+.echoid-page {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  background-color: #020617;
+  touch-action: none; /* Disable default pull-to-refresh/scrolling for map */
+}
+
+.echoid-topbar-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: rgba(2, 6, 23, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  color: white;
+  font-family: sans-serif;
+  box-sizing: border-box;
+}
+
+.echoid-topbar-layer h1 {
+  font-size: 1.2rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.echoid-back {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-right: 16px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.echoid-back:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.city-grid {
+  display: grid;
+  grid-template-columns: repeat(100, 256px);
+  grid-template-rows: repeat(100, 256px);
+}
+
+.city-tile {
+  width: 256px;
+  height: 256px;
+  background-image: url("/bgofechoid.jpg");
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.05); /* Subtle grid line */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 100;
+}
+
+.zoom-btn {
+  background: rgba(2, 6, 23, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+  transition: background 0.2s;
+}
+
+.zoom-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+}

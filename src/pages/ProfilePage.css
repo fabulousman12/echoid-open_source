@@ -1491,3 +1491,250 @@ flex-direction: row;
   transform: translate(-50%, -50%);
   z-index: 999999;
 }
+
+.anonymous-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.anonymous-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f7f8fb 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.anonymous-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -30% -50% auto;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.15), transparent 65%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.anonymous-card--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  text-align: center;
+  gap: 10px;
+}
+
+.anonymous-card--error {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.anonymous-muted {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.anonymous-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.anonymous-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.anonymous-subtitle {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #5b6474;
+}
+
+.anonymous-edit-btn {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.anonymous-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.anonymous-photo {
+  width: 76px;
+  height: 76px;
+  border-radius: 22px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.anonymous-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.anonymous-photo-fallback {
+  color: #475569;
+}
+
+.anonymous-meta {
+  min-width: 0;
+}
+
+.anonymous-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.anonymous-username {
+  margin-top: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  word-break: break-word;
+}
+
+.anonymous-id {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.anonymous-status-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.anonymous-info-grid {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.anonymous-info-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.anonymous-info-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.anonymous-info-value {
+  margin-top: 8px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.anonymous-warning {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.anonymous-client-id {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.anonymous-error-text {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.anonymous-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.anonymous-primary-btn,
+.anonymous-secondary-btn,
+.anonymous-ghost-btn,
+.anonymous-danger-btn {
+  width: 100%;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: none;
+}
+
+.anonymous-primary-btn {
+  background: #111827;
+  color: #ffffff;
+}
+
+.anonymous-secondary-btn {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.anonymous-ghost-btn {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.anonymous-ghost-btn--strong {
+  background: #e7efff;
+  color: #1d4ed8;
+}
+
+.anonymous-danger-btn {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .anonymous-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

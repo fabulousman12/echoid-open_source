@@ -57,6 +57,52 @@ export const api = {
       headers: { "Content-Type": "application/json" }
     }, host),
 
+  anonymousMe: (host) =>
+    authFetch(`${host}/user/anonymous/me`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  anonymousLogin: (host) =>
+    authFetch(`${host}/user/anonymous/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
+  getAnonymousUser: (host, clientId) =>
+    authFetch(`${host}/user/anonymous/getuser`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId })
+    }, host),
+
+  anonymousUsernameCheck: (host, username) =>
+    authFetch(`${host}/user/anonymous/username/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
+    }, host),
+
+  createAnonymousUser: (host, payload = {}) =>
+    authFetch(`${host}/user/anonymous/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, host),
+
+  editAnonymousUser: (host, payload = {}) =>
+    authFetch(`${host}/user/anonymous/edit`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, host),
+
+  deleteAnonymousUser: (host) =>
+    authFetch(`${host}/user/anonymous/delete`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    }, host),
+
   temporaryLogout: (host) =>
     authFetch(`${host}/user/temp/logout`, {
       method: "POST",

@@ -28,23 +28,26 @@ const buildClientFileName = (mimeType = "image/jpeg") => {
   return `profile_${Date.now()}.${ext}`;
 };
 
-const buildFetchers = (host, authenticated, endpointBase) => {
+const buildFetchers = (host, authenticated, endpointBase, authenticatedUsesAuthSuffix) => {
   if (authenticated) {
+    const initPath = authenticatedUsesAuthSuffix ? `${endpointBase}/init-auth` : `${endpointBase}/init`;
+    const chunkPath = authenticatedUsesAuthSuffix ? `${endpointBase}/chunk-auth` : `${endpointBase}/chunk`;
+    const commitPath = authenticatedUsesAuthSuffix ? `${endpointBase}/commit-auth` : `${endpointBase}/commit`;
     return {
       init: (payload) =>
-        authFetch(`${host}${endpointBase}/init-auth`, {
+        authFetch(`${host}${initPath}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }, host),
       chunk: (payload) =>
-        authFetch(`${host}${endpointBase}/chunk-auth`, {
+        authFetch(`${host}${chunkPath}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }, host),
       commit: (payload) =>
-        authFetch(`${host}${endpointBase}/commit-auth`, {
+        authFetch(`${host}${commitPath}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -79,6 +82,7 @@ async function uploadImageInChunks(
   imageDataUrl,
   {
     authenticated = false,
+    authenticatedUsesAuthSuffix = false,
     endpointBase = "/user/profile-upload",
     fileNamePrefix = "profile",
   } = {}
@@ -90,7 +94,7 @@ async function uploadImageInChunks(
 
   const fileName = buildClientFileName(blob.type || "image/jpeg").replace(/^profile_/, `${fileNamePrefix}_`);
   const totalChunks = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE_BYTES));
-  const transport = buildFetchers(host, authenticated, endpointBase);
+  const transport = buildFetchers(host, authenticated, endpointBase, authenticatedUsesAuthSuffix);
 
   const initRes = await transport.init({
     fileName,
@@ -146,6 +150,7 @@ async function uploadImageInChunks(
 async function uploadProfileImageInChunks(host, imageDataUrl, options = {}) {
   return uploadImageInChunks(host, imageDataUrl, {
     ...options,
+    authenticatedUsesAuthSuffix: options.authenticated ? true : options.authenticatedUsesAuthSuffix,
     endpointBase: "/user/profile-upload",
     fileNamePrefix: "profile",
   });
@@ -160,4 +165,14 @@ async function uploadGroupAvatarInChunks(host, imageDataUrl, options = {}) {
   });
 }
 
-export { uploadProfileImageInChunks, uploadGroupAvatarInChunks };
+async function uploadAnonymousProfileImageInChunks(host, imageDataUrl, options = {}) {
+  return uploadImageInChunks(host, imageDataUrl, {
+    authenticated: true,
+    authenticatedUsesAuthSuffix: false,
+    ...options,
+    endpointBase: "/user/anonymous/profile-upload",
+    fileNamePrefix: "anonymous_profile",
+  });
+}
+
+export { uploadProfileImageInChunks, uploadGroupAvatarInChunks, uploadAnonymousProfileImageInChunks };

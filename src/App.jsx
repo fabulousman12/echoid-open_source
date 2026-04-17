@@ -68,6 +68,9 @@ import { LiveUpdate } from '@capawesome/capacitor-live-update';
 import Blocklist from './components/Blocklist'
 import StarLoader  from './pages/StarLoader';
 import ProfilePage from './pages/ProfilePage';
+import EchoIdPage from './echoid';
+import AnonymousProfilePage from './pages/AnonymousProfilePage';
+import AnonymousLoginPage from './pages/AnonymousLoginPage';
 import { IonAlert } from '@ionic/react';
 import HelpInfoChat from './pages/HelpInfoChat';
 import UpdateModal from './components/UpdateModal';
@@ -79,7 +82,7 @@ import { appendCallLog } from "./services/callLog";
 import Swal from 'sweetalert2';
 
 import { useNetworkStatus } from './services/useNetworkStatus';
-import { refreshAccessToken, refreshAccessTokenWithReason } from "./services/apiClient";
+import { refreshAccessToken, refreshAccessTokenWithReason, isUserBannedResponse, showBannedAccountModal } from "./services/apiClient";
 import { api } from "./services/api";
 import { getDeviceId, getDeviceIdSync } from "./services/deviceInfo";
 import { hashPrivateKey } from "./services/keyHash";
@@ -207,6 +210,7 @@ const hasWsTokenParam = (url) => {
   }
 };
 const isRevocationLike = (status, payload) => {
+  if (isUserBannedResponse(status, payload)) return false;
   if (status === 401 || status === 403) return true;
   const msg = (payload?.error || payload?.message || "").toLowerCase();
   return msg.includes("revoke") || msg.includes("revocation") || (msg.includes("token") && msg.includes("invalid")) || msg.includes("logout");
@@ -1480,7 +1484,9 @@ useEffect(() => {
           const refreshResult = await refreshAccessTokenWithReason(host);
           token = refreshResult?.token || null;
           if (!token) {
-          
+            if (refreshResult?.banned) {
+              return;
+            }
             clearPrefStorage();
             await globalLogout();
             setInitialRoute('/login');
@@ -1556,6 +1562,12 @@ useEffect(() => {
         
                 return json.userResponse;
                 }else{
+                  if (isUserBannedResponse(response.status, json)) {
+                    await showBannedAccountModal(
+                      json?.error || json?.message || "You have been banned. If you feel this is a mistake, email the devs."
+                    );
+                    return false;
+                  }
                   if (isRevocationLike(response.status, json)) {
                     showAuthSwal("Session revoked", json.error || json.message || "Your session was revoked. Please login again.");
                   }
@@ -3551,6 +3563,7 @@ case "ice-restart-answer": {
           isNoCloseFrame;
       const authInvalid = event.code === 4400;
       const tokenExpiredCode = event.code === 4401;
+      const userBanned = event.code === 4403 || reasonText.includes("banned");
       const deviceMismatch = event.code === 4402;
       const userNotFound = event.code === 4404;
       const silentSocketClose =
@@ -3576,6 +3589,13 @@ case "ice-restart-answer": {
       }
 
       if (authInvalid || tokenExpiredCode) {
+        return;
+      }
+
+      if (userBanned) {
+        await showBannedAccountModal(
+          event.reason || "You have been banned. If you feel this is a mistake, email the devs."
+        );
         return;
       }
 
@@ -6734,6 +6754,18 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               getunread={getunread}
               resetunread={resetunread}
               selectedUser={selectedUser}/>} 
+            />
+            <Route
+              path="/echoid"
+              render={(props) => <EchoIdPage {...props} />}
+            />
+            <Route
+              path="/anonymous/create"
+              render={(props) => <AnonymousProfilePage {...props} host={host} />}
+            />
+            <Route
+              path="/anonymous/login"
+              render={(props) => <AnonymousLoginPage {...props} host={host} />}
             />
 
              <Route 

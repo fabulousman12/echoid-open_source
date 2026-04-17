@@ -10,6 +10,7 @@ import PropTypes from "prop-types";
 import StarLoader from '../pages/StarLoader';
 import Maindata from '../data';
 import { getAccessToken, setTokens, clearTokens } from "../services/authTokens";
+import { showBannedAccountModal } from "../services/apiClient";
 import { isTemporaryRuntime } from "../services/temporarySession";
 import Swal from 'sweetalert2';
 import { getDeviceInfo } from "../services/deviceInfo";
@@ -143,19 +144,9 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
         const banned = msg.includes("banned");
         const revoked = response.status === 401 || response.status === 403 || msg.includes("revoke") || msg.includes("revocation") || (msg.includes("token") && msg.includes("invalid")) || msg.includes("logout");
         if (banned) {
-          Swal.fire({
-            title: 'Account banned',
-            text: rawMessage || 'You have been banned.',
-            icon: 'error',
-            confirmButtonText: 'OK',
-            width: 320,
-            padding: '1.2rem',
-            backdrop: 'rgba(0,0,0,0.4)',
-            customClass: {
-              popup: 'mobile-alert'
-            }
-          });
-          await clearTokens();
+          await showBannedAccountModal(
+            rawMessage || 'You have been banned. If you feel this is a mistake, email the devs.'
+          );
         } else if (revoked) {
           const existingToken = await getAccessToken();
           if (existingToken) {
