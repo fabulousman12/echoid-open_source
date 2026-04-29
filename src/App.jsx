@@ -74,6 +74,7 @@ import AnonymousLoginPage from './pages/AnonymousLoginPage';
 import { IonAlert } from '@ionic/react';
 import HelpInfoChat from './pages/HelpInfoChat';
 import UpdateModal from './components/UpdateModal';
+import './AppRouteTransition.css';
 setupIonicReact();
 import { Capacitor } from '@capacitor/core';
 //import FloatingGlobal  from './components/FloatingGlobal'
@@ -85,8 +86,9 @@ import { useNetworkStatus } from './services/useNetworkStatus';
 import { refreshAccessToken, refreshAccessTokenWithReason, isUserBannedResponse, showBannedAccountModal } from "./services/apiClient";
 import { api } from "./services/api";
 import { getDeviceId, getDeviceIdSync } from "./services/deviceInfo";
+import { createEncryptedKeyPair } from "./services/privateKeyVault";
 import { hashPrivateKey } from "./services/keyHash";
-import { buildUnreadUpdate } from "./services/wsPayloads";
+import { buildUnreadUpdate, normalizeMessageIds } from "./services/wsPayloads";
 import { getAccessToken, globalLogout } from "./services/authTokens";
 import {
   getTemporaryRuntimeUser,
@@ -106,6 +108,43 @@ import {
 } from "./services/tempRoomStorage";
 
 import img from '/img.jpg';
+
+const hasValidFetchedUserShape = (user) => {
+  const resolvedId = String(user?.id || user?._id || "").trim();
+  const resolvedName = typeof user?.name === "string" ? user.name.trim() : "";
+  return Boolean(user && typeof user === "object" && resolvedId && resolvedName);
+};
+
+const buildUsersMainEntry = (user, fallback = {}) => {
+  if (!hasValidFetchedUserShape(user)) return null;
+
+  return {
+    id: String(user.id || user._id).trim(),
+    name: String(user.name || "").trim(),
+    avatar: user.profilePic || user.profilePhoto || user.avatar || img,
+    lastMessage: fallback.lastMessage || "",
+    timestamp: fallback.timestamp || user.updatedAt || new Date().toISOString(),
+    phoneNumber: user.phoneNumber || null,
+    unreadCount: Number(fallback.unreadCount || 0),
+    lastUpdated: user.lastUpdated,
+    About: user.About,
+    updatedAt: user.updatedAt,
+    DOB: user.DOB || user.dob,
+    Location: user.Location || user.location,
+    gender: user.gender,
+    publicKey: user.publicKey,
+  };
+};
+
+const MODE_TRANSITION_EXIT_MS = 180;
+const MODE_TRANSITION_ENTER_MS = 340;
+
+const isModeSwitchRoute = (pathname = "") => pathname === "/home" || pathname === "/echoid";
+
+const getSocketClientType = () => (Capacitor.isNativePlatform() ? "native" : "web");
+
+const buildSocketUrl = (token, deviceId) =>
+  `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
 
 export default function App() {
 //  //console.log('%c Is this on developing phase :' + Maindata.IsDev, 'color: blue; font-size: 15px; font-weight: bold;');
@@ -147,7 +186,6 @@ const {setSelectedUser1} = useContext(MessageContext)
   const acceptedTempRoomsRef = useRef(new Map());
   const host = `https://${Maindata.SERVER_URL}`;
  // const [initialMessageUserIds, setInitialMessageUserIds] = useState(new Set());
-//  const [unreadCounts, setUnreadCounts] = useState({});\
 const history = useHistory()
   const [messages, setMessages] = useState([]);
   const [groupMessagesByGroup, setGroupMessagesByGroup] = useState({});
@@ -209,6 +247,8 @@ const hasWsTokenParam = (url) => {
     return false;
   }
 };
+const getCurrentUserRuntimeId = (currentuserRef, currentUser) =>
+  String(currentuserRef?.current?._id || currentuserRef?.current?.id || currentUser?._id || currentUser?.id || "").trim();
 const isRevocationLike = (status, payload) => {
   if (isUserBannedResponse(status, payload)) return false;
   if (status === 401 || status === 403) return true;
@@ -398,6 +438,71 @@ useEffect(() => {
 const { connected } = useNetworkStatus();
 const [show, setShow] = useState(false);
   const [lastStatus, setLastStatus] = useState(null);
+  const location = useLocation();
+  const [displayLocation, setDisplayLocation] = useState(location);
+  const [routeTransitionStage, setRouteTransitionStage] = useState("idle");
+  const [routeTransitionDirection, setRouteTransitionDirection] = useState("none");
+  const routeTransitionTimersRef = useRef([]);
+
+  useEffect(() => {
+    return () => {
+      routeTransitionTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      routeTransitionTimersRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      location.pathname === displayLocation.pathname &&
+      location.search === displayLocation.search &&
+      location.hash === displayLocation.hash
+    ) {
+      return;
+    }
+
+    routeTransitionTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+    routeTransitionTimersRef.current = [];
+
+    const shouldAnimate =
+      isModeSwitchRoute(location.pathname) &&
+      isModeSwitchRoute(displayLocation.pathname) &&
+      location.pathname !== displayLocation.pathname;
+
+    if (!shouldAnimate) {
+      setDisplayLocation(location);
+      setRouteTransitionStage("idle");
+      setRouteTransitionDirection("none");
+      return;
+    }
+
+    setRouteTransitionDirection(location.pathname === "/echoid" ? "to-echoid" : "to-home");
+    setRouteTransitionStage("exit");
+
+    const swapTimerId = setTimeout(() => {
+      setDisplayLocation(location);
+      setRouteTransitionStage("enter");
+
+      const settleTimerId = setTimeout(() => {
+        setRouteTransitionStage("idle");
+        setRouteTransitionDirection("none");
+      }, MODE_TRANSITION_ENTER_MS);
+
+      routeTransitionTimersRef.current.push(settleTimerId);
+    }, MODE_TRANSITION_EXIT_MS);
+
+    routeTransitionTimersRef.current.push(swapTimerId);
+  }, [displayLocation, location]);
+
+  const routeModeClassName = isModeSwitchRoute(displayLocation.pathname)
+    ? displayLocation.pathname === "/echoid"
+      ? "is-echoid-mode"
+      : "is-home-mode"
+    : "is-neutral-mode";
+
+  const routeStageClassName =
+    routeTransitionStage === "idle" ? "" : `is-${routeTransitionStage}`;
+  const routeDirectionClassName =
+    routeTransitionDirection === "none" ? "" : routeTransitionDirection;
 
   useEffect(() => {
     return subscribeTemporarySession(() => {
@@ -1511,7 +1616,7 @@ useEffect(() => {
 
             setInitialRoute('/temporaryhome');
             const deviceId = getDeviceIdSync() || await getDeviceId();
-            const wsUrl = `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`;
+            const wsUrl = buildSocketUrl(token, deviceId);
             await connectTemporarySocket(wsUrl);
             setLink(wsUrl);
             return;
@@ -1545,6 +1650,12 @@ useEffect(() => {
         //  await ensureOverlayPermission();
         
           currentuserRef.current =(globalThis.storage.readJSON('currentuser', null)) ;
+          if (!hasValidFetchedUserShape(currentuserRef.current)) {
+            if (currentuserRef.current) {
+              globalThis.storage.removeItem('currentuser');
+            }
+            currentuserRef.current = null;
+          }
           //console.log("current user",currentuserRef.current._id)
           if(currentuserRef.current === null){
             try {
@@ -1554,13 +1665,18 @@ useEffect(() => {
               try {
         
                 if(response.ok && json.success){
-               // await Storage.set({ key: 'currentuser', value: JSON.stringify(json) });
-               globalThis.storage.setItem('currentuser',JSON.stringify(json.userResponse))
+               const fetchedUser = json?.userResponse || null;
+               if (!hasValidFetchedUserShape(fetchedUser)) {
+                 console.error("Invalid current user payload received", fetchedUser);
+                 globalThis.storage.removeItem('currentuser');
+                 return false;
+               }
+               globalThis.storage.setItem('currentuser',JSON.stringify(fetchedUser))
     
         
-               currentuserRef.current = json.userResponse;
+               currentuserRef.current = fetchedUser;
         
-                return json.userResponse;
+                return fetchedUser;
                 }else{
                   if (isUserBannedResponse(response.status, json)) {
                     await showBannedAccountModal(
@@ -1588,7 +1704,7 @@ useEffect(() => {
           }
     
           const deviceId = getDeviceIdSync() || await getDeviceId();
-          const wsUrl = `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`;
+          const wsUrl = buildSocketUrl(token, deviceId);
           setlocalinital(true)
             await getmessages();
             await mergerusers();
@@ -1834,12 +1950,28 @@ if (diff > 38_000 || diff < -12_000) {
     const userdet = usersMain.find(u => u.id === data.callerId);
 
     // Dispatch event
+    const currentUserId = getCurrentUserRuntimeId(currentuserRef, currentUser);
+    console.log("[incoming-call][cold-start] restoring call", {
+      callerId: data?.callerId,
+      callOnly: data?.callOnly,
+      hasOffer: Boolean(offer),
+      currentUserId,
+      hasCurrentUserRef: Boolean(currentuserRef.current),
+    });
+    if (!currentUserId) {
+      console.warn("[incoming-call][cold-start] skipped because current user is not ready", {
+        callerId: data?.callerId,
+        currentuserRef: currentuserRef.current,
+      });
+      return;
+    }
+
     window.dispatchEvent(new CustomEvent("incoming-call", {
       detail: {
         mode: "answer",
         callerId: data.callerId,
         offer: offer,
-        userId: currentuserRef.current._id,
+        userId: currentUserId,
         callOnly: data.callOnly,
         userdetail: userdet,
         Answer:true,
@@ -2258,8 +2390,75 @@ try {
 }
 }
 
+async function resolveIncomingDirectContent(data, fallback = "") {
+  const fallbackContent =
+    data?.content ||
+    data?.encryptedMessage ||
+    fallback ||
+    (data?.file_type ? `new message ${data.file_type}` : "");
 
-async function sendPublicKeyToBackend(userId) {
+  const hasEncryptedPayload =
+    data?.encryptedAESKey &&
+    data?.eniv &&
+    data?.encryptedMessage &&
+    globalThis.storage.getItem("privateKey");
+
+  if (!hasEncryptedPayload || data?.type === "file") {
+    return fallbackContent;
+  }
+
+  try {
+    return await decryptMessageHybrid(
+      data.encryptedAESKey,
+      data.eniv,
+      data.encryptedMessage,
+      globalThis.storage.getItem("privateKey")
+    );
+  } catch (error) {
+    console.error("Failed to decrypt incoming direct message, using payload fallback:", error?.message || error);
+    return fallbackContent;
+  }
+}
+
+async function deleteIncomingDirectMessageOnNative(messageId) {
+  if (!messageId || !Capacitor.isNativePlatform()) return;
+
+  try {
+    await api.deleteMessage(host, messageId);
+    console.log("? Deleted message on server after native decrypt:", messageId);
+  } catch (error) {
+    console.error("Failed to delete native direct message on server:", error?.message || error);
+  }
+}
+
+
+async function isStoredKeyPairValid(publicKeyPem, privateKeyJwkStr) {
+  const testMessage = "keypair-test";
+  const publicKey = await importPublicKeyFromPem(publicKeyPem);
+  const privateKey = await window.crypto.subtle.importKey(
+    "jwk",
+    JSON.parse(privateKeyJwkStr),
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    true,
+    ["decrypt"]
+  );
+
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    publicKey,
+    new TextEncoder().encode(testMessage)
+  );
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    privateKey,
+    encrypted
+  );
+
+  return new TextDecoder().decode(decryptedBuffer) === testMessage;
+}
+
+async function sendPublicKeyToBackend(userId, password) {
 
   console.log("we are at pulbic keys")
   const currentUserStr = globalThis.storage.getItem('currentuser');
@@ -2282,61 +2481,16 @@ async function sendPublicKeyToBackend(userId) {
 
   const publicKeyPem = currentUser?.publicKey || null;
   const privateKeyJwkStr = globalThis.storage.getItem('privateKey') || null;
-  const storedHash = currentUser?.privateKeyHash || null;
-
-
-  const testMessage = "keypair-test";
+  const storedFingerprint = currentUser?.privateKeyFingerprint || null;
 
   if (publicKeyPem && privateKeyJwkStr) {
     try {
-      const localHash = await hashPrivateKey(privateKeyJwkStr);
-      if (storedHash && storedHash === localHash) {
-        console.log("?? Existing keypair hash matches.");
-        return { message: "?? Keys exist and hash matches." };
-      }
-      if (storedHash && storedHash !== localHash) {
-        console.warn("? Private key hash mismatch. Rotating keypair.");
-        } else if (!storedHash) {
-         const res = await api.updateKey(host, publicKeyPem, localHash);
-         const json = await res.json().catch(() => ({}));
-         if (!res.ok) {
-           if (isRevocationLike(res.status, json)) {
-             showAuthSwal("Session revoked", json.error || json.message || "Your session was revoked. Please login again.");
-           }
-           throw new Error(json.error || json.message || "Failed to update key hash.");
-         }
-          if (currentUser) {
-            currentUser.privateKeyHash = localHash;
-            globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
-            globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
-          }
-          console.log("?? Stored private key hash.");
-          return { message: "?? Stored private key hash." };
+      if (await isStoredKeyPairValid(publicKeyPem, privateKeyJwkStr)) {
+        const localFingerprint = await hashPrivateKey(privateKeyJwkStr);
+        if (storedFingerprint && storedFingerprint !== localFingerprint) {
+          await globalLogout();
+          return { message: "Private key changed. Please login again." };
         }
-
-      const publicKey = await importPublicKeyFromPem(publicKeyPem);
-      const privateKey = await window.crypto.subtle.importKey(
-        "jwk",
-        JSON.parse(privateKeyJwkStr),
-        { name: "RSA-OAEP", hash: "SHA-256" },
-        true,
-        ["decrypt"]
-      );
-
-      const encrypted = await window.crypto.subtle.encrypt(
-        { name: "RSA-OAEP" },
-        publicKey,
-        new TextEncoder().encode(testMessage)
-      );
-
-      const decryptedBuffer = await window.crypto.subtle.decrypt(
-        { name: "RSA-OAEP" },
-        privateKey,
-        encrypted
-      );
-      const decrypted = new TextDecoder().decode(decryptedBuffer);
-
-      if (decrypted === testMessage && storedHash && storedHash === localHash) {
         console.log("?? Existing keypair is valid.");
         return { message: "?? Keys exist and are valid." };
       }
@@ -2345,27 +2499,14 @@ async function sendPublicKeyToBackend(userId) {
     }
   }
 
+  if (!password) {
+    console.warn("? Keypair is missing or invalid, but no password is available for encrypted rotation.");
+    return { message: "? Keypair rotation skipped because password is unavailable." };
+  }
 
-  const keyPair = await window.crypto.subtle.generateKey(
-    {
-      name: "RSA-OAEP",
-      modulusLength: 2048,
-      publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256",
-    },
-    true,
-    ["encrypt", "decrypt"]
-  );
-
-  const spki = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
-  const jwk = await window.crypto.subtle.exportKey("jwk", keyPair.privateKey);
-
-  const pem = convertSpkiToPem(spki);
-
-
-
-  const privateKeyHash = await hashPrivateKey(JSON.stringify(jwk));
-   const response = await api.updateKey(host, pem, privateKeyHash);
+  const keyBundle = await createEncryptedKeyPair(password);
+  const privateKeyFingerprint = await hashPrivateKey(keyBundle.privateKey);
+  const response = await api.updateKey(host, keyBundle.publicKey, keyBundle.privateKeyHash, privateKeyFingerprint);
    const result = await response.json().catch(() => ({}));
    if (!response.ok) {
      if (isRevocationLike(response.status, result)) {
@@ -2376,20 +2517,13 @@ async function sendPublicKeyToBackend(userId) {
 console.log("resuklt",result)
   if (result.success) {
     if (currentUser) {
-      currentUser.publicKey = pem;
-      currentUser.privateKeyHash = privateKeyHash;
-globalThis.storage.removeItem("privateKey");
-globalThis.storage.removeItem("currentuser");
-globalThis.storage.removeItem("privateKey");
-globalThis.storage.removeItem("currentuser");
-
-      console.log("pem",pem)
+      currentUser.publicKey = keyBundle.publicKey;
+      currentUser.privateKeyHash = keyBundle.privateKeyHash;
+      currentUser.privateKeyFingerprint = privateKeyFingerprint;
       globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
       globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
     }
-    globalThis.storage.setItem("privateKey", JSON.stringify(jwk));
-    console.log("jwk",jwk)
-    globalThis.storage.setItem("privateKey", JSON.stringify(jwk));
+    globalThis.storage.setItem("privateKey", keyBundle.privateKey);
     console.log("?? Keys saved locally.");
   }
 
@@ -3073,7 +3207,7 @@ useEffect(() => {
       }
       const deviceId = getDeviceIdSync() || await getDeviceId();
       const url = token
-        ? `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`
+        ? buildSocketUrl(token, deviceId)
         : null;
 
       // ? Reconnect WebSocket if needed
@@ -3225,23 +3359,14 @@ const fetchAndMergeIncomingCaller = async (callerId) => {
     const data = await response.json();
     if (!data?.success || !data?.userResponse) return null;
 
-    const { userResponse } = data;
-    const newUser = {
-      id: userResponse.id,
-      name: userResponse.name,
-      avatar: userResponse.profilePic || img,
+    const newUser = buildUsersMainEntry(data?.userResponse || null, {
       lastMessage: "",
-      timestamp: userResponse.updatedAt || new Date().toISOString(),
-      phoneNumber: userResponse.phoneNumber,
       unreadCount: 0,
-      lastUpdated: userResponse.lastUpdated,
-      About: userResponse.About,
-      updatedAt: userResponse.updatedAt,
-      DOB: userResponse.DOB,
-      Location: userResponse.Location,
-      gender: userResponse.gender,
-      publicKey: userResponse.publicKey
-    };
+    });
+    if (!newUser) {
+      console.error("Skipping invalid fetched caller payload", data?.userResponse);
+      return null;
+    }
 
     const latestUsers = globalThis.storage.readJSON('usersMain', []) || [];
     const alreadyExists = latestUsers.some((u) => String(u.id) === callerKey);
@@ -3386,6 +3511,14 @@ await LocalNotifications.schedule({
     return; // ? DO NOT open JS UI now
   }
 
+    console.log("[incoming-call][ui] opening incoming call UI", {
+      callerId: e.detail?.callerId,
+      userId: e.detail?.userId,
+      autostart: e.detail?.Autostart,
+      isActive: isAcitve.current,
+      hasUserDetail: Boolean(userdet),
+    });
+
  
     CallRuntime.set({
       mode: "answer",
@@ -3402,6 +3535,133 @@ await LocalNotifications.schedule({
   return () => window.removeEventListener("incoming-call", handleIncoming);
 }, [usersMain]);
 
+
+const sendReadReceiptUpdate = async ({ messageIds, sender, recipient, fileType }) => {
+  const normalizedMessageIds = normalizeMessageIds(messageIds);
+  if (!normalizedMessageIds.length || !sender) return;
+
+  const updatePayload = {
+    ...buildUnreadUpdate({ messageIds: normalizedMessageIds, sender, recipient }),
+    ...(fileType ? { fileType } : {}),
+  };
+
+  if (!Capacitor.isNativePlatform()) {
+    try {
+      await api.markReadWeb(host, {
+        messageIds: normalizedMessageIds,
+        sender,
+        recipient,
+        ...(fileType ? { fileType } : {}),
+      });
+      return;
+    } catch (error) {
+      console.warn("Web mark-read endpoint failed, falling back to websocket update:", error?.message || error);
+    }
+  }
+
+  if (socket.current?.readyState === WebSocket.OPEN) {
+    socket.current.send(JSON.stringify({ updatePayload }));
+  }
+};
+
+const isSelectedActiveDirectSender = (sender) =>
+  sender &&
+  selectedUser.current &&
+  String(sender) === String(selectedUser.current) &&
+  isAcitve.current === true;
+
+const mergeMessagesById = (existingMessages = [], incomingMessages = []) => {
+  const merged = Array.isArray(existingMessages) ? [...existingMessages] : [];
+  const seenIds = new Set(merged.map((message) => message?.id || message?.messageId).filter(Boolean));
+
+  incomingMessages.forEach((message) => {
+    const messageId = message?.id || message?.messageId;
+    if (!messageId || seenIds.has(messageId)) return;
+    seenIds.add(messageId);
+    merged.push(message);
+  });
+
+  return merged;
+};
+
+const appendDirectMessagesToState = (incomingMessages) => {
+  const messagesToAdd = (Array.isArray(incomingMessages) ? incomingMessages : [incomingMessages]).filter(Boolean);
+  if (!messagesToAdd.length) return;
+
+  messagesRef.current = mergeMessagesById(messagesRef.current || [], messagesToAdd);
+
+  setMessages((prevMessages) => mergeMessagesById(prevMessages, messagesToAdd));
+  setMessagestest((prevMessages) => mergeMessagesById(prevMessages, messagesToAdd));
+};
+
+const persistUsersMainState = (users) => {
+  const nextUsers = Array.isArray(users) ? [...users] : [];
+  globalThis.storage.setItem('usersMain', JSON.stringify(nextUsers));
+  setUsersMain(nextUsers);
+  setUsersMaintest(nextUsers);
+  return nextUsers;
+};
+
+const getMessagePeerId = (message, currentUserId) => {
+  const sender = String(message?.sender || "");
+  const recipient = String(message?.recipient || "");
+  const current = String(currentUserId || currentuserRef.current?._id || "");
+  return sender === current ? recipient : sender;
+};
+
+const buildChatSyncPayload = ({ chatLimit = 20, messageLimit = 30 } = {}) => {
+  const normalizedChatLimit = Math.min(100, Math.max(1, Number(chatLimit) || 20));
+  const normalizedMessageLimit = Math.min(100, Math.max(1, Number(messageLimit) || 30));
+  const allUsers = globalThis.storage.readJSON('usersMain', []) || [];
+  const selectedUsers = [...allUsers]
+    .filter((user) => user?.id || user?._id)
+    .sort((a, b) => new Date(b?.timestamp || b?.updatedAt || 0) - new Date(a?.timestamp || a?.updatedAt || 0))
+    .slice(0, normalizedChatLimit);
+  const selectedUserIds = new Set(selectedUsers.map((user) => String(user.id || user._id)));
+  const currentUserId = currentuserRef.current?._id;
+  const allMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+  const messagesByPeer = new Map();
+
+  allMessages.forEach((message) => {
+    const peerId = getMessagePeerId(message, currentUserId);
+    if (!selectedUserIds.has(String(peerId))) return;
+    if (!messagesByPeer.has(peerId)) messagesByPeer.set(peerId, []);
+    messagesByPeer.get(peerId).push(message);
+  });
+
+  const messagesToSync = [];
+  messagesByPeer.forEach((peerMessages) => {
+    messagesToSync.push(
+      ...peerMessages
+        .sort((a, b) => new Date(b?.timestamp || 0) - new Date(a?.timestamp || 0))
+        .slice(0, normalizedMessageLimit)
+    );
+  });
+
+  return {
+    usersMain: selectedUsers,
+    messages: messagesToSync,
+  };
+};
+
+const applyChatSyncPayload = ({ usersMain: incomingUsers = [], messages: incomingMessages = [] } = {}) => {
+  const storedUsers = globalThis.storage.readJSON('usersMain', []) || [];
+  const userMap = new Map(storedUsers.map((user) => [String(user?.id || user?._id || ""), user]));
+  incomingUsers.forEach((user) => {
+    const id = String(user?.id || user?._id || "");
+    if (!id) return;
+    userMap.set(id, { ...(userMap.get(id) || {}), ...user, id });
+  });
+  persistUsersMainState([...userMap.values()]);
+
+  const storedMessages = globalThis.storage.readJSON('messages', []) || [];
+  const mergedMessages = mergeMessagesById(storedMessages, incomingMessages);
+  globalThis.storage.setItem('messages', JSON.stringify(mergedMessages));
+  appendDirectMessagesToState(incomingMessages);
+};
+
+const getUpdateMessageIds = (payload = {}) =>
+  normalizeMessageIds(payload.messageIds ?? payload.messageId ?? payload.id);
 
 const connect = async (url) => {
     if (!socket.current || socket.current.readyState === WebSocket.CLOSED) {
@@ -3444,11 +3704,27 @@ const connect = async (url) => {
     }
     /* ?? Caller sent offer ? this becomes incoming-call event */
     case "incoming-call": {
+      const currentUserId = getCurrentUserRuntimeId(currentuserRef, currentUser);
+      console.log("[ws][incoming-call] payload received", {
+        callerId: data?.callerId,
+        callOnly: data?.callOnly,
+        hasOffer: Boolean(data?.offer),
+        currentUserId,
+        hasCurrentUserRef: Boolean(currentuserRef.current),
+      });
+      if (!currentUserId) {
+        console.warn("[ws][incoming-call] dropped because current user is not ready", {
+          payload: data,
+          currentuserRef: currentuserRef.current,
+        });
+        break;
+      }
+
       window.dispatchEvent(new CustomEvent("incoming-call", {
         detail: {
           callerId: data.callerId,
           offer: data.offer,
-          userId: currentuserRef.current._id,
+          userId: currentUserId,
           callOnly:data.callOnly,
           Answer: false,
         }
@@ -3580,7 +3856,7 @@ case "ice-restart-answer": {
 
         if (newToken && isAcitve.current) {
           const deviceId = getDeviceIdSync() || await getDeviceId();
-          const newUrl = `wss://${Maindata.SERVER_URL}?token=${newToken}&deviceId=${encodeURIComponent(deviceId)}`;
+          const newUrl = buildSocketUrl(newToken, deviceId);
           setLink(newUrl);
           connect(newUrl);
           return;
@@ -4112,6 +4388,49 @@ case "ice-restart-answer": {
         );
         return;
       }
+      if (data?.type === "chat-sync-request") {
+        if (!Capacitor.isNativePlatform()) return;
+        const chatLimit = Math.min(100, Math.max(1, Number(data.chatLimit || 20)));
+        const messageLimit = Math.min(100, Math.max(1, Number(data.messageLimit || 30)));
+        const result = await Swal.fire({
+          title: "Sync chats to web?",
+          text: `Send ${chatLimit} chats with about ${messageLimit} messages each to device ${data.requesterDeviceId || "web"}?`,
+          icon: "question",
+          showCancelButton: true,
+          confirmButtonText: "Send",
+          cancelButtonText: "Deny",
+          width: 320,
+          customClass: { popup: "mobile-alert" },
+        });
+
+        const response = {
+          type: "chat-sync-response",
+          requestId: data.requestId,
+          accepted: Boolean(result.isConfirmed),
+          ...(result.isConfirmed ? buildChatSyncPayload({ chatLimit, messageLimit }) : { message: "Denied on native device" }),
+        };
+        if (socket.current?.readyState === WebSocket.OPEN) {
+          socket.current.send(JSON.stringify(response));
+        }
+        return;
+      }
+      if (data?.type === "chat-sync-response") {
+        if (data.accepted === false) {
+          await Swal.fire("Chat sync denied", data.message || "Native device denied the request.", "info");
+          return;
+        }
+        applyChatSyncPayload(data);
+        await Swal.fire("Chats imported", "Synced chats from your native device.", "success");
+        return;
+      }
+      if (data?.type === "chat-sync-offline") {
+        await Swal.fire("Native device offline", data.message || "Open EchoId on your phone and try again.", "info");
+        return;
+      }
+      if (data?.type === "chat-sync-error") {
+        await Swal.fire("Chat sync failed", data.message || "Could not sync chats.", "error");
+        return;
+      }
       if (isPlatform('hybrid')) {
         console.log(JSON.stringify(dbRef.current))
         if (!dbRef.current) {
@@ -4216,7 +4535,7 @@ case "ice-restart-answer": {
         const refreshedToken = await refreshAccessToken(host);
         if (refreshedToken) {
           const deviceId = getDeviceIdSync() || await getDeviceId();
-          reconnectUrl = `wss://${Maindata.SERVER_URL}?token=${refreshedToken}&deviceId=${encodeURIComponent(deviceId)}`;
+          reconnectUrl = buildSocketUrl(refreshedToken, deviceId);
           temporarySocketUrlRef.current = reconnectUrl;
           console.warn("Temporary WebSocket token refreshed after disconnect");
         }
@@ -4291,8 +4610,9 @@ case "ice-restart-answer": {
         if (normalizedUpdatePayload.type === 'update' && normalizedUpdatePayload.updateType === 'status') {
           console.log("Status update received: ", data);
         
-          const { messageIds = [], status = 'sent' } = normalizedUpdatePayload;
-          if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+          const messageIds = getUpdateMessageIds(normalizedUpdatePayload);
+          const { status = 'sent' } = normalizedUpdatePayload;
+          if (messageIds.length === 0) return;
         
           // 1. Update SQLite directly
           const updateQuery = `
@@ -4331,8 +4651,8 @@ case "ice-restart-answer": {
         if (normalizedUpdatePayload.type === 'update' && normalizedUpdatePayload.updateType === 'unread') {
        
         
-          const { messageIds = [] } = normalizedUpdatePayload;
-          if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+          const messageIds = getUpdateMessageIds(normalizedUpdatePayload);
+          if (messageIds.length === 0) return;
           if(!db){
             await initSQLiteDB();
           }
@@ -4383,46 +4703,28 @@ console.log("Initial messages received:", data);
         // Retrieve saved messages from SQLite
     
 const newMessages = androidMessages.filter(
-          msg => !messagesRef.current.some(existingMsg => existingMsg.id === msg.id)
+          msg => !(messagesRef.current || []).some(existingMsg => existingMsg.id === msg.id)
+        );
+
+        const duplicateInitialMessages = androidMessages.filter(
+          msg => (messagesRef.current || []).some(existingMsg => existingMsg.id === msg.id)
+        );
+        await Promise.all(
+          duplicateInitialMessages.map((message) => deleteIncomingDirectMessageOnNative(message.id))
         );
 
         
         // 2. Save all processed messages into SQLite
-        const privateKeyPem = globalThis.storage.getItem('privateKey'); // Must be stored locally
-        const initialUsersMain = globalThis.storage.readJSON('usersMain', []) || [];
+        let initialUsersMain = globalThis.storage.readJSON('usersMain', []) || [];
         for (const message of newMessages) {
 
-          let decryptedContent = " new message " + message.file_type
-          if(message.type !=='file'){
-            console.log("Trying to decrypt message:", {
-    encryptedAESKey: message.encryptedAESKey,
-    eniv: message.eniv,
-    encryptedMessage: message.encryptedMessage,
-  });
- decryptedContent  = await decryptMessageHybrid(
-  message.encryptedAESKey,
-  message.eniv,
-  message.encryptedMessage,
-  privateKeyPem
-  );
-          }
+          let decryptedContent = await resolveIncomingDirectContent(message, " new message " + message.file_type);
           console.log("message",message)
 
           if (decryptedContent) {
             message.encryptedMessage = decryptedContent;
             message.content = decryptedContent;
           }
-
-          if (decryptedContent) {
-            try {
-              await api.deleteMessage(host, message.id);
-              console.log("? Deleted message on server after decrypt:", message.id);
-            } catch (error) {
-              console.error("Failed to delete message on server:", error?.message || error);
-            }
-          }
-
-          await storeMessageInSQLite(db, message);
 
           const isSenderInInitialUsersMain = initialUsersMain.some(user => user.id === message.sender);
           if (!isSenderInInitialUsersMain) {
@@ -4450,9 +4752,7 @@ const newMessages = androidMessages.filter(
                 };
 
                 initialUsersMain.push(newUser);
-                globalThis.storage.setItem('usersMain', JSON.stringify(initialUsersMain));
-                setUsersMain(initialUsersMain);
-                setUsersMaintest(initialUsersMain);
+                initialUsersMain = persistUsersMainState(initialUsersMain);
               }
 
             } catch (error) {
@@ -4460,28 +4760,27 @@ const newMessages = androidMessages.filter(
             }
           }
 
-        
-            if (message.sender === selectedUser.current && isAcitve.current === true) {
-              message.read = 1; // Mark as read for the selected user
+          if (isSelectedActiveDirectSender(message.sender)) {
+            message.read = 1; // Mark as read for the selected user
+            await sendReadReceiptUpdate({
+              messageIds: message.id,
+              sender: message.sender,
+              recipient: message.recipient,
+              fileType: message.type === 'file' ? 'file' : undefined,
+            });
+          } else {
+            message.read = 0; // Mark as unread for others
+            if (isnotmute && message.sender && !mutedlist.includes(message.sender)) {
+              //console.log("new message received",message.sender)
+              if (message.type === 'file') {
+                message.content = "New file received" + " " + message.file_type;
+              }
+              showCustomNotification(message); // Show notification for unread messages
             }
-            else {
-              message.read = 0; // Mark as unread for others
-              if(isnotmute){
-                if (message.sender && !mutedlist.includes(message.sender)) {
-                  //console.log("new message received",message.sender)
+          }
 
-                  if(message.type === 'file'){
-                    message.content = "New file received"+ " " + message.file_type;
-                  }
-                  showCustomNotification(message); // Show notification for unread messages
-              // Shw notification
-          //    showCustomNotification(message);
-            
-            
-          }
-        }
-            
-          }
+          await storeMessageInSQLite(db, message);
+          await deleteIncomingDirectMessageOnNative(message.id);
         }
         
         //     const newMessages = androidMessages.map(message => {
@@ -4522,9 +4821,7 @@ const newMessages = androidMessages.filter(
         });
     
         // Update the local state with the new messages
-        setMessages(prevMessages => [...prevMessages, ...newMessages]);
-        setMessagestest(prevMessages => [...prevMessages, ...newMessages]);
-        messagesRef.current = [...messagesRef.current, ...newMessages];
+        appendDirectMessagesToState(newMessages);
     
         // Set user IDs, unread counts, and latest message timestamps
         // setInitialMessageUserIds(userIds);
@@ -4532,7 +4829,7 @@ const newMessages = androidMessages.filter(
         setLatestMessageTimestamps(latestMessageTimestampsMap);
     
         // Fetch usersMain array from localStorage
-        const userMainArray = globalThis.storage.readJSON('usersMain', []) || [];
+        let userMainArray = globalThis.storage.readJSON('usersMain', []) || [];
     
         // Add new users from the messages if they don't already exist
         for (let msg of newMessages) {
@@ -4563,9 +4860,7 @@ const newMessages = androidMessages.filter(
               return user; // Keep the rest of the users unchanged
             });
       
-            globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-            setUsersMain(updatedUsers);
-            setUsersMaintest(updatedUsers);
+            userMainArray = persistUsersMainState(updatedUsers);
           }
         }
     
@@ -4583,25 +4878,10 @@ const newMessages = androidMessages.filter(
         const isSenderInUserMain = userMainArray.some(user => user.id === sender);
    
 
-                  const privateKeyPem = globalThis.storage.getItem('privateKey');
-              const decryptedContent =  await decryptMessageHybrid(
-  data.encryptedAESKey,
-  data.eniv,
-  data.encryptedMessage,
-  privateKeyPem
-);
+                  const decryptedContent = await resolveIncomingDirectContent(data);
 console.log("decrypted content",decryptedContent)
 
-        if (decryptedContent) {
-          try {
-            await api.deleteMessage(host, id);
-            console.log("? Deleted message on server after decrypt:", id);
-          } catch (error) {
-            console.error("Failed to delete message on server:", error?.message || error);
-          }
-        }
-
-
+        await deleteIncomingDirectMessageOnNative(id);
 
         if (!isSenderInUserMain) {
           try {
@@ -4634,10 +4914,7 @@ console.log("decrypted content",decryptedContent)
                 .filter((user, index, self) => index === self.findIndex((u) => u.id === user.id)); // Ensure no duplicates
 
               // Update localStorage and state
-              globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-                globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-              setUsersMain(updatedUsers);
-              setUsersMaintest(updatedUsers);
+              persistUsersMainState(updatedUsers);
             }
           } catch (error) {
             console.error("Error in fetching new user:", error);
@@ -4645,19 +4922,15 @@ console.log("decrypted content",decryptedContent)
         }
         
         // Handle read status based on whether the sender is the selected user
-        if (sender === selectedUser.current &&  isAcitve.current === true) {
+        if (isSelectedActiveDirectSender(sender)) {
           console.log("lets try")
           updatedReadStatus = 1;
           
-            const updatePayload = buildUnreadUpdate({
+            await sendReadReceiptUpdate({
               messageIds: id,
               sender,
               recipient
             });
-
-          
-          
-          socket.current.send(JSON.stringify({ updatePayload }));
         } else {
         
          if(isnotmute){
@@ -4740,17 +5013,11 @@ const updatedUsers = afterusermainarray.map(user => {
 // //console.log('Before updating localStorage:', globalThis.storage.getItem('usersMain'));
 
 // After updating localStorage
- globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
+        persistUsersMainState(updatedUsers);
 //console.log('After updating localStorage:', globalThis.storage.getItem('usersMain'));
-
-
-        setUsersMain(updatedUsers);
-        setUsersMaintest(updatedUsers);
       
         // Update the messages in state and localStorage
-        setMessages(prevMessages => [...prevMessages, newMessage]);
-        setMessagestest(prevMessages => [...prevMessages, newMessage]);
-        messagesRef.current = [...messagesRef.current, newMessage];
+        appendDirectMessagesToState(newMessage);
         
         // Save the message to SQLite
         //console.log("new message",JSON.stringify(newMessage))
@@ -4813,10 +5080,8 @@ const userMainArray =  globalThis.storage.readJSON('usersMain', []) ||[];
       //console.log("updatedUsers",updatedUsers)
               // Update localStorage and state with updated users
               //console.log("before udpate",globalThis.storage.readJSON('', null))
-              globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
+              persistUsersMainState(updatedUsers);
               //console.log("after udpate",globalThis.storage.readJSON('', null))
-              setUsersMain(updatedUsers);
-              setUsersMaintest(updatedUsers);
             }
 
    
@@ -4825,15 +5090,10 @@ const userMainArray =  globalThis.storage.readJSON('usersMain', []) ||[];
           }
         }
            var read = null;
-          if(sender === selectedUser.current){
+          if(isSelectedActiveDirectSender(sender)){
             read = 1
-              const updatePayload = {
-                ...buildUnreadUpdate({ messageIds: id, sender, recipient }),
-                fileType: 'file'
-              };
-
           try {
-              socket.current.send(JSON.stringify({ updatePayload }));
+              await sendReadReceiptUpdate({ messageIds: id, sender, recipient, fileType: 'file' });
            
             } catch (err) {
               console.error("WebSocket send failed", err);
@@ -4912,15 +5172,10 @@ const updatedUsers = afterusermainarray.map(user => {
 // //console.log('Before updating localStorage:', globalThis.storage.getItem('usersMain'));
 
 // After updating localStorage
- globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
- 
-        setUsersMain(updatedUsers);
-        setUsersMaintest(updatedUsers);
+        persistUsersMainState(updatedUsers);
  //Check if the new message already exists by ID
        
-           setMessages(prevMessages => [...prevMessages, newMessage]);
-        setMessagestest(prevMessages => [...prevMessages, newMessage]);
-          messagesRef.current = [...messagesRef.current, newMessage]; // Add new message if not duplicate
+        appendDirectMessagesToState(newMessage);
       
   try{
 
@@ -5041,9 +5296,9 @@ const normalizedUpdatePayload =
     : data;
 
 if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateType === "status") {
-  const { messageIds = [] } = normalizedUpdatePayload;
+  const messageIds = getUpdateMessageIds(normalizedUpdatePayload);
   const status = normalizedUpdatePayload.status || 'sent'; // Default to 'sent' if status is not provided  
-  if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+  if (messageIds.length === 0) return;
 
   //console.log("Status update received: ", messageIds, "New Status:", status);
 
@@ -5084,8 +5339,8 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
       if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateType === "unread") {
      
 
-        const { messageIds = [] } = normalizedUpdatePayload;
-        if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+        const messageIds = getUpdateMessageIds(normalizedUpdatePayload);
+        if (messageIds.length === 0) return;
         //console.log("Update message unread received: ", messageIds);
         // Fetch and update messages in localStorage
         const storedMessages = globalThis.storage.readJSON("messages", []);
@@ -5136,7 +5391,6 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
         //console.log("Initial messages received: ", androidMessages);
         const storedMessages = globalThis.storage.readJSON('messages', []);
         let savedMessages = Array.isArray(storedMessages) ? storedMessages : [];
-        const privatekey = globalThis.storage.getItem('privateKey');
         // Filter out any messages already saved to avoid duplicates
         const filteredMessages = savedMessages.filter((msg) => {
           const msgId = msg?.id || msg?.messageId;
@@ -5148,34 +5402,18 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
           if (!normalizedId) continue;
           message.id = normalizedId;
 
-          let decryptedMessage = message.content || message.encryptedMessage || (`new message ${message.file_type || ''}`);
-          const hasEncryptedPayload =
-            message.type !== 'file' &&
-            privatekey &&
-            message.encryptedAESKey &&
-            message.eniv &&
-            message.encryptedMessage;
-
-          if (hasEncryptedPayload) {
-            try {
-              decryptedMessage = await decryptMessageHybrid(
-                message.encryptedAESKey,
-                message.eniv,
-                message.encryptedMessage,
-                privatekey
-              );
-
-              await api.deleteMessage(host, message.id);
-              console.log("? Deleted message on server after decrypt:", message.id);
-            } catch (error) {
-              console.error("Failed to decrypt/delete initial message:", message?.id, error?.message || error);
-            }
-          }
+          let decryptedMessage = await resolveIncomingDirectContent(message, `new message ${message.file_type || ''}`);
 
           message.encryptedMessage = decryptedMessage;
           message.content = decryptedMessage;
 
-          if (message.sender === selectedUser.current) {
+          if (isSelectedActiveDirectSender(message.sender)) {
+            await sendReadReceiptUpdate({
+              messageIds: message.id,
+              sender: message.sender,
+              recipient: message.recipient,
+              fileType: message.type === 'file' ? 'file' : undefined,
+            });
             processedMessages.push({ ...message, read: 1 });
           } else {
             // Show notification for messages not from the selected user
@@ -5208,9 +5446,7 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
         // ? Add this console to check if the messages were saved
         //console.log(`Messages after saving (${newMessages.length} new):`, savedMessages);
         // Update local state for messages
-        setMessages(prevMessages => [...prevMessages, ...newMessages]);
-        setMessagestest(prevMessages => [...prevMessages, ...newMessages]);
-        messagesRef.current = [...messagesRef.current, ...newMessages];
+        appendDirectMessagesToState(newMessages);
 
         const unreadCountsMap = new Map();
         const userIds = new Set();
@@ -5235,7 +5471,7 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
         globalThis.storage.setItem('unreadCounts', JSON.stringify(unreadCounts));
      
         // Now handle the addition of new users for each initial message sender if they aren't in userMain
-        const userMainArray = globalThis.storage.readJSON('usersMain', []) || [];
+        let userMainArray = globalThis.storage.readJSON('usersMain', []) || [];
         
         for (let msg of newMessages) {
           const isSenderInUserMain = userMainArray.some(user => isSameUserId(user, msg.sender));
@@ -5274,9 +5510,7 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
                 );
             
                 // Update the usersMain in localStorage and state
-                globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-                setUsersMain(updatedUsers);
-                setUsersMaintest(updatedUsers);  // Assuming Zustand or another state management library
+                userMainArray = persistUsersMainState(updatedUsers);
                //console.log("zustand list",usersMaintest)
               }
       
@@ -5304,9 +5538,7 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
               }
               return user; // Keep the rest of the users unchanged
             });
-            globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
-            setUsersMain(updatedUsers);
-            setUsersMaintest(updatedUsers);
+            userMainArray = persistUsersMainState(updatedUsers);
           }
         }
       }
@@ -5321,23 +5553,8 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
         const usersFromStorage = globalThis.storage.readJSON('usersMain', []) || [];
         const userMainArray = Array.isArray(usersMain) && usersMain.length > 0 ? usersMain : usersFromStorage;
         const isSenderInUserMain = userMainArray.some(user => isSameUserId(user, sender));
-        const privateKey = globalThis.storage.getItem('privateKey');
-          const decryptedMessage = await decryptMessageHybrid(
-  data.encryptedAESKey,
-  data.eniv,
-  data.encryptedMessage,
-  privateKey
-);
+        const decryptedMessage = await resolveIncomingDirectContent(data);
 console.log("decrypt",decryptedMessage)
-    if (decryptedMessage) {
-          try {
-            await api.deleteMessage(host, id);
-            console.log("? Deleted message on server after decrypt:", id);
-          } catch (error) {
-            console.error("Failed to delete message on server:", error?.message || error);
-          }
-        }
-                     
         if (!isSenderInUserMain) {
           try {
             //console.log("we runnig not presnet user ")
@@ -5375,10 +5592,8 @@ console.log("decrypt",decryptedMessage)
       //console.log("updatedUsers",updatedUsers)
               // Update localStorage and state with updated users
               //console.log("before udpate",globalThis.storage.readJSON('', null))
-              globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
+              persistUsersMainState(updatedUsers);
               //console.log("after udpate",globalThis.storage.readJSON('', null))
-              setUsersMain(updatedUsers);
-              setUsersMaintest(updatedUsers);
             }
 
    
@@ -5388,15 +5603,11 @@ console.log("decrypt",decryptedMessage)
         }
       //console.log("selected user",selectedUser.current)
         // Handle the read status based on whether the sender is the selected user
-        if (sender === selectedUser.current && isAcitve.current === true) {
+        if (isSelectedActiveDirectSender(sender)) {
           
           updatedReadStatus = 1;
       
-            const updatePayload = buildUnreadUpdate({ messageIds: id, sender, recipient });
-          console.log("updatePayload",updatePayload)
-          //console.log("socket",socket.current)
-      
-          socket.current.send(JSON.stringify({ updatePayload }));
+            await sendReadReceiptUpdate({ messageIds: id, sender, recipient });
         } else {
           //console.log("muted list",mutedlist)
        if(isnotmute){
@@ -5420,6 +5631,15 @@ console.log("decrypt",decryptedMessage)
          
           updatedReadStatus = 0;
         }
+
+        const storedUnreadCounts = globalThis.storage.readJSON('unreadCounts', {}) || {};
+        const nextUnreadCounts = {
+          ...storedUnreadCounts,
+          [sender]: updatedReadStatus === 0
+            ? Number(storedUnreadCounts[sender] || 0) + 1
+            : 0,
+        };
+        globalThis.storage.setItem('unreadCounts', JSON.stringify(nextUnreadCounts));
       
         const newMessage = {
           id,
@@ -5476,16 +5696,8 @@ console.log("decrypt",decryptedMessage)
         // Update localStorage and state with the updated user list
         // Before updating localStorage
 
-globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
+        persistUsersMainState(updatedUsers);
 //console.log('After updating localStorage:', globalThis.storage.getItem('usersMain'));
-
-
-// After updating localStorage
-
-
-
-        setUsersMain(updatedUsers);
-        setUsersMaintest(updatedUsers);
         
       
         // Update the messages array in localStorage
@@ -5495,9 +5707,7 @@ globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
         ];
       
         // Update messages in state and localStorage
-        setMessages(prevMessages => [...prevMessages, newMessage]);
-        setMessagestest(prevMessages => [...prevMessages, newMessage]);
-        messagesRef.current = [...messagesRef.current, newMessage];
+        appendDirectMessagesToState(newMessage);
      
 
         globalThis.storage.setItem('messages', JSON.stringify(updatedMessages));
@@ -5553,10 +5763,8 @@ globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
       //console.log("updatedUsers",updatedUsers)
               // Update localStorage and state with updated users
               //console.log("before udpate",globalThis.storage.readJSON('', null))
-              globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
+              persistUsersMainState(updatedUsers);
               //console.log("after udpate",globalThis.storage.readJSON('', null))
-              setUsersMain(updatedUsers);
-              setUsersMaintest(updatedUsers);
             }
 
    
@@ -5567,24 +5775,11 @@ globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
           var read = 0;
       
           // Check if sender is the selected user
-          if (sender === selectedUser.current) {
+          if (isSelectedActiveDirectSender(sender)) {
             read = 1;
       
-            // Prepare update payload
-            const updatePayload = {
-              type: 'update',
-              updateType: 'unread',
-              fileType: 'file',
-              messageIds: [id],
-              sender: sender,
-              recipient: recipient,
-            };
-      
-            //console.log("updatePayload for file", updatePayload);
-      
-            // Send update to WebSocket
             try {
-              socket.current.send(JSON.stringify({ updatePayload }));
+              await sendReadReceiptUpdate({ messageIds: [id], sender, recipient, fileType: 'file' });
               //console.log("WebSocket send success");
             } catch (err) {
               console.error("WebSocket send failed", err);
@@ -5641,9 +5836,7 @@ globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
           //console.log("newMessage to add:", newMessage);
       
           // Update messagesRef
-          setMessages(prevMessages => [...prevMessages, newMessage]);
-          setMessagestest(prevMessages => [...prevMessages, newMessage]);
-          messagesRef.current = [...messagesRef.current, newMessage];
+          appendDirectMessagesToState(newMessage);
       
           // Save updated messages to localStorage
           globalThis.storage.setItem('messages', JSON.stringify(updatedMessages));
@@ -5791,7 +5984,7 @@ if(message.type === 'file'){
     } else {
       const token = await getAccessToken();
             const deviceId = getDeviceIdSync() || await getDeviceId();
-            const wsUrl = `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`;
+            const wsUrl = buildSocketUrl(token, deviceId);
 
          
           await connect(wsUrl);
@@ -6391,8 +6584,11 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 )}
 
 
-
-          <Switch>
+          <div
+            className={`app-route-stage ${routeModeClassName} ${routeStageClassName} ${routeDirectionClassName}`.trim()}
+          >
+            <div className="app-route-stage__veil" aria-hidden="true" />
+            <Switch location={displayLocation}>
             <Route 
               path="/home" 
               render={(props) => <HomeScreen {...props} link={link} storage={store}     messages={messages}
@@ -6757,7 +6953,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
             />
             <Route
               path="/echoid"
-              render={(props) => <EchoIdPage {...props} />}
+              render={(props) => <EchoIdPage {...props} host={host} />}
             />
             <Route
               path="/anonymous/create"
@@ -6832,7 +7028,8 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
  
 
             <Redirect from="/" to={initialRoute} />
-          </Switch>
+            </Switch>
+          </div>
 
 
       </MessageProvider>
@@ -6840,6 +7037,7 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   );
 }
 }
+
 
 
 

@@ -308,6 +308,7 @@ const[isDownloading,setisDownloading] = useState(false)
 const [isArchive,setIsarcivehs]=useState(false);
     const buttonRef = useRef(null);
     const [showOptions, setShowOptions] = useState(false);
+    const [showThreadMenu, setShowThreadMenu] = useState(false);
     const [fileUploadError, setFileUploadError] = useState(false);
     const [fileDownloadError, setFileDownloadError] = useState(false);
 const [prodilepicBIg,setprodilepicBIg]=useState(false);
@@ -334,10 +335,12 @@ const [selectionModeFile, setSelectionModeFile] = useState(false);
     // const CustomBellIcon = SettingsIcon;
 const topMessageRef = useRef(null);
 const replyGlowTimeoutRef = useRef(null);
+const threadMenuRef = useRef(null);
 const [glowMessageId, setGlowMessageId] = useState(null);
 const [replyTargetMessage, setReplyTargetMessage] = useState(null);
 const nearBottomRef = useRef(true);
 const prevMessageCountRef = useRef(0);
+const readReceiptInFlightRef = useRef(new Set());
 const swipeReplyRef = useRef({
   activeId: null,
   startX: 0,
@@ -398,6 +401,23 @@ useEffect(() => {
     selectedUser.current = userdetails.id;
   }
 }, [selectedUser, userdetails?.id]);
+
+useEffect(() => {
+  if (!showThreadMenu) return undefined;
+
+  const handleOutsideClick = (event) => {
+    if (!threadMenuRef.current?.contains(event.target)) {
+      setShowThreadMenu(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleOutsideClick);
+  document.addEventListener("touchstart", handleOutsideClick);
+  return () => {
+    document.removeEventListener("mousedown", handleOutsideClick);
+    document.removeEventListener("touchstart", handleOutsideClick);
+  };
+}, [showThreadMenu]);
 
 let pressTimer = useRef(null);
 //const [isPaused, setIsPaused] = useState(false);
@@ -1228,11 +1248,20 @@ console.log("sending message culprit?",JSON.stringify(sentmsg))
             
             if (filteredMessages.length > 0) {
            
-              const unreadMessages = filteredMessages.filter((msg) => msg.read === 0 && msg.sender === userdetails.id);
+              const unreadMessages = filteredMessages.filter((msg) => {
+                const id = msg?.id;
+                return (
+                  id &&
+                  msg.read === 0 &&
+                  msg.sender === userdetails.id &&
+                  !readReceiptInFlightRef.current.has(id)
+                );
+              });
           
 
              
               if (unreadMessages.length > 0) {
+                unreadMessages.forEach((msg) => readReceiptInFlightRef.current.add(msg.id));
                 
                 const pairs = new Map();
                 unreadMessages.forEach((msg) => {
@@ -1243,7 +1272,7 @@ console.log("sending message culprit?",JSON.stringify(sentmsg))
                   pairs.get(pairKey).messageIds.push(msg.id);
                 });
   
-                pairs.forEach(({ sender, recipient, messageIds }) => {
+                pairs.forEach(async ({ sender, recipient, messageIds }) => {
                   const updatePayload = buildUnreadUpdate({
                     messageIds,
                     sender,
@@ -1252,12 +1281,26 @@ console.log("sending message culprit?",JSON.stringify(sentmsg))
               
 //console.log("unread message from chatwindf")
               
-                  // Send update type message through WebSocket
-                  socket.send(
-                    JSON.stringify({
-                      updatePayload,
-                    })
-                  );
+                  if (!Capacitor.isNativePlatform()) {
+                    try {
+                      await api.markReadWeb(host || `https://${Maindata.SERVER_URL}`, {
+                        messageIds,
+                        sender,
+                        recipient,
+                      });
+                      return;
+                    } catch (error) {
+                      console.warn("Web mark-read endpoint failed, falling back to websocket update:", error?.message || error);
+                    }
+                  }
+
+                  if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(
+                      JSON.stringify({
+                        updatePayload,
+                      })
+                    );
+                  }
                 });
           
                 // Check the platform (Android, iOS, or Hybrid) and update accordingly
@@ -1529,6 +1572,95 @@ globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
   localchat_messages.current = filteredMessages;
 }, [messages, userdetails.id, messagesRef]);
 
+useEffect(() => {
+  if (!userdetails?.id) return;
+
+  const sourceMessages = Array.isArray(messages) ? messages : (messagesRef.current || []);
+  const unreadMessages = sourceMessages.filter((msg) => {
+    const id = msg?.id;
+    return (
+      id &&
+      msg.sender === userdetails.id &&
+      Number(msg.read || 0) === 0 &&
+      !readReceiptInFlightRef.current.has(id)
+    );
+  });
+
+  if (unreadMessages.length === 0) return;
+
+  const messageIds = unreadMessages.map((msg) => msg.id);
+  messageIds.forEach((id) => readReceiptInFlightRef.current.add(id));
+
+  const markLocalRead = () => {
+    setMessages1((prev) =>
+      prev.map((msg) => (messageIds.includes(msg.id) ? { ...msg, read: 1 } : msg))
+    );
+    localchat_messages.current = (localchat_messages.current || []).map((msg) =>
+      messageIds.includes(msg.id) ? { ...msg, read: 1 } : msg
+    );
+    messagesRef.current = (messagesRef.current || []).map((msg) =>
+      messageIds.includes(msg.id) ? { ...msg, read: 1 } : msg
+    );
+    setMessages((prev) =>
+      prev.map((msg) => (messageIds.includes(msg.id) ? { ...msg, read: 1 } : msg))
+    );
+  };
+
+  markLocalRead();
+
+  if (isPlatform('hybrid')) {
+    if (db?.transaction) {
+      const query = `
+        UPDATE messages
+        SET read = 1
+        WHERE id IN (${messageIds.map(() => '?').join(',')})
+      `;
+      db.transaction((tx) => {
+        tx.executeSql(query, messageIds, () => {}, (_, error) => {
+          console.error("Error updating live read status:", error);
+          return false;
+        });
+      });
+    }
+  } else {
+    const storedMessages = globalThis.storage.readJSON('messages', []) || [];
+    const updatedMessages = storedMessages.map((msg) =>
+      messageIds.includes(msg.id) ? { ...msg, read: 1 } : msg
+    );
+    globalThis.storage.setItem('messages', JSON.stringify(updatedMessages));
+  }
+
+  const pairs = new Map();
+  unreadMessages.forEach((msg) => {
+    const pairKey = `${msg.sender}-${msg.recipient}`;
+    if (!pairs.has(pairKey)) {
+      pairs.set(pairKey, { sender: msg.sender, recipient: msg.recipient, messageIds: [] });
+    }
+    pairs.get(pairKey).messageIds.push(msg.id);
+  });
+
+  pairs.forEach(async ({ sender, recipient, messageIds: ids }) => {
+    const updatePayload = buildUnreadUpdate({ messageIds: ids, sender, recipient });
+
+    if (!Capacitor.isNativePlatform()) {
+      try {
+        await api.markReadWeb(host || `https://${Maindata.SERVER_URL}`, {
+          messageIds: ids,
+          sender,
+          recipient,
+        });
+        return;
+      } catch (error) {
+        console.warn("Web mark-read endpoint failed, falling back to websocket update:", error?.message || error);
+      }
+    }
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ updatePayload }));
+    }
+  });
+}, [db, host, messages, messagesRef, setMessages, socket, userdetails?.id]);
+
     // useEffect(() => {
     //   if (videoRef.current) {
     //     // Initialize Plyr for both web and Android using WebView
@@ -1780,11 +1912,20 @@ const toggleMute = () => {
     // Mute
     mutedUsers.push(userdetails.id);
     globalThis.storage.setItem('mutedUsers', JSON.stringify(mutedUsers));
-    setmutedList(prev => prev.filter(id => id !== userdetails.id));
+    setmutedList(prev => (prev.includes(userdetails.id) ? prev : [...prev, userdetails.id]));
     setIsMuted(true);
   }
 };
 const sound = customSounds.find(item => item.senderId === userdetails.id);
+
+const closeThreadMenu = () => {
+  setShowThreadMenu(false);
+};
+
+const runThreadMenuAction = (action) => {
+  closeThreadMenu();
+  action?.();
+};
 
 
 
@@ -4552,16 +4693,62 @@ const expandedProfilePanel = userdetails ? (
         </div>
       </button>
     </div>
-    <div className="chat-thread-header-actions">
+    <div className="chat-thread-header-actions" ref={threadMenuRef}>
       <button className="chat-thread-icon-btn" title="Call" onClick={() => handleStartCall(true)}>
         <IonIcon icon={call} size="small" />
       </button>
       <button className="chat-thread-icon-btn" title="Video Call" onClick={() => handleStartCall(false)}>
         <IonIcon icon={videocam} size="small" />
       </button>
-      <button className="chat-thread-icon-btn" title="More Options" onClick={() => handleMoreOptions(userdetails.id)}>
+      <button
+        className="chat-thread-icon-btn"
+        title="More Options"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowThreadMenu((prev) => !prev);
+        }}
+      >
         <IonIcon icon={ellipsisVerticalOutline} size="small" />
       </button>
+      {showThreadMenu && (
+        <div className="chat-thread-menu" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="chat-thread-menu-item"
+            onClick={() => runThreadMenuAction(toggleMute)}
+          >
+            {isMuted ? "Unmute notifications" : "Mute notifications"}
+          </button>
+          <button
+            type="button"
+            className="chat-thread-menu-item"
+            onClick={() => runThreadMenuAction(handleCustomNotification)}
+          >
+            Custom notification
+          </button>
+          <button
+            type="button"
+            className="chat-thread-menu-item"
+            onClick={() => runThreadMenuAction(handleArchive)}
+          >
+            {isArchive ? "Unarchive chat" : "Archive chat"}
+          </button>
+          <button
+            type="button"
+            className="chat-thread-menu-item chat-thread-menu-item--danger"
+            onClick={() => runThreadMenuAction(isTargetBlocked ? handleUnblock : handleBlock)}
+          >
+            {isTargetBlocked ? "Unblock user" : "Block user"}
+          </button>
+          <button
+            type="button"
+            className="chat-thread-menu-item chat-thread-menu-item--danger"
+            onClick={() => runThreadMenuAction(handleDeleteChat)}
+          >
+            Delete chat
+          </button>
+        </div>
+      )}
     </div>
   </div>
   )}

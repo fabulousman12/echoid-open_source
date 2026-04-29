@@ -1,7 +1,35 @@
 import { authFetch } from "./apiClient";
 import Maindata from "../data";
+import { getDeviceInfo } from "./deviceInfo";
 
 const defaultHost = `https://${Maindata.SERVER_URL}`;
+
+const tryPostCommentRoutes = async (host, postId, options = {}, suffix = "") => {
+  const normalizedPostId = encodeURIComponent(postId);
+  const method = String(options?.method || "GET").toUpperCase();
+  const routes = [
+    ...(method === "POST"
+      ? [`${host}/post/${normalizedPostId}/comment${suffix}`]
+      : [`${host}/post/${normalizedPostId}/comments${suffix}`]),
+    ...(method === "POST"
+      ? [`${host}/post/${normalizedPostId}/comments${suffix}`]
+      : [`${host}/post/${normalizedPostId}/comment${suffix}`]),
+    `${host}/post/comment/${normalizedPostId}${suffix}`,
+    `${host}/post/comments/${normalizedPostId}${suffix}`,
+  ];
+
+  let lastResponse = null;
+  for (const route of routes) {
+    const response = await authFetch(route, options, host);
+    lastResponse = response;
+    if (response.status !== 404) {
+      return response;
+    }
+  }
+
+  return lastResponse;
+};
+
 export const api = {
   getUser: (host) =>
     authFetch(`${host}/user/getuser`, {
@@ -37,12 +65,14 @@ export const api = {
       headers: { "Content-Type": "application/json" }
     }, host),
 
-  updateKey: (host, publicKey, privateKeyHash) =>
-    authFetch(`${host}/user/updateKey`, {
+  updateKey: async (host, publicKey, privateKeyHash, privateKeyFingerprint) => {
+    const deviceInfo = await getDeviceInfo();
+    return authFetch(`${host}/user/updateKey`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKey, privateKeyHash })
-    }, host),
+      body: JSON.stringify({ publicKey, privateKeyHash, privateKeyFingerprint, ...deviceInfo })
+    }, host);
+  },
 
   createTemporaryUser: (host, payload = {}) =>
     fetch(`${host}/user/temp/create`, {
@@ -74,6 +104,13 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clientId })
+    }, host),
+
+  anonymousUserByUsername: (host, username) =>
+    authFetch(`${host}/user/anonymous/username/user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
     }, host),
 
   anonymousUsernameCheck: (host, username) =>
@@ -442,6 +479,174 @@ export const api = {
       host
     ),
 
+  postFeed: (host = defaultHost, params = {}) => {
+    const { category, subCategory, filter, page } = params || {};
+    const search = new URLSearchParams();
+    if (category) search.set("category", category);
+    if (subCategory) search.set("subCategory", subCategory);
+    if (filter) search.set("filter", filter);
+    if (page) search.set("page", String(page));
+    const qs = search.toString() ? `?${search.toString()}` : "";
+    return authFetch(`${host}/post/feed${qs}`, { method: "GET" }, host);
+  },
+
+  postSearch: (host = defaultHost, q, params = {}) => {
+    const { page } = params || {};
+    const search = new URLSearchParams();
+    search.set("q", q || "");
+    if (page) search.set("page", String(page));
+    return authFetch(`${host}/post/search?${search.toString()}`, { method: "GET" }, host);
+  },
+
+  postById: (host = defaultHost, postId) =>
+    authFetch(`${host}/post/${encodeURIComponent(postId)}`, { method: "GET" }, host),
+
+  postReactionsBatch: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/reactions/batch`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postLike: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}/like`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postDislike: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}/dislike`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postMyPosts: (host = defaultHost) =>
+    authFetch(`${host}/post/my-posts`, { method: "GET" }, host),
+
+  postByClientId: (host = defaultHost, clientId) =>
+    authFetch(`${host}/post/user/${encodeURIComponent(clientId)}`, { method: "GET" }, host),
+
+  postWitness: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}/witness`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postUnwitness: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}/witness`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postWitnesses: (host = defaultHost, postId) =>
+    authFetch(`${host}/post/${encodeURIComponent(postId)}/witnesses`, { method: "GET" }, host),
+
+  postDelete: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postReport: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/${encodeURIComponent(postId)}/report`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postComments: (host = defaultHost, postId, params = {}) => {
+    const { page } = params || {};
+    const search = new URLSearchParams();
+    if (page) search.set("page", String(page));
+    const qs = search.toString() ? `?${search.toString()}` : "";
+    return tryPostCommentRoutes(host, postId, { method: "GET" }, qs);
+  },
+
+  postCommentReplies: (host = defaultHost, commentId, params = {}) => {
+    const { page } = params || {};
+    const search = new URLSearchParams();
+    if (page) search.set("page", String(page));
+    const qs = search.toString() ? `?${search.toString()}` : "";
+    return authFetch(`${host}/post/comment/${encodeURIComponent(commentId)}/replies${qs}`, { method: "GET" }, host);
+  },
+
+  createPostComment: (host = defaultHost, postId, payload = {}) =>
+    tryPostCommentRoutes(
+      host,
+      postId,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  postUploadInit: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/upload/init`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  postUploadDelete: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/upload/delete`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  createPost: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/create`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
   groupMediaUploadInit: (host = defaultHost, groupId, payload) =>
     authFetch(
       `${host}/api/groups/${encodeURIComponent(groupId)}/upload/init`,
@@ -474,6 +679,13 @@ export const api = {
   deleteMessage: (host, messageId) =>
     authFetch(`${host}/api/delete/${encodeURIComponent(messageId)}`, {
       method: "DELETE"
+    }, host),
+
+  markReadWeb: (host, payload = {}) =>
+    authFetch(`${host}/messages/mark-read-web`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     }, host)
 
 

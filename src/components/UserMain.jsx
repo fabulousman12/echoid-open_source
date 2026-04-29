@@ -5,6 +5,8 @@ import useListWorker from '../hooks/useListWorker';
 import './UserRow.css';
 import Lottie from "lottie-react";
 import sticker from "../assets/Astronaut - Light Theme.json";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 const INITIAL_VISIBLE_USERS = 10;
 const VISIBLE_USERS_STEP = 10;
@@ -39,6 +41,29 @@ const SearchBar = React.memo(({ value, visible, onChange, onKeyDown, onClear, in
   </div>
 ));
 
+const UserMainSkeletonList = ({ count = 6 }) => (
+  <>
+    {Array.from({ length: count }, (_, index) => (
+      <div
+        key={`user-main-skeleton-${index}`}
+        className="user-card d-flex align-items-center"
+        style={{ gap: '12px', padding: '14px 16px', marginBottom: '10px', borderRadius: '20px' }}
+        aria-hidden="true"
+      >
+        <Skeleton circle width={52} height={52} />
+        <div style={{ flex: 1 }}>
+          <Skeleton width="42%" height={15} borderRadius={8} />
+          <Skeleton width="68%" height={12} borderRadius={8} style={{ marginTop: '8px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          <Skeleton width={32} height={18} borderRadius={999} />
+          <Skeleton width={44} height={10} borderRadius={8} />
+        </div>
+      </div>
+    ))}
+  </>
+);
+
 const UserMain = ({
   usersMain,
   onUserClick,
@@ -53,6 +78,7 @@ const UserMain = ({
   statusSection,
   onMarkAllRead,
   appTheme,
+  isLoading = false,
 }) => {
   const [activeSwipeId, setActiveSwipeId] = useState(null);
   const [action, setAction] = useState('');
@@ -239,7 +265,8 @@ const UserMain = ({
 
       <div className="user-list-container" id="user-list-container" ref={listContainerRef}>
         <div className="list-group">
-          {visibleUsers && visibleUsers.map(user => (
+          {isLoading ? <UserMainSkeletonList /> : null}
+          {!isLoading && visibleUsers && visibleUsers.map(user => (
             <UserRow
               key={user.id}
               user={user}
@@ -260,7 +287,7 @@ const UserMain = ({
               appTheme={appTheme}
             />
           ))}
-          {filteredAndSortedUsers && filteredAndSortedUsers.length === 0 && (
+          {!isLoading && filteredAndSortedUsers && filteredAndSortedUsers.length === 0 && (
             <div style={{ textAlign: 'center', padding: '1rem', color: '#888' }}>
               No users found.
               <Lottie

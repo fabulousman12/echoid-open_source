@@ -297,6 +297,16 @@ export default function StatusViewer({
     current.viewedBy.length > 0 &&
     (!Array.isArray(usersMain) || usersMain.length === 0);
 
+  const openViewerSheet = (trigger = "unknown") => {
+    console.log("[StatusViewer] eye icon trigger:", trigger, {
+      statusId: current?.id || null,
+      isOwn,
+      viewerCount: Array.isArray(current?.viewedBy) ? current.viewedBy.length : 0,
+    });
+    pausePlayback();
+    setViewerSheetOpen(true);
+  };
+
   const startDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -615,12 +625,36 @@ export default function StatusViewer({
           </div>
         ) : null}
 
-        {isOwn && !hideViewerChrome ? (
+        {isOwn  ? (
           <div
             className="status-viewer-own-views"
-            onClick={(e) => {
+            onPointerDown={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              setViewerSheetOpen(true);
+              pausePlayback();
+            }}
+            onPointerUp={(e) => {
+        
+            }}
+            onMouseDown={(e) => {
+          
+            }}
+            onMouseUp={(e) => {
+          openViewerSheet("mouse");
+            }}
+            onTouchStart={(e) => {
+          
+              console.log("[StatusViewer] eye icon touchstart", {
+                statusId: current?.id || null,
+              });
+            }}
+            onTouchEnd={(e) => {
+        
+              openViewerSheet("touchend");
+            }}
+            onClick={(e) => {
+             
+              openViewerSheet("click");
             }}
             role="button"
             tabIndex={0}
@@ -632,7 +666,7 @@ export default function StatusViewer({
               alignItems: "center",
               gap: "8px",
               cursor: "pointer",
-              zIndex: 20,
+              zIndex: 140,
             }}
           >
             <span>👁</span>
@@ -719,7 +753,7 @@ export default function StatusViewer({
             background: "rgba(0,0,0,0.35)",
             display: "flex",
             alignItems: "flex-end",
-            zIndex: 70,
+            zIndex: 220,
           }}
         >
           <div
@@ -734,6 +768,8 @@ export default function StatusViewer({
               boxShadow: "0 -8px 20px rgba(0,0,0,0.35)",
               display: "flex",
               flexDirection: "column",
+              position: "relative",
+              zIndex: 221,
             }}
           >
             <div

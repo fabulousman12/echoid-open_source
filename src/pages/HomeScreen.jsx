@@ -40,6 +40,33 @@ import { useNetworkStatus } from '../services/useNetworkStatus';
 import { MdOutlinePortableWifiOff } from "react-icons/md";
 import { MdOutlineCancel } from "react-icons/md";
 import { RiDeleteBin5Fill } from "react-icons/ri";
+import Swal from 'sweetalert2';
+
+const hasValidFetchedUserShape = (user) => {
+  const resolvedId = String(user?.id || user?._id || "").trim();
+  const resolvedName = typeof user?.name === "string" ? user.name.trim() : "";
+  return Boolean(user && typeof user === "object" && resolvedId && resolvedName);
+};
+
+const buildUsersMainEntry = (user, fallback = {}) => {
+  if (!hasValidFetchedUserShape(user)) return null;
+
+  return {
+    id: String(user.id || user._id).trim(),
+    name: String(user.name || "").trim(),
+    avatar: user.profilePic || user.profilePhoto || user.avatar || img,
+    lastMessage: fallback.lastMessage || "",
+    timestamp: fallback.timestamp || user.updatedAt || new Date().toISOString(),
+    unreadCount: Number(fallback.unreadCount || 0),
+    phoneNumber: user.phoneNumber || null,
+    updatedAt: user.updatedAt,
+    gender: user.gender,
+    dob: user.dob || user.DOB,
+    Location: user.location || user.Location,
+    About: user.About,
+    publicKey: user.publicKey,
+  };
+};
 const waitForSocketConnection = (socket, callback) => {
   const maxAttempts = 50; // Retry limit
   let attempts = 0;
@@ -339,7 +366,10 @@ writeJSON('usersMain', mergedUsers);
       await sendPublicKeyToBackend(token);
 const usermain = readJSON('currentuser', null);
 var user = null
-      if (!usermain) {
+      if (!hasValidFetchedUserShape(usermain)) {
+if (usermain) {
+  globalThis.storage.removeItem('currentuser');
+}
 user = await getuser()
 
       }else{
@@ -765,84 +795,80 @@ const handleCallNotification = (data) => {
       try {
         const res = await api.getUser(host);
         const json = await res.json();
-        if (json.success) {
+        if (json.success && hasValidFetchedUserShape(json?.userResponse)) {
           currentUser = json.userResponse;
           writeJSON("currentuser", currentUser);
+        } else if (json.success) {
+          console.error("Invalid current user payload received in HomeScreen", json?.userResponse);
+          globalThis.storage.removeItem("currentuser");
         }
       } catch (err) {
         console.error("Failed to fetch user for key check:", err);
       }
     }
-    const prevToken = currentUser?.publicKey || null;
-    const prevPrivateKey = globalThis.storage.getItem('privateKey') || null;
-    const storedHash = currentUser?.privateKeyHash || null;
 
-    if (prevToken && prevPrivateKey) {
+    const publicKeyPem = currentUser?.publicKey || null;
+    const privateKeyJwkStr = globalThis.storage.getItem('privateKey') || null;
+    const storedFingerprint = currentUser?.privateKeyFingerprint || null;
+
+    if (publicKeyPem && privateKeyJwkStr) {
       try {
-        const localHash = await hashPrivateKey(prevPrivateKey);
-        if (storedHash && storedHash === localHash) {
-          return { message: 'Keys exist and hash matches.' };
-        }
-        if (!storedHash) {
-          const res = await api.updateKey(host, prevToken, localHash);
-          if (res.ok && currentUser) {
-            currentUser.privateKeyHash = localHash;
-            writeJSON("currentuser", currentUser);
+        if (await isStoredKeyPairValid(publicKeyPem, privateKeyJwkStr)) {
+          const localFingerprint = await hashPrivateKey(privateKeyJwkStr);
+          if (storedFingerprint && storedFingerprint !== localFingerprint) {
+            globalThis.storage.removeItem("currentuser");
+            globalThis.storage.removeItem("privateKey");
+            await clearTokens();
+            return { success: false, message: "Private key changed. Please login again." };
           }
-          return { message: 'Stored private key hash.' };
+          return { message: 'Keys exist and are valid.' };
         }
       } catch (err) {
-        console.error("Key hash check failed:", err);
+        console.error("Key validation failed:", err);
       }
     }
-  
-    // Generate new key pair
-     const keyPair = await window.crypto.subtle.generateKey(
-    {
-      name: "RSA-OAEP",
-      modulusLength: 2048,
-      publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256",
-    },
-    true,
-    ["encrypt", "decrypt"]
-  );
 
-  const spki = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
-  const jwk = await window.crypto.subtle.exportKey("jwk", keyPair.privateKey);
-
-
-    const pem = convertSpkiToPem(spki);
-
-     const privateKeyHash = await hashPrivateKey(JSON.stringify(jwk));
-     const response = await api.updateKey(host, pem, privateKeyHash);
-  if (!response.ok) throw new Error("❌ Failed to update public key on backend");
-
-  const result = await response.json();
-
-  
-
-  if (result.success) {
-    if (currentUser) {
-      currentUser.publicKey = pem;
-      currentUser.privateKeyHash = privateKeyHash;
-      globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
-    }
-    globalThis.storage.setItem("privateKey", JSON.stringify(jwk));
-
+    console.warn("Keypair is missing or invalid. Login/signup will restore or rotate it with the user's password.");
+    return { success: false, message: "Keypair is missing or invalid." };
   }
-  
-    return result;
-  }
-  
-  
-  
-  function convertSpkiToPem(spkiBuffer) {
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(spkiBuffer)));
-  const formatted = base64.match(/.{1,64}/g)?.join('\n');
-  return `-----BEGIN PUBLIC KEY-----\n${formatted}\n-----END PUBLIC KEY-----`;
-}
 
+  async function isStoredKeyPairValid(publicKeyPem, privateKeyJwkStr) {
+    const testMessage = "keypair-test";
+    const publicKey = await importPublicKeyFromPem(publicKeyPem);
+    const privateKey = await window.crypto.subtle.importKey(
+      "jwk",
+      JSON.parse(privateKeyJwkStr),
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      true,
+      ["decrypt"]
+    );
+
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: "RSA-OAEP" },
+      publicKey,
+      new TextEncoder().encode(testMessage)
+    );
+
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+      { name: "RSA-OAEP" },
+      privateKey,
+      encrypted
+    );
+
+    return new TextDecoder().decode(decryptedBuffer) === testMessage;
+  }
+
+  async function importPublicKeyFromPem(pem) {
+    const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+    const binaryDer = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return window.crypto.subtle.importKey(
+      "spki",
+      binaryDer.buffer,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      true,
+      ["encrypt"]
+    );
+  }
   const loadMessages = async () => {
     let mainMessages = [];
     if (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios') {
@@ -910,23 +936,15 @@ const handleCallNotification = (data) => {
         const data = await response.json();
 console.log("Fetched user details for missing user:", data);
         if (response.ok && data.success) {
-          const { userResponse } = data;
-  
-          const newUser = {
-            id: userResponse.id,
-            name: userResponse.name,
-            avatar: userResponse.profilePic || img,  // Assuming profilePhoto contains the image URL or base64 string
+          const newUser = buildUsersMainEntry(data?.userResponse || null, {
             lastMessage: message.content,
             timestamp: message.timestamp,
-            unreadCount: 1, // This message is unread for the new user
-            phoneNumber: userResponse.phoneNumber || null,
-            updatedAt: userResponse.updatedAt,
-            gender:userResponse.gender,
-            dob:userResponse.dob,
-            Location:userResponse.location,
-            About:userResponse.About,
-              publicKey:userResponse.publicKey,
-          };
+            unreadCount: 1,
+          });
+          if (!newUser) {
+            console.error("Skipping invalid fetched user payload in HomeScreen", data?.userResponse);
+            continue;
+          }
         
 
           // Add the new user to `usersMain` and localStorage
@@ -1437,9 +1455,50 @@ console.log("Fetched user details for missing user:", data);
     history.push(activeFooter === "Group" ? "/newgroup" : "/newchat");
   }, [activeFooter, history]);
 
+  const handleImportChats = useCallback(async () => {
+console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
+    if(Capacitor.isNativePlatform?.()){
+      history.push("/newchat");
+      return;
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      await Swal.fire("Native device offline", "Connect WebSocket first, then try importing chats.", "info");
+      return;
+    }
+
+    const { value } = await Swal.fire({
+      title: "Import chats",
+      input: "select",
+      inputOptions: {
+        20: "20 chats",
+        30: "30 chats",
+        50: "50 chats",
+      },
+      inputValue: "20",
+      showCancelButton: true,
+      confirmButtonText: "Request",
+      width: 320,
+    });
+
+    if (!value) return;
+    const chatLimit = Number(value) || 20;
+    const requestId =
+      globalThis.crypto?.randomUUID?.() ||
+      `chat-sync-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    socket.send(JSON.stringify({
+      type: "chat-sync-request",
+      requestId,
+      chatLimit,
+      messageLimit: 30,
+    }));
+
+    await Swal.fire("Request sent", "Confirm the import on your native device.", "info");
+  }, [socket]);
+
   
   
-  const headerTitle = activeFooter === "Calls" ? "Calls" : activeFooter === "Group" ? "People" : "Messages";
+  const headerTitle = "EchoId";
   const headerSubtitle = activeFooter === "Calls"
     ? `${(calls || []).length} call logs`
     : activeFooter === "Group"
@@ -1450,7 +1509,12 @@ console.log("Fetched user details for missing user:", data);
 
   const homeHeader = (
     <div className="home-screen-header">
-      <div className="home-screen-title-wrap">
+      <button
+        type="button"
+        className="home-screen-title-wrap"
+        onClick={() => history.push("/echoid")}
+        style={{ background: "transparent", border: 0, padding: 0 }}
+      >
         {selectionMode && activeFooter !== "Calls" ? (
           <MdOutlineCancel size={25} className="icon" onClick={handleDeselectAll} style={{ fontSize: '24px', cursor: 'pointer' }} />
         ) : callsSelectionMode && activeFooter === "Calls" ? (
@@ -1464,7 +1528,7 @@ console.log("Fetched user details for missing user:", data);
             </div>
           </>
         )}
-      </div>
+      </button>
 
       <div className="home-screen-actions">
         {selectionMode && activeFooter !== "Calls" ? (
@@ -1501,6 +1565,11 @@ console.log("Fetched user details for missing user:", data);
             {canCreateChat || activeFooter === "Group" ? (
               <button type="button" className="home-screen-action-btn" onClick={handlePrimaryAction}>
                 <FaRegEdit size={16} />
+              </button>
+            ) : null}
+            {!Capacitor.isNativePlatform?.() && activeFooter === "Chats" ? (
+              <button type="button" className="home-screen-action-btn" onClick={handleImportChats} title="Import chats">
+                <FaUsers size={16} />
               </button>
             ) : null}
             {!connected && <MdOutlinePortableWifiOff size={20} />}
@@ -1540,6 +1609,7 @@ console.log("Fetched user details for missing user:", data);
   const chatsContent = (
     <UserMain
       usersMain={usersMain}
+      isLoading={isloading}
       history={history}
       onUserClick={handleUserClick}
       currentUserId={currentUserId}
@@ -1565,6 +1635,7 @@ console.log("Fetched user details for missing user:", data);
       <div style={{ display: activeFooter === 'Group' ? 'block' : 'none' }}>
         <Group
           groupsMain={groupsMain}
+          isLoading={isloading}
           setGroupsMain={setGroupsMain}
           db={db}
           mutedGroupIds={mutedGroupIds}
@@ -1769,4 +1840,5 @@ console.log("Fetched user details for missing user:", data);
 };
 
 export default HomeScreen;
+
 

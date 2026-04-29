@@ -6,6 +6,8 @@ import { api } from "../services/api";
 import { LoginContext } from '../Contexts/UserContext';
 import { WebSocketContext } from '../services/websokcetmain';
 import useListWorker from '../hooks/useListWorker';
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import img from '/img.jpg';
 import './Group.css';
 
@@ -86,8 +88,33 @@ function readCachedGroups() {
   return sortGroups(cached.map(normalizeGroup).filter(Boolean));
 }
 
+function GroupListSkeleton({ count = 6 }) {
+  return (
+    <div className="group-list-stack" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={`group-skeleton-${index}`}
+          className="group-list-card user-card d-flex justify-content-between align-items-center"
+          style={{ gap: '12px' }}
+        >
+          <Skeleton circle width={48} height={48} />
+          <div className="flex-grow-1">
+            <Skeleton width="40%" height={15} borderRadius={8} />
+            <Skeleton width="72%" height={12} borderRadius={8} style={{ marginTop: '8px' }} />
+          </div>
+          <div className="text-right">
+            <Skeleton width={30} height={18} borderRadius={999} />
+            <Skeleton width={42} height={10} borderRadius={8} style={{ marginTop: '8px' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const Group = ({
   groupsMain = [],
+  isLoading = false,
   setGroupsMain,
   db,
   mutedGroupIds = [],
@@ -403,9 +430,10 @@ const Group = ({
       </div>
 
       <div className="user-list-container" id="group-list-container" ref={listContainerRef}>
+        {isLoading && activeTab === "groups" ? <GroupListSkeleton /> : null}
         {activeTab === "groups" && (
           <div className="group-list-stack">
-            {visibleGroups.map((group) => (
+            {!isLoading && visibleGroups.map((group) => (
               <div
                 key={group.id}
                 className={`group-list-card user-card d-flex justify-content-between align-items-center ${String(selectedGroupId || "") === String(group.id) ? "selected" : ""}`}
@@ -451,7 +479,7 @@ const Group = ({
                 </div>
               </div>
             ))}
-            {groupsToRender.length === 0 && (
+            {!isLoading && groupsToRender.length === 0 && (
               <div style={{ textAlign: 'center', padding: '1rem', color: '#888' }}>
                 No groups found.
               </div>
@@ -557,6 +585,7 @@ export default Group;
 
 Group.propTypes = {
   groupsMain: PropTypes.array,
+  isLoading: PropTypes.bool,
   setGroupsMain: PropTypes.func.isRequired,
   db: PropTypes.object,
   mutedGroupIds: PropTypes.array,

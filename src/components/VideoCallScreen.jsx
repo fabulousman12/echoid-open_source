@@ -18,7 +18,7 @@ import {
 import { startCallRingtone,stopCallRingtone,startCallTimeout,clearCallTimeout } from '../services/callRingtone';
 import { appendCallLog } from "../services/callLog";
 
-import { Video, VideoOff, Mic, MicOff, PhoneOff, Phone, X, Settings, Volume2, Headphones } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, PhoneOff, Phone, X, Volume2, Headphones } from 'lucide-react';
 import { useCallStore } from "../store/useCallStore";
 import { CallRuntime } from "../store/CallRuntime";  // REQUIRED
 
@@ -61,7 +61,8 @@ const floatRef = useRef(null);                     // for draggable later
 const CALL_TIMEOUT = 40000; // 45 
 const [miniActive, setMiniActive] = useState(false); // show enlarge + button
 const [activeLabel, setActiveLabel] = useState("");  // "You" or remote user name
-const [localVideoAvailable, setLocalVideoAvailable] = useState(callOnly ? false : true);
+  const [localVideoAvailable, setLocalVideoAvailable] = useState(callOnly ? false : true);
+  const windowIconSrc = "/assets/minimize.png";
 
 const [remoteVideoAvailable, setRemoteVideoAvailable] = useState(callOnly ? false : true);
 const loggedOutgoingRef = useRef(false);
@@ -618,10 +619,10 @@ return (
   
   <button
   onClick={reopenFullscreen}
-  className="absolute top-6 left-4 w-12 h-12 rounded-full ... "
+  className="absolute top-6 left-4 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md bg-white/20 border border-white/45 hover:scale-110 active:scale-95 transition"
   style={{zIndex: '66'}}
 >
-  <Settings className="w-5 h-5 rotate-90"/>
+  <img src={windowIconSrc} alt="Open window" className="w-5 h-5 object-contain opacity-100" />
 </button>
 <div className="absolute inset-0 z-[5] flex flex-col items-center justify-end pb-16">
 
@@ -707,10 +708,10 @@ return (
 
   <button
   onClick={minimizeCall}
-  className="absolute top-6 left-6 w-12 h-12 rounded-full ..."
+  className="absolute top-6 left-6 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md bg-white/20 border border-white/45 hover:scale-110 active:scale-95 transition"
   style={{display: CallRuntime.overlayActive ? 'none' : 'block'}}
 >
-  <Settings className="w-5 h-5 rotate-90"/>
+  <img src={windowIconSrc} alt="Minimize call" className="w-5 h-5 object-contain opacity-100" />
 </button>
 
 
@@ -844,10 +845,10 @@ minimizeCall()
 }
   className={`absolute top-6 left-6 ${CallRuntime.isFloating ? 'w-10 h-10' : 'w-12 h-12'} rounded-full
   flex items-center justify-center text-white
-  backdrop-blur-md bg-white/10 border border-white/30
+  backdrop-blur-md bg-white/20 border border-white/45
   hover:scale-110 active:scale-95 transition z-[60]`}
 >
-  <Settings className="w-5 h-5 rotate-90" />   {/* icon same but now MINIMIZES */}
+  <img src={windowIconSrc} alt={CallRuntime.isFloating ? "Open window" : "Minimize call"} className="w-5 h-5 object-contain opacity-100" />
 </button>
 
 

@@ -8,6 +8,10 @@ import StarLoader from '../pages/StarLoader';
 import data from '../data';
 import { setTokens } from "../services/authTokens";
 import { getDeviceInfo } from "../services/deviceInfo";
+import { createEncryptedKeyPair } from "../services/privateKeyVault";
+import { hashPrivateKey } from "../services/keyHash";
+import { isPlatform } from '@ionic/react';
+const getSocketClientType = () => (isPlatform('hybrid') || isPlatform('ios') || isPlatform('android') ? "native" : "web");
 const SignupForm = ({sendPublicKeyToBackend,connect}) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [userInfo, setUserInfo] = useState(null);
@@ -101,11 +105,16 @@ handleVerifyOTP(json.otp, info)
       try {
         const finalCountryCode = userInfo.countryCode || defaultCountryCode;
         const fullPhoneNumber = `${finalCountryCode}${userInfo.phone}`;
+        const keyBundle = await createEncryptedKeyPair(userInfo.password);
+        const privateKeyFingerprint = await hashPrivateKey(keyBundle.privateKey);
         const response = await signup({
           ...userInfo,
           phoneNumber: fullPhoneNumber,
           otpCode: otp,
           profilePhoto: userInfo.profileImage,
+          publicKey: keyBundle.publicKey,
+          privateKeyHash: keyBundle.privateKeyHash,
+          privateKeyFingerprint,
           accepted_terms: !!userInfo.acceptedTerms,
           accepted_terms_at: new Date().toISOString(),
           accepted_terms_version: data.TermsVersion,
@@ -116,12 +125,13 @@ handleVerifyOTP(json.otp, info)
 
     if (response.success) {
           globalThis.storage.removeItem('otpRequestTime')
+          globalThis.storage.setItem("privateKey", keyBundle.privateKey);
           await setTokens({ accessToken: response.data, refreshToken: response.refreshToken });
 const deviceId = (await getDeviceInfo()).deviceId;
-const wul = `wss://${data.SERVER_URL}?token=${response.data}&deviceId=${encodeURIComponent(deviceId)}`;
+const wul = `wss://${data.SERVER_URL}?token=${response.data}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
                     await connect(wul);
                     await  getuser();
-await sendPublicKeyToBackend(response.data);
+await sendPublicKeyToBackend(response.data, userInfo.password);
           history.push('/home');
     } else {
         const responseMessage = response?.message || response?.error?.message || "";

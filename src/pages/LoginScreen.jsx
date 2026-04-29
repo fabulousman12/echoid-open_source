@@ -12,9 +12,14 @@ import Maindata from '../data';
 import { getAccessToken, setTokens, clearTokens } from "../services/authTokens";
 import { showBannedAccountModal } from "../services/apiClient";
 import { isTemporaryRuntime } from "../services/temporarySession";
+import { api } from "../services/api";
+import { createEncryptedKeyPair, decryptPrivateKeyWithPassword, encryptPrivateKeyWithPassword } from "../services/privateKeyVault";
+import { hashPrivateKey } from "../services/keyHash";
 import Swal from 'sweetalert2';
 import { getDeviceInfo } from "../services/deviceInfo";
 import "./LoginScreen.css";
+
+const getSocketClientType = () => (isPlatform('hybrid') || isPlatform('ios') || isPlatform('android') ? "native" : "web");
 
 const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
   const history = useHistory();
@@ -107,6 +112,122 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
     });
   };
 
+  const isEncryptedPrivateKeyPayload = (value) => {
+    if (!value) return false;
+    try {
+      const parsed = JSON.parse(value);
+      return Boolean(parsed?.v && parsed?.salt && parsed?.iv && parsed?.ciphertext);
+    } catch {
+      return false;
+    }
+  };
+
+  const clearKeySessionAndThrow = async (message) => {
+    globalThis.storage.removeItem("currentuser");
+    globalThis.storage.removeItem("privateKey");
+    await clearTokens();
+    throw new Error(message);
+  };
+
+  const restorePrivateKeyForLogin = async (loginResponse) => {
+    const serverUser = loginResponse?.userResponse || null;
+    const encryptedPrivateKey = loginResponse?.privateKeyHash || serverUser?.privateKeyHash || "";
+    const serverFingerprint = loginResponse?.privateKeyFingerprint || serverUser?.privateKeyFingerprint || "";
+
+    if (serverUser) {
+      globalThis.storage.setItem("currentuser", JSON.stringify(serverUser));
+    }
+
+    if (encryptedPrivateKey && isEncryptedPrivateKeyPayload(encryptedPrivateKey)) {
+      try {
+        const privateKey = await decryptPrivateKeyWithPassword(encryptedPrivateKey, password);
+        const localFingerprint = await hashPrivateKey(privateKey);
+        if (serverFingerprint && serverFingerprint !== localFingerprint) {
+          await clearKeySessionAndThrow("Private key changed. Please login again.");
+        }
+        globalThis.storage.setItem("privateKey", privateKey);
+        if (!serverFingerprint && serverUser?.publicKey) {
+          const updateResponse = await api.updateKey(host, serverUser.publicKey, encryptedPrivateKey, localFingerprint);
+          const updateJson = await updateResponse.json().catch(() => ({}));
+          if (updateResponse.ok && updateJson.success) {
+            const updatedUser = { ...serverUser, privateKeyFingerprint: localFingerprint };
+            globalThis.storage.setItem("currentuser", JSON.stringify(updatedUser));
+          }
+        }
+        return;
+      } catch (error) {
+        if (error?.message === "Private key changed. Please login again.") {
+          throw error;
+        }
+        console.warn("Stored private key could not be decrypted.", error);
+        await clearKeySessionAndThrow("Private key could not be decrypted. Please login again.");
+      }
+    }
+
+    if (encryptedPrivateKey && !isEncryptedPrivateKeyPayload(encryptedPrivateKey)) {
+      const localPrivateKey = globalThis.storage.getItem("privateKey");
+      if (!localPrivateKey || !serverUser?.publicKey) {
+        console.warn("Old key format found without a recoverable local private key. Rotating key pair for this account.");
+        const keyBundle = await createEncryptedKeyPair(password);
+        const privateKeyFingerprint = await hashPrivateKey(keyBundle.privateKey);
+        const updateResponse = await api.updateKey(host, keyBundle.publicKey, keyBundle.privateKeyHash, privateKeyFingerprint);
+        const updateJson = await updateResponse.json().catch(() => ({}));
+        if (!updateResponse.ok || !updateJson.success) {
+          throw new Error(updateJson.error || updateJson.message || "Failed to rotate private key storage.");
+        }
+
+        const rotatedUser = {
+          ...serverUser,
+          publicKey: keyBundle.publicKey,
+          privateKeyHash: keyBundle.privateKeyHash,
+          privateKeyFingerprint,
+        };
+        globalThis.storage.setItem("currentuser", JSON.stringify(rotatedUser));
+        globalThis.storage.setItem("privateKey", keyBundle.privateKey);
+        return;
+      }
+
+      const localFingerprint = await hashPrivateKey(localPrivateKey);
+      if (encryptedPrivateKey !== localFingerprint && serverFingerprint !== localFingerprint) {
+        await clearKeySessionAndThrow("Private key changed. Please login again.");
+      }
+
+      const upgradedEncryptedPrivateKey = await encryptPrivateKeyWithPassword(localPrivateKey, password);
+      const updateResponse = await api.updateKey(host, serverUser.publicKey, upgradedEncryptedPrivateKey, localFingerprint);
+      const updateJson = await updateResponse.json().catch(() => ({}));
+      if (!updateResponse.ok || !updateJson.success) {
+        throw new Error(updateJson.error || updateJson.message || "Failed to upgrade private key storage.");
+      }
+
+      const upgradedUser = {
+        ...serverUser,
+        privateKeyHash: upgradedEncryptedPrivateKey,
+        privateKeyFingerprint: localFingerprint,
+      };
+      globalThis.storage.setItem("currentuser", JSON.stringify(upgradedUser));
+      globalThis.storage.setItem("privateKey", localPrivateKey);
+      return;
+    }
+
+    const keyBundle = await createEncryptedKeyPair(password);
+    const privateKeyFingerprint = await hashPrivateKey(keyBundle.privateKey);
+    const updateResponse = await api.updateKey(host, keyBundle.publicKey, keyBundle.privateKeyHash, privateKeyFingerprint);
+    const updateJson = await updateResponse.json().catch(() => ({}));
+    if (!updateResponse.ok || !updateJson.success) {
+      throw new Error(updateJson.error || updateJson.message || "Failed to store encrypted private key.");
+    }
+
+    globalThis.storage.setItem("privateKey", keyBundle.privateKey);
+    const currentUserStr = globalThis.storage.getItem("currentuser");
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : serverUser;
+    if (currentUser) {
+      currentUser.publicKey = keyBundle.publicKey;
+      currentUser.privateKeyHash = keyBundle.privateKeyHash;
+      currentUser.privateKeyFingerprint = privateKeyFingerprint;
+      globalThis.storage.setItem("currentuser", JSON.stringify(currentUser));
+    }
+  };
+
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
       setAlertMessage('Please enter both username and password.');
@@ -127,6 +248,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
 
       if (json.success) {
         await setTokens({ accessToken: json.authtoken, refreshToken: json.refreshToken });
+        await restorePrivateKeyForLogin(json);
 
         const user = globalThis.storage.getItem('currentuser');
         if (!user) {
@@ -134,9 +256,9 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
         }
         await ensureSQLiteReady();
         const deviceId = (await getDeviceInfo()).deviceId;
-        const wsUrl = `wss://${Maindata.SERVER_URL}?token=${json.authtoken}&deviceId=${encodeURIComponent(deviceId)}`;
+        const wsUrl = `wss://${Maindata.SERVER_URL}?token=${json.authtoken}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
         await connect(wsUrl);
-        await sendPublicKeyToBackend(json.authtoken);
+        await sendPublicKeyToBackend(json.authtoken, password);
         history.push('/home');
       } else {
         const rawMessage = json?.error || json?.message || "";
@@ -172,7 +294,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
       setloginlaod(false);
     } catch (error) {
       console.error(error);
-      setAlertMessage('An error occurred. Please try again.');
+      setAlertMessage(error?.message || 'An error occurred. Please try again.');
       setShowAlert(true);
       setloginlaod(false);
     }
