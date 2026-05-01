@@ -28,7 +28,7 @@ import {   FaTimes } from 'react-icons/fa';
 import useUserStore from '../services/useUserStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { IonIcon } from '@ionic/react';
-import { ffmpeg_thumnail } from 'ionic-thumbnail';
+import { ffmpeg_thumnail } from "ionic-thumbnail";
 import UpdateModal from '../components/UpdateModal';
 import { api } from "../services/api";
 import { getAccessToken, getRefreshToken, clearTokens } from "../services/authTokens";

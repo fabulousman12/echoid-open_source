@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useHistory } from "react-router";
 import Swal from "sweetalert2";
 import {
@@ -131,13 +132,8 @@ const tabs = [
   { id: "profile", label: "Profile", icon: CircleUserRound },
 ];
 
-const drawerSections = [
-  {
-    title: "Category",
-    items: ["All posts", "Tech", "Rant", "Story", "Questions", "Civic sense", "Politics", "Confessions"],
-  },
- 
-];
+const homeCategoryLabels = ["All posts", "Tech", "Rant", "Story", "Questions", "Civic sense", "Politics", "Confessions"];
+const drawerNavItems = tabs.filter((tab) => !tab.isPrimary);
 
 const sortOptions = [
   { id: "date", label: "By date" },
@@ -1442,8 +1438,19 @@ async function putToSignedUrlWithProgress(uploadUrl, body, contentType, onProgre
   });
 }
 
-export default function EchoIdPage({ host }) {
+export default function EchoIdPage({
+  host,
+  initialPostId = "",
+  initialPost = null,
+  initialPostLoading = false,
+  initialPostError = "",
+}) {
   const history = useHistory();
+  const [isMobileLayout, setIsMobileLayout] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 768;
+  });
+  const shouldShowBottomNav = Boolean(Capacitor.isNativePlatform?.() || isMobileLayout);
   const cachedAnonymousProfile = useMemo(() => readAnonymousProfile(), []);
   const cachedOwnPosts = useMemo(() => readOwnPostsCache(), []);
   const fileInputRef = useRef(null);
@@ -1563,6 +1570,30 @@ export default function EchoIdPage({ host }) {
     );
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      setIsMobileLayout(window.innerWidth <= 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const normalizedInitialPostId = String(initialPostId || "").trim();
+    if (!normalizedInitialPostId) return;
+
+    setSelectedUserClientId("");
+    setSelectedPostId(normalizedInitialPostId);
+    setSelectedPostError("");
+    setWitnessPanelPostId("");
+    setIsComposePreviewOpen(false);
+    setActiveTab("home");
+  }, [initialPostId]);
+
   const mergeIncomingPostWithLocalState = (incomingPost, currentPost = null) => {
     const normalizedIncomingPost = normalizePostRecord(incomingPost);
     const postId = getPostId(normalizedIncomingPost);
@@ -1597,6 +1628,26 @@ export default function EchoIdPage({ host }) {
     const currentPostsById = new Map(normalizePostCollection(currentPosts).map((entry) => [getPostId(entry), entry]));
     return normalizePostCollection(incomingPosts).map((entry) => mergeIncomingPostWithLocalState(entry, currentPostsById.get(getPostId(entry))));
   };
+
+  useEffect(() => {
+    const normalizedInitialPostId = String(initialPostId || "").trim();
+    if (!normalizedInitialPostId) return;
+
+    setSelectedPostLoading(Boolean(initialPostLoading));
+    setSelectedPostError(initialPostError || "");
+
+    if (!initialPost) return;
+
+    const normalizedPost = mergeIncomingPostWithLocalState(initialPost);
+    const postId = getPostId(normalizedPost) || normalizedInitialPostId;
+    setSelectedPostDetailMap((prev) => ({
+      ...prev,
+      [postId]: {
+        ...normalizedPost,
+        _id: postId,
+      },
+    }));
+  }, [initialPost, initialPostError, initialPostId, initialPostLoading]);
 
   const showAnonymousBannedModal = async (message) => {
     clearAnonymousProfile();
@@ -1703,11 +1754,13 @@ export default function EchoIdPage({ host }) {
   }, [query]);
 
   useEffect(() => {
+    if (String(initialPostId || "").trim()) return;
+
     setSelectedPostId("");
     setSelectedUserClientId("");
     setWitnessPanelPostId("");
     setIsComposePreviewOpen(false);
-  }, [activeTab]);
+  }, [activeTab, initialPostId]);
 
   useEffect(() => {
     return () => {
@@ -2329,7 +2382,18 @@ export default function EchoIdPage({ host }) {
     [allKnownPosts, selectedPostId]
   );
   const selectedPost = useMemo(
-    () => selectedPostDetailMap[selectedPostId] || selectedPostPreview,
+    () =>
+      selectedPostDetailMap[selectedPostId] ||
+      selectedPostPreview ||
+      (selectedPostId
+        ? normalizePostRecord({
+            _id: selectedPostId,
+            name: "Anonymous",
+            username: "anonymous",
+            createdAt: new Date().toISOString(),
+            body: "",
+          })
+        : null),
     [selectedPostDetailMap, selectedPostId, selectedPostPreview]
   );
   const selectedPostComments = selectedPostId ? commentsByPostId[selectedPostId] || [] : [];
@@ -2528,6 +2592,16 @@ export default function EchoIdPage({ host }) {
     setIsDrawerOpen(false);
   };
 
+  const handleSelectDrawerTab = (tabId) => {
+    setIsComposePreviewOpen(false);
+    setActiveTab(tabId);
+    setSelectedUserClientId("");
+    setSelectedPostId("");
+    setSelectedPostError("");
+    setWitnessPanelPostId("");
+    setIsDrawerOpen(false);
+  };
+
   const handleOpenPost = (post) => {
     const postId = getPostId(post);
     if (!postId) return;
@@ -2590,6 +2664,9 @@ export default function EchoIdPage({ host }) {
     setSelectedPostId("");
     setSelectedPostError("");
     setWitnessPanelPostId("");
+    if (String(history.location?.pathname || "").startsWith("/app/post/")) {
+      history.replace("/echoid");
+    }
   };
 
   const handleOpenWitnessPanel = async (post) => {
@@ -3476,7 +3553,7 @@ export default function EchoIdPage({ host }) {
       </section>
 
       <section className="echoid-home-categories" aria-label="EchoId categories">
-        {drawerSections[0].items.map((item) => {
+        {homeCategoryLabels.map((item) => {
           const value = toCategoryValue(item);
           const isActive = value === selectedHomeCategory;
           return (
@@ -4008,11 +4085,11 @@ export default function EchoIdPage({ host }) {
   }
 
   return (
-    <div className="echoid-page">
+    <div className={`echoid-page ${shouldShowBottomNav ? "" : "echoid-page--no-bottomnav"}`}>
       <button
         type="button"
         className="echoid-mobile-menu-button"
-        aria-label="Open category navigation"
+        aria-label="Open navigation"
         ref={mobileDrawerButtonRef}
         onClick={() => setIsDrawerOpen((current) => !current)}
       >
@@ -4058,7 +4135,7 @@ export default function EchoIdPage({ host }) {
         />
       ) : null}
 
-      <aside className={`echoid-drawer ${isDrawerOpen ? "is-open" : ""}`} aria-label="EchoId categories" ref={drawerRef}>
+      <aside className={`echoid-drawer ${isDrawerOpen ? "is-open" : ""}`} aria-label="EchoId navigation" ref={drawerRef}>
         <div className="echoid-drawer-head">
           <span className="echoid-drawer-kicker">Menu</span>
           <div className="echoid-drawer-brand">
@@ -4096,32 +4173,48 @@ export default function EchoIdPage({ host }) {
           <span>Create Echo</span>
         </button>
 
-        {drawerSections.map((section) => (
-          <section key={section.title} className="echoid-drawer-section">
-            <div className="echoid-drawer-section-title">{section.title}</div>
-            <div className="echoid-drawer-list">
-              {section.items.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`echoid-drawer-item ${
-                    section.title === "Category" && toCategoryValue(item) === selectedHomeCategory ? "is-active" : ""
-                  }`}
-                  onClick={() => {
-                    if (section.title === "Category") {
-                      handleSelectHomeCategory(toCategoryValue(item));
-                      return;
-                    }
-                    setIsDrawerOpen(false);
-                  }}
-                >
-                  <span>{item}</span>
-                  <ChevronRight size={15} />
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
+        <section className="echoid-drawer-section">
+          <div className="echoid-drawer-section-title">{shouldShowBottomNav ? "Category" : "Navigation"}</div>
+          <div className="echoid-drawer-list">
+            {shouldShowBottomNav
+              ? homeCategoryLabels.map((item) => {
+                  const value = toCategoryValue(item);
+                  const isActive = value === selectedHomeCategory;
+
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`echoid-drawer-item ${isActive ? "is-active" : ""}`}
+                      onClick={() => handleSelectHomeCategory(value)}
+                    >
+                      <span>{item}</span>
+                      <ChevronRight size={15} />
+                    </button>
+                  );
+                })
+              : drawerNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`echoid-drawer-item ${isActive ? "is-active" : ""}`}
+                      onClick={() => handleSelectDrawerTab(item.id)}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span>
+                        <Icon size={16} />
+                        {item.label}
+                      </span>
+                      <ChevronRight size={15} />
+                    </button>
+                  );
+                })}
+          </div>
+        </section>
       </aside>
 
       <div className="echoid-shell">
@@ -4193,30 +4286,32 @@ export default function EchoIdPage({ host }) {
 
         <main className="echoid-content" onScroll={handleContentScroll}>{renderActivePage()}</main>
 
-        <nav className="echoid-bottomnav" aria-label="EchoId navigation">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+        {shouldShowBottomNav ? (
+          <nav className="echoid-bottomnav" aria-label="EchoId navigation">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
 
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""}`}
-                onClick={() => {
-                  setIsComposePreviewOpen(false);
-                  setActiveTab(tab.id);
-                }}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <span className="echoid-nav-button-icon">
-                  <Icon size={tab.isPrimary ? 16 : 17} />
-                </span>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""}`}
+                  onClick={() => {
+                    setIsComposePreviewOpen(false);
+                    setActiveTab(tab.id);
+                  }}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <span className="echoid-nav-button-icon">
+                    <Icon size={tab.isPrimary ? 16 : 17} />
+                  </span>
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        ) : null}
       </div>
       {previewOverlay}
     </div>

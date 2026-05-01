@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { IonSpinner } from '@ionic/react';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { ffmpeg_thumnail } from 'ionic-thumbnail';
+
+import { ffmpeg_thumnail } from "ionic-thumbnail";
 import imga from '../../public/favicon.png';
 import { FaPlay } from "react-icons/fa";
 import { Capacitor } from '@capacitor/core';

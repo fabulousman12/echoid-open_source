@@ -24,7 +24,8 @@ import { IoCheckmarkSharp } from "react-icons/io5";
 import 'bootstrap-icons/font/bootstrap-icons.css';
 //import { FaPlay, FaPause, FaPaperPlane, FaTimes } from 'react-icons/fa';
 //import { FilePicker } from '@capawesome/capacitor-file-picker';
-import { ffmpeg_thumnail } from 'ionic-thumbnail';
+import { ffmpeg_thumnail } from "ionic-thumbnail";
+
 import 'bootstrap-icons/font/bootstrap-icons.css';
 //import { BellIcon, BellOffIcon, Files, SettingsIcon } from 'lucide-react';
 import { IonSpinner,IonButton } from '@ionic/react';

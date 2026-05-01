@@ -1,0 +1,36 @@
+import { WebPlugin } from '@capacitor/core';
+export class ffmpeg_thumnailWeb extends WebPlugin {
+    async echo(options) {
+        console.log('ECHO', options);
+        return options;
+    }
+    async generateThumbnail(options) {
+        console.warn('[VideoThumbnail] Web platform fallback – returning input path as-is');
+        return {
+            data: options.path // Simply return path to simulate result
+        };
+    }
+    async getFileInfo(options) {
+        console.warn('[MyFileInfo] Web platform fallback - cannot access native file info.');
+        // As fallback, just return URI and nulls
+        return {
+            name: null,
+            size: null,
+            uri: options.uri,
+            persisted: false,
+            localPath: ''
+        };
+    }
+    // ===== Start.io Ad Stub Methods =====
+    async initStartio(options) {
+        console.warn('[Start.io] Web platform – initStartio() called with App ID:', options.appId);
+    }
+    async showStartioInterstitial() {
+        console.warn('[Start.io] Web platform – showStartioInterstitial() called.');
+    }
+    async showStartioRewarded() {
+        console.warn('[Start.io] Web platform – showStartioRewarded() called.');
+        return { rewarded: false, viewedTime: 0 };
+    }
+}
+//# sourceMappingURL=web.js.map

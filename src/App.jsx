@@ -146,6 +146,28 @@ const getSocketClientType = () => (Capacitor.isNativePlatform() ? "native" : "we
 const buildSocketUrl = (token, deviceId) =>
   `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
 
+const normalizeDeepLinkPath = (url) => {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname || ""}${parsed.search || ""}${parsed.hash || ""}`;
+  } catch {
+    return String(url || "");
+  }
+};
+
+const getEchoIdPostRouteFromUrl = (url) => {
+  const path = normalizeDeepLinkPath(url);
+  const match = path.match(/\/app\/post\/([^/?#]+)/i);
+  if (!match?.[1]) return "";
+  return `/app/post/${encodeURIComponent(decodeURIComponent(match[1]))}`;
+};
+
+const getEchoIdPostIdFromUrl = (url) => {
+  const path = normalizeDeepLinkPath(url);
+  const match = path.match(/\/app\/post\/([^/?#]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
+};
+
 export default function App() {
 //  //console.log('%c Is this on developing phase :' + Maindata.IsDev, 'color: blue; font-size: 15px; font-weight: bold;');
  // const { connect, isConnected, close,socket,db,messages,setMessages,getmessages } = useWebSocket(); // Use WebSocket context methods
@@ -230,6 +252,12 @@ const isAcitve = useRef(true);
 const [blockedUsers, setBlockedUsers] = useState(new Set());
   const [adminMessages, setAdminMessages] = useState([]);
   const [adminUnread, setAdminUnread] = useState(false);
+  const [echoIdDeepLinkPost, setEchoIdDeepLinkPost] = useState({
+    postId: "",
+    post: null,
+    loading: false,
+    error: "",
+  });
 const [blockedBy, setBlockedBy] = useState(new Set());
 const serverreconnected = useRef(true)
 const wsRefreshInFlight = useRef(false);
@@ -301,6 +329,7 @@ const saveAdminMessagesToStorage = (messagesToSave) => {
     console.warn("Failed to cache admin messages:", err);
   }
 };
+
 
 const normalizeAdminMessages = (messages) =>
   messages.map((msg) => {
@@ -503,6 +532,89 @@ const [show, setShow] = useState(false);
     routeTransitionStage === "idle" ? "" : `is-${routeTransitionStage}`;
   const routeDirectionClassName =
     routeTransitionDirection === "none" ? "" : routeTransitionDirection;
+
+  const loadEchoIdDeepLinkPost = useCallback(async (postId) => {
+    const normalizedPostId = String(postId || "").trim();
+    if (!normalizedPostId) return null;
+
+    setEchoIdDeepLinkPost({
+      postId: normalizedPostId,
+      post: null,
+      loading: true,
+      error: "",
+    });
+
+    try {
+      const response = await api.postById(host, normalizedPostId);
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success || !json?.post) {
+        throw new Error(json?.message || "Could not load this Echo.");
+      }
+
+      setEchoIdDeepLinkPost({
+        postId: normalizedPostId,
+        post: json.post,
+        loading: false,
+        error: "",
+      });
+      return json.post;
+    } catch (error) {
+      console.warn("Failed to preload EchoId deep link post:", error);
+      setEchoIdDeepLinkPost({
+        postId: normalizedPostId,
+        post: null,
+        loading: false,
+        error: error?.message || "Could not load this Echo.",
+      });
+      return null;
+    }
+  }, [host]);
+
+  const openEchoIdPostRoute = useCallback((url) => {
+    const route = getEchoIdPostRouteFromUrl(url);
+    console.log("Deep link URL:", url, "Parsed route:", route);
+    const postId = getEchoIdPostIdFromUrl(url);
+    if (!route) return false;
+
+    if (`${history.location?.pathname || ""}${history.location?.search || ""}` !== route) {
+      history.push(route);
+    }
+    void loadEchoIdDeepLinkPost(postId);
+    return true;
+  }, [history, loadEchoIdDeepLinkPost]);
+
+  useEffect(() => {
+    openEchoIdPostRoute(window.location.href);
+
+    let urlOpenHandle;
+    if (Capacitor.isNativePlatform()) {
+      Promise.resolve(CapacitorApp.getLaunchUrl?.())
+        .then((launch) => {
+          if (launch?.url) openEchoIdPostRoute(launch.url);
+        })
+        .catch(() => {});
+
+      Promise.resolve(CapacitorApp.addListener("appUrlOpen", (event) => {
+        if (event?.url) openEchoIdPostRoute(event.url);
+      }))
+        .then((handle) => {
+          urlOpenHandle = handle;
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      if (urlOpenHandle && typeof urlOpenHandle.remove === "function") {
+        urlOpenHandle.remove();
+      }
+    };
+  }, [openEchoIdPostRoute]);
+
+  useEffect(() => {
+    const routePostId = getEchoIdPostIdFromUrl(location.pathname);
+    if (!routePostId || echoIdDeepLinkPost.postId === routePostId) return;
+    void loadEchoIdDeepLinkPost(routePostId);
+  }, [echoIdDeepLinkPost.postId, loadEchoIdDeepLinkPost, location.pathname]);
 
   useEffect(() => {
     return subscribeTemporarySession(() => {
@@ -6950,6 +7062,23 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
               getunread={getunread}
               resetunread={resetunread}
               selectedUser={selectedUser}/>} 
+            />
+            <Route
+              path="/app/post/:postId"
+              render={(props) => {
+                const postId = props.match.params.postId;
+                const shouldUsePreloadedPost = String(echoIdDeepLinkPost.postId || "") === String(postId || "");
+                return (
+                  <EchoIdPage
+                    {...props}
+                    host={host}
+                    initialPostId={postId}
+                    initialPost={shouldUsePreloadedPost ? echoIdDeepLinkPost.post : null}
+                    initialPostLoading={shouldUsePreloadedPost ? echoIdDeepLinkPost.loading : false}
+                    initialPostError={shouldUsePreloadedPost ? echoIdDeepLinkPost.error : ""}
+                  />
+                );
+              }}
             />
             <Route
               path="/echoid"

@@ -132,6 +132,8 @@ npm run dev
 
 ---
 
+the local dependency on ionic thumnail has been removed as the plugin is now publicaly available 
+
 ## Android Native Helper Files
 
 If you add Android support with Capacitor, also copy the Java helper files from:
@@ -141,7 +143,7 @@ If you add Android support with Capacitor, also copy the Java helper files from:
 into:
 
 `android/app/src/main/java/<your-package>/`
-
+//todo add manifest 
 This includes files such as:
 
 - `MainActivity.java`

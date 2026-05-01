@@ -1,0 +1,67 @@
+{
+  "name": "ionic-thumbnail",
+  "version": "0.0.1",
+  "description": "Generate video thumbnails in Capacitor/Ionic apps.",
+  "author": "fabulousman12",
+  "license": "MIT",
+  "homepage": "https://github.com/fabulousman12/ionic-thumnail#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fabulousman12/ionic-thumnail.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fabulousman12/ionic-thumnail/issues"
+  },
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "files": [
+    "android/build.gradle",
+    "android/gradle.properties",
+    "android/proguard-rules.pro",
+    "android/settings.gradle",
+    "android/src/main/",
+    "dist/",
+    "src/",
+    "README.md",
+    "rollup.config.mjs",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc && rollup -c rollup.config.mjs",
+    "clean": "node -e \"const fs=require('fs');for(const p of ['dist/esm','dist/plugin.js','dist/plugin.js.map','dist/plugin.cjs.js','dist/plugin.cjs.js.map'])fs.rmSync(p,{recursive:true,force:true})\"",
+    "docgen": "docgen --api ffmpeg_thumnailPlugin --output-readme README.md --output-json dist/docs.json",
+    "verify": "npm run build",
+    "prepublishOnly": "npm run verify"
+  },
+  "keywords": [
+    "capacitor",
+    "ionic",
+    "thumbnail",
+    "video",
+    "android"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/docgen": "^0.3.0",
+    "@ionic/eslint-config": "^0.4.0",
+    "@ionic/prettier-config": "^4.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.4.2",
+    "rollup": "^4.30.1",
+    "typescript": "^5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "api": {
+    "name": "ffmpeg_thumnailPlugin",
+    "slug": "ffmpeg_thumnailplugin",
+    "docs": "",
+    "tags": [],
+    "methods": [
+      {
+        "name": "echo",
+        "signature": "(options: { value: string; }) => Promise<{ value: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ value: string; }"
+          }
+        ],
+        "returns": "Promise<{ value: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "echo"
+      },
+      {
+        "name": "generateThumbnail",
+        "signature": "(options: GenerateThumbnailOptions) => Promise<GenerateThumbnailResult>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "GenerateThumbnailOptions"
+          }
+        ],
+        "returns": "Promise<GenerateThumbnailResult>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "GenerateThumbnailResult",
+          "GenerateThumbnailOptions"
+        ],
+        "slug": "generatethumbnail"
+      },
+      {
+        "name": "getFileInfo",
+        "signature": "(options: GetFileInfoOptions) => Promise<GetFileInfoResult>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "GetFileInfoOptions"
+          }
+        ],
+        "returns": "Promise<GetFileInfoResult>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "GetFileInfoResult",
+          "GetFileInfoOptions"
+        ],
+        "slug": "getfileinfo"
+      },
+      {
+        "name": "initStartio",
+        "signature": "(options: { appId: string; }) => Promise<void>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ appId: string; }"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "initstartio"
+      },
+      {
+        "name": "showStartioInterstitial",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "showstartiointerstitial"
+      },
+      {
+        "name": "showStartioRewarded",
+        "signature": "() => Promise<{ rewarded: boolean; viewedTime: number; }>",
+        "parameters": [],
+        "returns": "Promise<{ rewarded: boolean; viewedTime: number; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "showstartiorewarded"
+      }
+    ],
+    "properties": []
+  },
+  "interfaces": [
+    {
+      "name": "GenerateThumbnailResult",
+      "slug": "generatethumbnailresult",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "data",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "GenerateThumbnailOptions",
+      "slug": "generatethumbnailoptions",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "path",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "GetFileInfoResult",
+      "slug": "getfileinforesult",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "name",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string | null"
+        },
+        {
+          "name": "size",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | null"
+        },
+        {
+          "name": "uri",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "persisted",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean"
+        },
+        {
+          "name": "localPath",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "GetFileInfoOptions",
+      "slug": "getfileinfooptions",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "uri",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "enums": [],
+  "typeAliases": [],
+  "pluginConfigs": []
+}
