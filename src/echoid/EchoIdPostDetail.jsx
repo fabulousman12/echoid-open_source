@@ -1,6 +1,40 @@
-import React, { useEffect, useRef } from "react";
-import { ArrowLeft } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Copy, Share2, X } from "lucide-react";
 import Skeleton from "react-loading-skeleton";
+
+const APP_POST_ORIGIN = "https://app.echoidchat.online";
+
+const getPostShareUrl = (post) => {
+  const postId = String(post?._id || post?.id || post?.postId || "").trim();
+  return postId ? `${APP_POST_ORIGIN}/app/post/${encodeURIComponent(postId)}` : APP_POST_ORIGIN;
+};
+
+const copyTextToClipboard = async (text) => {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
+};
+
+const stripInlineMediaTokens = (value = "") =>
+  String(value || "")
+    .replace(/\[(?:Link|Link_cover):-?\s*https?:\/\/[^\]\s]+(?:\s*\])?/gi, "")
+    .replace(/\[\[media:[^[\]]+\]\]/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
 const renderPostMedia = (media, altText, index, onPreviewMedia) => {
   if (!media?.url) return null;
@@ -37,7 +71,6 @@ function EchoIdDetailBodySkeleton() {
     </div>
   );
 }
-
 function EchoIdCommentSkeletonList({ count = 3 }) {
   return (
     <div className="echoid-post-comments-list" aria-hidden="true">
@@ -58,6 +91,83 @@ function EchoIdCommentSkeletonList({ count = 3 }) {
           </div>
         </article>
       ))}
+    </div>
+  );
+}
+
+function EchoIdShareModal({ post, shareUrl, previewMedia, previewText, onClose }) {
+  const [copyStatus, setCopyStatus] = useState("");
+  const author = post?.name || "Anonymous";
+  const title = post?.title || "EchoId post";
+
+  const handleCopyLink = async () => {
+    await copyTextToClipboard(shareUrl);
+    setCopyStatus("Link copied");
+  };
+
+  const handleShareLink = async () => {
+    await copyTextToClipboard(shareUrl);
+    setCopyStatus("Link copied. Choose an app to share.");
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text: previewText || `Open ${author}'s EchoId post`,
+          url: shareUrl,
+        });
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          setCopyStatus("Link copied");
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="echoid-share-modal-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
+      <section className="echoid-share-modal" role="dialog" aria-modal="true" aria-labelledby="echoid-share-title">
+        <div className="echoid-share-modal-head">
+          <div>
+            <span>Share post</span>
+            <strong id="echoid-share-title">{title}</strong>
+          </div>
+          <button type="button" className="echoid-share-close" aria-label="Close share dialog" onClick={onClose}>
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="echoid-share-preview">
+          {previewMedia?.url ? (
+            <div className="echoid-share-preview-media">
+              {previewMedia.kind === "video" ? (
+                <video src={previewMedia.url} muted playsInline preload="metadata" />
+              ) : (
+                <img src={previewMedia.url} alt={title} />
+              )}
+            </div>
+          ) : null}
+          <div className="echoid-share-preview-copy">
+            <strong>{author}</strong>
+            {previewText ? <p>{previewText}</p> : <p>Open this EchoId post in the app.</p>}
+          </div>
+        </div>
+
+        <div className="echoid-share-link-box">
+          <span>{shareUrl}</span>
+        </div>
+
+        <div className="echoid-share-actions">
+          <button type="button" onClick={handleCopyLink}>
+            <Copy size={17} />
+            <span>Copy link</span>
+          </button>
+          <button type="button" className="is-primary" onClick={handleShareLink}>
+            <Share2 size={17} />
+            <span>Share link</span>
+          </button>
+        </div>
+        {copyStatus ? <div className="echoid-share-status">{copyStatus}</div> : null}
+      </section>
     </div>
   );
 }
@@ -126,13 +236,19 @@ export default function EchoIdPostDetail({
   const commentNodeMapRef = useRef(new Map());
   const detailBodyRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const author = post.name || "Anonymous";
   const handle = post.username ? `@${post.username}` : "@anonymous";
   const title = post.title || "";
   const hasComments = Number(post.comments || 0) > 0;
   const replyTargetId = String(replyTarget?.id || "").trim();
+  const inlineMediaUrls = new Set(
+    Array.isArray(bodyBlocks)
+      ? bodyBlocks.filter((block) => block?.type === "media" && block?.value?.url).map((block) => block.value.url)
+      : []
+  );
   const extraMedia = Array.isArray(mediaItems)
-    ? mediaItems.filter((item) => item?.url && item.url !== leadMedia?.url && !Array.isArray(bodyBlocks))
+    ? mediaItems.filter((item) => item?.url && item.url !== leadMedia?.url && !inlineMediaUrls.has(item.url))
     : [];
   const topLevelComments = Array.isArray(comments) ? comments : [];
   const handleOpenCommentAuthor = (entry) => {
@@ -180,6 +296,11 @@ export default function EchoIdPostDetail({
     commentNodeMapRef.current.delete(normalizedCommentId);
   };
   const shouldRenderWitnessAction = canShowWitness && !canManageWitnesses;
+  const shareUrl = useMemo(() => getPostShareUrl(post), [post]);
+  const previewText = useMemo(() => {
+    const value = stripInlineMediaTokens(title || fullBodyText || "");
+    return value.length > 160 ? `${value.slice(0, 157)}...` : value;
+  }, [fullBodyText, title]);
 
   return (
     <div className="echoid-post-detail-screen">
@@ -255,25 +376,38 @@ export default function EchoIdPostDetail({
               {postError ? <div className="echoid-post-detail-status is-error">{postError}</div> : null}
               {!isPostLoading && Array.isArray(bodyBlocks) && bodyBlocks.length > 0 ? (
                 <div className="echoid-post-detail-flow">
-                  {bodyBlocks.map((block) =>
-                    block.type === "media" ? (
-                      <div key={block.key} className="echoid-post-detail-inline-media">
-                        {renderPostMedia(block.value, title || author, block.key, onPreviewMedia)}
-                      </div>
-                    ) : (
+                  {bodyBlocks.map((block) => {
+                    if (block.type === "media") {
+                      return (
+                        <div key={block.key} className="echoid-post-detail-inline-media">
+                          {renderPostMedia(block.value, title || author, block.key, onPreviewMedia)}
+                        </div>
+                      );
+                    }
+
+                    const textValue = stripInlineMediaTokens(block.value);
+                    return textValue ? (
                       <p key={block.key} className="echoid-post-detail-text">
-                        {block.value}
+                        {textValue}
                       </p>
-                    )
-                  )}
+                    ) : null;
+                  })}
                 </div>
-              ) : fullBodyText ? (
-                <p className="echoid-post-detail-text">{fullBodyText}</p>
+              ) : stripInlineMediaTokens(fullBodyText) ? (
+                <p className="echoid-post-detail-text">{stripInlineMediaTokens(fullBodyText)}</p>
               ) : (
                 <p className="echoid-post-muted">Media-only post</p>
               )}
 
               <div className="echoid-post-detail-actions">
+                <button
+                  type="button"
+                  className="echoid-post-action-button"
+                  onClick={() => setIsShareModalOpen(true)}
+                  aria-haspopup="dialog"
+                >
+                  Share
+                </button>
                 <button
                   type="button"
                   className={`echoid-post-action-button ${reactionValue === 1 ? "is-selected is-like" : ""}`}
@@ -379,6 +513,16 @@ export default function EchoIdPostDetail({
             </section>
           </div>
         </article>
+
+        {isShareModalOpen ? (
+          <EchoIdShareModal
+            post={post}
+            shareUrl={shareUrl}
+            previewMedia={leadMedia}
+            previewText={previewText}
+            onClose={() => setIsShareModalOpen(false)}
+          />
+        ) : null}
 
         <section className="echoid-post-comments-panel">
           <div className="echoid-post-comments-head">

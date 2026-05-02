@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.swipe",
+      "sha256_cert_fingerprints": [
+        "07:96:D5:07:D9:40:B7:D1:F3:37:5A:04:23:07:CA:2F:FD:5A:20:AE:A3:8E:09:2A:4B:F3:9A:DB:12:5D:FF:91"
+      ]
+    }
+  }
+]

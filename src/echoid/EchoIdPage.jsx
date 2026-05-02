@@ -2406,6 +2406,8 @@ export default function EchoIdPage({
   const selectedPostCommentSubmitting = Boolean(selectedPostId && commentSubmittingByPostId[selectedPostId]);
   const selectedPostCommentSubmitError = selectedPostId ? commentSubmitErrorByPostId[selectedPostId] || "" : "";
   const selectedPostReplyTarget = selectedPostId ? replyTargetByPostId[selectedPostId] || null : null;
+  const selectedPostHasFullDetail = Boolean(selectedPostId && selectedPostDetailMap[selectedPostId]);
+  const selectedPostContentLoading = Boolean(host && selectedPostId && (selectedPostLoading || !selectedPostHasFullDetail));
   const selectedPostWitnessValue = normalizeWitnessValue(postWitnessMap[selectedPostId] ?? selectedPost?.userWitness);
   const selectedPostIsOwner = isOwnerPost(selectedPost, anonymousProfile);
   const selectedPostWitnessPanelOpen = Boolean(selectedPostId && witnessPanelPostId === selectedPostId);
@@ -2886,7 +2888,7 @@ export default function EchoIdPage({
   };
 
   useEffect(() => {
-    if (!host || !selectedPostId || selectedPostDetailMap[selectedPostId]) return;
+    if (!host || !selectedPostId) return;
 
     let active = true;
     setSelectedPostLoading(true);
@@ -2912,9 +2914,9 @@ export default function EchoIdPage({
         console.warn("Failed to fetch EchoId post detail:", error);
         setSelectedPostError(error?.message || "Could not load the full post.");
       } finally {
-        console.log("Finished loading post detail for postId:", selectedPostId);
-         setSelectedPostLoading(false);
-      
+        if (active) {
+          setSelectedPostLoading(false);
+        }
       }
     };
 
@@ -2922,7 +2924,7 @@ export default function EchoIdPage({
     return () => {
       active = false;
     };
-  }, [host, selectedPostDetailMap, selectedPostId]);
+  }, [host, selectedPostId]);
 
   useEffect(() => {
     if (!host || !selectedPostId || !selectedPost || !isExplicitlyNonAnonymousPost(selectedPost)) return;
@@ -4022,10 +4024,10 @@ export default function EchoIdPage({
       <>
         <EchoIdPostDetail
           post={selectedPost}
-          fullBodyText={getFullPostBody(selectedPost.body)}
-          mediaItems={getPostMediaItems(selectedPost)}
-          leadMedia={getPostLeadMedia(selectedPost)}
-          bodyBlocks={getPostBodyBlocks(selectedPost)}
+          fullBodyText={selectedPostContentLoading ? "" : getFullPostBody(selectedPost.body)}
+          mediaItems={selectedPostContentLoading ? [] : getPostMediaItems(selectedPost)}
+          leadMedia={selectedPostContentLoading ? null : getPostLeadMedia(selectedPost)}
+          bodyBlocks={selectedPostContentLoading ? [] : getPostBodyBlocks(selectedPost)}
           relativeTimeLabel={formatRelativeTime(getRelativeMinutesFromDate(selectedPost.createdAt))}
           reactionValue={normalizeUserReactionValue(postReactionMap[getPostId(selectedPost)] ?? selectedPost?.userReaction)}
           witnessValue={selectedPostWitnessValue}
@@ -4061,7 +4063,7 @@ export default function EchoIdPage({
           commentSubmitError={selectedPostCommentSubmitError}
           viewerAvatarUrl={profileAvatarUrl}
           viewerName={profileDisplayName}
-          isPostLoading={selectedPostLoading}
+          isPostLoading={selectedPostContentLoading}
           postError={selectedPostError}
           witnessPanelOpen={selectedPostWitnessPanelOpen}
           witnessEntries={selectedPostWitnessEntries}

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
 import { isPlatform } from '@ionic/react';
-import {  CapacitorSQLite,SQLiteDBConnection } from '@capacitor-community/sqlite';
+
 import Maindata from '../data';
 import { runStorageWorker } from './storageWorkerBridge';
 const WebSocketContext = createContext();

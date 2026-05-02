@@ -25,7 +25,7 @@ import NewGroupPage from './pages/NewGroupPage';
 import GroupChatWindow from './pages/GroupChatWindow';
 import GroupAddMembersPage from './pages/GroupAddMembersPage';
 import StatusViewers from './pages/StatusViewers';
-
+import * as LiveUpdates from '@capacitor/live-updates';
 import { App as CapacitorApp } from '@capacitor/app';
 import {  setupIonicReact } from '@ionic/react';
 import '@ionic/react/css/core.css';
@@ -64,7 +64,7 @@ import ArchivedChats from './pages/Archived';
 import useMessageStore from './services/useMessageStore.js';
 import ChatWindow from './pages/chatwindo';
 import {WebSocketContext} from './services/websokcetmain'
-import { LiveUpdate } from '@capawesome/capacitor-live-update';
+
 import Blocklist from './components/Blocklist'
 import StarLoader  from './pages/StarLoader';
 import ProfilePage from './pages/ProfilePage';
@@ -2140,32 +2140,22 @@ const versionCodeToString = (code) => {
 useEffect(() => {
   const bootstrapUpdates = async () => {
     try {
-      // 1?? Native version (authority)
-      // Prefer build-time config to avoid startup storage timing races.
       const configuredNativeVersion = Number(Maindata.NativeVersionCode);
-      const nativeVersion = Number.isFinite(configuredNativeVersion) && configuredNativeVersion > 0
-        ? configuredNativeVersion
-        : await getNativeVersionWithRetry();
-      console.log('[BOOT] Native version:', nativeVersion);
 
-      if (nativeVersion === null) {
-        console.error('[BOOT] Invalid native version');
-        return;
-      }
+      const nativeVersion =
+        Number.isFinite(configuredNativeVersion) && configuredNativeVersion > 0
+          ? configuredNativeVersion
+          : await getNativeVersionWithRetry();
 
-            const nativeVersionStr = versionCodeToString(nativeVersion);
+      if (!nativeVersion) return;
 
-      // 2?? Ask server
+      const nativeVersionStr = versionCodeToString(nativeVersion);
+
       const res = await fetch(`https://${Maindata.SERVER_URL}/user/version`);
-      const data = await res.json(); // { version: "1.5" }
-console.log("versions",nativeVersionStr,data.version)
-      // 3?? Native update exists ? HARD BLOCK OTA
+      const data = await res.json();
+
+      // 🚫 BLOCK OTA IF NATIVE UPDATE EXISTS
       if (isVersionGreater(data.version, nativeVersionStr)) {
-        console.warn('[BOOT] Native update available ? blocking OTA');
-
-        // ?? wipe ALL OTA bundles
-        await LiveUpdate.reset();
-
         const updatedetails = await fetch(
           `https://${Maindata.SERVER_URL}/user/updatedetails`
         );
@@ -2173,34 +2163,43 @@ console.log("versions",nativeVersionStr,data.version)
 
         setCriticalUpdate(isCritical(data.version));
         setServerVersion(data.version);
-        setDownloadUrl(dat.resposnse_url || 'https://example.com/download');
+        setDownloadUrl(dat.resposnse_url || '');
         setShowModal2(true);
-
-        return; // ?? STOP HERE
+        return;
       }
-   const OTA_CHANNEL = `Live-update-${nativeVersionStr}`;
-        const OTA_TESTCHANNEL = `Live-update-test-${nativeVersionStr}`
-        console.log('[BOOT] OTA allowed ? channel: also for test now', Maindata.testchannel_actuve ? OTA_TESTCHANNEL : OTA_CHANNEL);
-      // 4?? Native is current ? OTA allowed
+
+      // ✅ OTA FLOW
       if (!Maindata.IsDev) {
         const OTA_CHANNEL = `Live-update-${nativeVersionStr}`;
-        const OTA_TESTCHANNEL = `Live-update-test-${nativeVersionStr}`
-        console.log('[BOOT] OTA allowed ? channel: also for test now', Maindata.testchannel_actuve ? OTA_TESTCHANNEL : OTA_CHANNEL);
-const final = Maindata.testchannel_actuve ? OTA_TESTCHANNEL : OTA_CHANNEL
-        await LiveUpdate.ready();
+        const OTA_TESTCHANNEL = `Live-update-test-${nativeVersionStr}`;
+        const final = Maindata.testchannel_actuve
+          ? OTA_TESTCHANNEL
+          : OTA_CHANNEL;
 
-        const syncResult = await LiveUpdate.sync({
-          channel: final,
-        });
+        console.log('[BOOT] OTA channel:', final);
 
-        console.log('[LiveUpdate] Sync result:', syncResult);
-
-        if (syncResult.nextBundleId) {
-          console.log('[LiveUpdate] New bundle installed ? reloading');
-          await LiveUpdate.reload();
-        } else {
-          console.log('[LiveUpdate] App already up-to-date');
+        // ✅ set channel (if supported)
+        if (LiveUpdates.setConfig) {
+         await LiveUpdates.setConfig({ channel: "Production" });
         }
+
+        // ✅ main call
+        const result = await LiveUpdates.sync();
+
+        console.log('[LiveUpdates] sync result:', result);
+ 
+        // 🔥 Appflow flag
+     if (result.activeApplicationPathChanged) {
+      console.log('[OTA] New update detected → reloading');
+
+      // small delay so WebView settles
+      setTimeout(() => {
+        // Appflow reload is flaky → fallback to browser reload
+        window.location.reload();
+      }, 300);
+    } else {
+      console.log('[OTA] No new update');
+    }
       }
     } catch (err) {
       console.error('[BOOT] Version / OTA bootstrap failed', err);
@@ -2209,8 +2208,6 @@ const final = Maindata.testchannel_actuve ? OTA_TESTCHANNEL : OTA_CHANNEL
 
   bootstrapUpdates();
 }, []);
-
-
 function isCritical(versionStr) {
   const parts = versionStr.split('.');
   if (parts.length < 2) return false;

@@ -1,9 +1,9 @@
 import React, { useState, createContext } from "react";
 import { IonToast } from "@ionic/react";
-import { Plugins } from '@capacitor/core'; // Import from @capacitor/core
+//import { Plugins } from '@capacitor/core'; // Import from @capacitor/core
 
 // Access Storage from Plugins
-const { Storage } = Plugins;
+//const { Storage } = Plugins;
 import Maindata from "../data";
 import { setTokens } from "../services/authTokens";
 import { api } from "../services/api";
@@ -176,7 +176,7 @@ const LoginProvider = (props) => {
 
   // Edit user function
   const editUser = async (formData) => {
-    const tokenResult = await Storage.get({ key: 'token' });
+    const tokenResult = await globalThis.storage.getItem('authtoken');
     const token = tokenResult.value;
     try {
       const response = await api.editUser(host, formData, { Auth: token });

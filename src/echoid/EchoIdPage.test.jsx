@@ -763,6 +763,108 @@ test("opens post details, renders body media, and lazily fetches comments", asyn
   expect(await findByText(/Absolutely agree\./i)).toBeTruthy();
 });
 
+test("renders multiple detail media links without showing raw link tokens", async () => {
+  api.postFeed.mockResolvedValueOnce(
+    jsonResponse({
+      success: true,
+      page: 1,
+      hasMore: false,
+      posts: [
+        {
+          _id: "post-multi-media",
+          name: "Kaddu",
+          username: "kaddu_khan",
+          createdAt: new Date().toISOString(),
+          category: "rant",
+          title: "Vbccg",
+          body: "Gjcv",
+          likes: 0,
+          dislikes: 1,
+          comments: 0,
+        },
+      ],
+    })
+  );
+  api.postById.mockResolvedValueOnce(
+    jsonResponse({
+      success: true,
+      post: {
+        _id: "post-multi-media",
+        name: "Kaddu",
+        username: "kaddu_khan",
+        createdAt: new Date().toISOString(),
+        category: "rant",
+        title: "Vbccg",
+        body:
+          "Gjcv\n[Link_cover:-https://cdn.example.com/cover.jpg]\n[Link:-https://cdn.example.com/extra.jpg]",
+        coverImage: "https://cdn.example.com/cover.jpg",
+        likes: 0,
+        dislike: 1,
+        comments: 0,
+      },
+    })
+  );
+
+  const { container, findByText, getByText, queryByText } = render(
+    <MemoryRouter>
+      <EchoIdPage host="https://api.example.com" />
+    </MemoryRouter>
+  );
+
+  expect(await findByText("Vbccg")).toBeTruthy();
+  fireEvent.click(getByText("Vbccg"));
+
+  expect(await findByText("Gjcv")).toBeTruthy();
+  expect(container.querySelector('img[src="https://cdn.example.com/cover.jpg"]')).toBeTruthy();
+  expect(container.querySelector('img[src="https://cdn.example.com/extra.jpg"]')).toBeTruthy();
+  expect(queryByText(/\[Link/i)).toBeNull();
+});
+
+test("refreshes post detail even when an initial post snapshot exists", async () => {
+  api.postById.mockResolvedValueOnce(
+    jsonResponse({
+      success: true,
+      post: {
+        _id: "post-stale",
+        name: "policy_watch",
+        username: "policy.watch",
+        createdAt: new Date().toISOString(),
+        category: "story",
+        title: "Stale detail",
+        body: "Full canonical body [Link_cover:-https://cdn.example.com/full.png]",
+        likes: 3,
+        dislikes: 0,
+        comments: 0,
+      },
+    })
+  );
+
+  const { container, findByText, queryByText } = render(
+    <MemoryRouter>
+      <EchoIdPage
+        host="https://api.example.com"
+        initialPostId="post-stale"
+        initialPost={{
+          _id: "post-stale",
+          name: "policy_watch",
+          username: "policy.watch",
+          createdAt: new Date().toISOString(),
+          category: "story",
+          title: "Stale detail",
+          body: "Partial preview body",
+          likes: 1,
+          comments: 0,
+        }}
+      />
+    </MemoryRouter>
+  );
+
+  expect(queryByText("Partial preview body")).toBeNull();
+  expect(await findByText("Full canonical body")).toBeTruthy();
+  expect(container.querySelector('img[src="https://cdn.example.com/full.png"]')).toBeTruthy();
+  expect(api.postById).toHaveBeenCalledWith("https://api.example.com", "post-stale");
+});
+
 test("sends a comment, updates local ui, and posts it to the backend", async () => {
   api.postFeed.mockResolvedValueOnce(
     jsonResponse({
