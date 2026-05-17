@@ -1,4 +1,4 @@
-# EchoId - Open Source Secure Messaging Platform
+# EchoId - Open Source Secure Messaging Platform(In Public beta Stage)
 
 EchoId is a privacy-focused, open-source messaging Project built for secure, real-time communication without tracking, analytics, or unnecessary data collection.
 
