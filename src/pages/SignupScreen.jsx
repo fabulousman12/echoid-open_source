@@ -32,6 +32,7 @@ const [otpRequestTime, setOtpRequestTime] = useState(null);
   },[alertMessage,showAlert])
 const handleNext = (info) => {
   setUserInfo(info);
+  console.log(info)
   const requestTime = Date.now();
   globalThis.storage.setItem('otpRequestTime', requestTime.toString());
   setOtpRequestTime(requestTime); // <- update the state
@@ -118,6 +119,8 @@ handleVerifyOTP(json.otp, info)
           accepted_terms: !!userInfo.acceptedTerms,
           accepted_terms_at: new Date().toISOString(),
           accepted_terms_version: data.TermsVersion,
+          accepted_terms_of_use:userInfo.acctepuse,
+          accepted_terms_of_use_version:data.UseVersion
         });
 
         setIsLoad(false);
@@ -128,7 +131,7 @@ handleVerifyOTP(json.otp, info)
           globalThis.storage.setItem("privateKey", keyBundle.privateKey);
           await setTokens({ accessToken: response.data, refreshToken: response.refreshToken });
 const deviceId = (await getDeviceInfo()).deviceId;
-const wul = `wss://${data.SERVER_URL}?token=${response.data}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
+const wul = `wss://${data.SERVER_URL}?token=${encodeURIComponent(response.data)}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
                     await connect(wul);
                     await  getuser();
 await sendPublicKeyToBackend(response.data, userInfo.password);

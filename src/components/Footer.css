@@ -2,7 +2,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--app-mobile-browser-bottom-gap, 0px);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: end;
@@ -90,4 +90,8 @@
   border-radius: 999px;
   background: #2ce5a7;
   border: 2px solid #111729;
+}
+
+body.mobile-web-browser .footer {
+  border-radius: 26px 26px 0 0;
 }

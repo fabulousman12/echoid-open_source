@@ -18,8 +18,8 @@ import { getDeviceId, getDeviceIdSync } from "../services/deviceInfo";
 import { uploadProfileImageInChunks } from "../services/profileChunkUpload";
 import { clearAnonymousProfile, readAnonymousProfile, saveAnonymousProfile } from "../services/anonymousProfileStorage";
 import Swal from "sweetalert2";
-import data from "../data";
 import ImageRenderer from "../components/ImageRenderer";
+import PrivacyPolicy from "../components/PrivacyPolicy";
 
 const PROFILE_NAME_MAX_LENGTH = 30;
 const PROFILE_ABOUT_MAX_LENGTH = 120;
@@ -59,6 +59,10 @@ const ProfilePage = ({host}) => {
   const [revokePassword, setRevokePassword] = useState("");
   const [revokeLoading, setRevokeLoading] = useState(false);
   const [revokeError, setRevokeError] = useState("");
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [headerVisible, setHeaderVisible] = useState(true);
   const [statusViewerScope, setStatusViewerScope] = useState("all_chat_users");
   const [statusViewersCount, setStatusViewersCount] = useState(0);
@@ -493,7 +497,6 @@ if (
       globalThis.storage.removeItem('privateKey');
       setCurrentUser(null);
       await clearTokens();
-      globalThis.storage.removeItem("device_token");
       globalThis.storage.removeItem("currentuser");
       globalThis.storage.removeItem("privateKey");
       history.push('/login');
@@ -783,6 +786,59 @@ if (
     setRevokePassword("");
     setRevokeError("");
     setRevokeLoading(false);
+  };
+
+  const closePasswordModal = () => {
+    setPasswordModalOpen(false);
+    setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    setPasswordError("");
+    setPasswordLoading(false);
+  };
+
+  const confirmPasswordChange = async () => {
+    const oldPassword = passwordForm.oldPassword.trim();
+    const newPassword = passwordForm.newPassword;
+    const confirmPassword = passwordForm.confirmPassword;
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Please fill in all password fields.");
+      return;
+    }
+    if (newPassword.length < 7) {
+      setPasswordError("New password must be longer than 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation do not match.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    setPasswordError("");
+    try {
+      const res = await api.changePassword(host, oldPassword, newPassword);
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || json?.error || "Failed to update password.");
+      }
+      const nextUser = json.userResponse || currentUser;
+      if (nextUser) {
+        globalThis.storage?.setItem?.("currentuser", JSON.stringify(nextUser));
+        setCurrentUser(nextUser);
+      }
+      closePasswordModal();
+      await Swal.fire({
+        title: "Password updated",
+        text: "Your encrypted private key was re-secured with the new password.",
+        icon: "success",
+        width: 320,
+        padding: "1.2rem",
+        customClass: { popup: "mobile-alert" },
+      });
+    } catch (err) {
+      setPasswordError(err.message || "Failed to update password.");
+    } finally {
+      setPasswordLoading(false);
+    }
   };
   
   const confirmRevokeSession = async () => {
@@ -1142,7 +1198,7 @@ if (
                     <small>View devices and active sessions</small>
                   </span>
                 </button>
-                <button type="button" className="profile-settings-web__feature" onClick={() => {}}>
+                <button type="button" className="profile-settings-web__feature" onClick={() => setPasswordModalOpen(true)}>
                   <span className="profile-settings-web__featureIcon"><Phone size={16} /></span>
                   <span className="profile-settings-web__featureText">
                     <strong>Manage password</strong>
@@ -1321,10 +1377,11 @@ if (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => {}}
+      onClick={() => setPasswordModalOpen(true)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-        }
+          if (e.key === "Enter" || e.key === " ") {
+            setPasswordModalOpen(true);
+          }
       }}
       className="active-logins-row"
     >
@@ -1621,119 +1678,7 @@ if (
               <div className="profile-details-header">
                 <h2 className="text-base font-semibold text-slate-900">Privacy policy</h2>
               </div>
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-5 text-sm text-slate-600 space-y-4 leading-relaxed">
-                <p>
-                  By using this app, you agree to this Privacy Policy. We respect your privacy and are
-                  committed to protecting your information.
-                </p>
-                <div className="text-xs text-slate-500">
-                  Privacy Policy version: {data.TermsVersion}
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Information we store</div>
-                  <div>
-                    We store basic account details you provide such as name, email, phone number, and
-                    profile image at account creation.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Messages and delivery</div>
-                  <div>
-                    Messages are stored on our servers only while undelivered. After delivery, they are
-                    removed from the database.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Local device storage</div>
-                  <div>
-                    Chat history, call history, app preferences (mute, notification sounds), and
-                    downloaded files are stored locally on your device for performance and offline access.
-                    You can delete local data from within the app.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Security and sessions</div>
-                  <div>
-                    Device details like model and OS are used to manage login sessions and keep your
-                    account secure.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Session metadata</div>
-                  <div>
-                    For security, we store session metadata such as device name, OS, app version,
-                    IP address, last active time, and user agent.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Encryption</div>
-                  <div>
-                    Messages are encrypted using asymmetric RSA 2048-bit cryptography. Your private key
-                    stays only on your device. A one-way hash + salt is stored in the database for
-                    matching purposes. Passwords are also stored as one-way hash + salt.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Media and permissions</div>
-                  <div>
-                    Camera and microphone access are used for calls and voice messages. Photo and media
-                    access are used for profile images and attachments. Contacts access is optional and
-                    only used to show your device contacts when you create a new chat.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Files and attachments</div>
-                  <div>
-                    Files you send are uploaded to our servers for delivery and may be retained as needed
-                    for recipients to download. Downloaded files are saved on your device.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Location</div>
-                  <div>
-                    If you choose to set a location, we use a location search service to help you pick
-                    it. Providing location is optional.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Notifications</div>
-                  <div>
-                    Dead app delivery is handled by third-party services such as FCM and Pushy. We do
-                    not use extra data without your prior permission. We store a device token to send
-                    notifications.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Calls</div>
-                  <div>
-                    Calls are designed to be peer-to-peer to bypass servers when possible. A TURN server
-                    is used as a fallback. Call history is saved locally on your device.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Your choices</div>
-                  <div>
-                    You can edit your profile, manage sessions, and request account deletion.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="font-semibold text-slate-800 mb-1">Contact</div>
-                  <div>If you have questions about privacy, contact support.</div>
-                </div>
-              </div>
+              <PrivacyPolicy title="" />
             </div>
           )}
 
@@ -1826,6 +1771,76 @@ if (
             </div>
           );
           })}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Change password modal */}
+  {passwordModalOpen && (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        zIndex: 100000,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "min(92vw, 420px)",
+          background: "#fff",
+          borderRadius: 12,
+          overflow: "hidden",
+          padding: 16,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Change password</div>
+        <div style={{ fontSize: 12, color: "#475569", marginBottom: 12 }}>
+          Your private key will be decrypted with the current password and encrypted again with the new one.
+        </div>
+        {[
+          ["oldPassword", "Current password", "current-password"],
+          ["newPassword", "New password", "new-password"],
+          ["confirmPassword", "Confirm new password", "new-password"],
+        ].map(([field, placeholder, autoComplete]) => (
+          <input
+            key={field}
+            type="password"
+            value={passwordForm[field]}
+            onChange={(e) => setPasswordForm((prev) => ({ ...prev, [field]: e.target.value }))}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            className="w-full px-4 py-3 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            style={{ marginTop: field === "oldPassword" ? 0 : 10 }}
+          />
+        ))}
+        {passwordError && (
+          <div style={{ fontSize: 12, color: "#e11d48", marginTop: 8 }}>
+            {passwordError}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+          <button
+            onClick={closePasswordModal}
+            disabled={passwordLoading}
+            style={{ background: "#e2e8f0", color: "#0f172a", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmPasswordChange}
+            disabled={passwordLoading}
+            style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer" }}
+          >
+            {passwordLoading ? "Updating..." : "Update password"}
+          </button>
         </div>
       </div>
     </div>

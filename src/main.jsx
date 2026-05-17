@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Route, Switch, Redirect,useLocation  } from 'r
 import './services/notificationBootstrap';
 import { initPrefStorage, storage } from "./services/prefStorage";
 import { getDeviceId } from "./services/deviceInfo";
+import { Capacitor } from "@capacitor/core";
 const production = true
 if (production) {
   // Silence noisy console output in production builds without changing app logic.
@@ -17,6 +18,30 @@ if (production) {
 }
 window.addEventListener("DOMContentLoaded", async () => {
   try {
+    const syncMobileWebViewport = () => {
+      const isNative = Boolean(Capacitor.isNativePlatform?.());
+      const isNarrow = window.matchMedia?.("(max-width: 768px)")?.matches ?? window.innerWidth <= 768;
+      const isMobileWeb = !isNative && isNarrow;
+      document.body.classList.toggle("mobile-web-browser", isMobileWeb);
+
+      if (!isMobileWeb) {
+        document.documentElement.style.removeProperty("--app-mobile-browser-bottom-gap");
+        return;
+      }
+
+      const visualViewport = window.visualViewport;
+      const viewportGap = visualViewport
+        ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop)
+        : 0;
+      const browserControlsGap = Math.max(42, Math.ceil(viewportGap));
+      document.documentElement.style.setProperty("--app-mobile-browser-bottom-gap", `${browserControlsGap}px`);
+    };
+
+    syncMobileWebViewport();
+    window.addEventListener("resize", syncMobileWebViewport);
+    window.visualViewport?.addEventListener("resize", syncMobileWebViewport);
+    window.visualViewport?.addEventListener("scroll", syncMobileWebViewport);
+
     globalThis.storage = storage;
     globalThis.storageReady = initPrefStorage([
       "token",
@@ -58,7 +83,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const root = createRoot(container);
 
     root.render(
-      <React.StrictMode>
+     
          <Router> 
         <MessageProvider> {/* Wrap the App with the MessageProvider */}
         <WebSocketProvider> {/* Wrap the App with the WebSocketProvider */}
@@ -66,7 +91,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         </WebSocketProvider>
         </MessageProvider>
          </Router> 
-      </React.StrictMode>
+    
     );
   } catch (e) {
     console.error("Error during initialization:", e);

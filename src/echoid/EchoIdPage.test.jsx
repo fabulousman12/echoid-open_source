@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, within } from "@testing-library/react";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import Swal from "sweetalert2";
@@ -284,8 +284,24 @@ test("opens user details from search results and loads public posts", async () =
           username: "kaddu_lover",
           createdAt: new Date().toISOString(),
           category: "story",
+          anonymity: false,
           title: "User post",
           body: "Public body [Link:-https://cdn.example.com/p.png]",
+          likes: 1,
+          dislike: 0,
+          comments: 0,
+          witness: 0,
+        },
+        {
+          _id: "user-post-hidden",
+          posterId: "507f1f77bcf86cd799439099",
+          name: "Kaddu Lover",
+          username: "kaddu_lover",
+          createdAt: new Date().toISOString(),
+          category: "confessions",
+          anonymity: true,
+          title: "Hidden anonymous post",
+          body: "Private body",
           likes: 1,
           comments: 0,
           witness: 0,
@@ -293,8 +309,16 @@ test("opens user details from search results and loads public posts", async () =
       ],
     })
   );
+  api.postReactionsBatch.mockResolvedValueOnce(
+    jsonResponse({
+      success: true,
+      reactions: [{ postId: "user-post-1", value: 1 }],
+      witnesses: [],
+    })
+  );
+  api.postDislike.mockResolvedValueOnce(jsonResponse({ success: true, likes: 0, dislikes: 1 }));
 
-  const { getByText, getByLabelText, findByText } = render(
+  const { getByText, getByLabelText, getByRole, findByText, queryByText } = render(
     <MemoryRouter>
       <EchoIdPage host="https://api.example.com" />
     </MemoryRouter>
@@ -316,6 +340,23 @@ test("opens user details from search results and loads public posts", async () =
 
   expect(await findByText("User post")).toBeTruthy();
   expect(getByText("Public body")).toBeTruthy();
+  expect(queryByText("Hidden anonymous post")).toBeNull();
+  await waitFor(() => {
+    expect(getByRole("button", { name: /Likes 1/i }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  fireEvent.click(getByRole("button", { name: /Dislikes 0/i }));
+
+  expect(await findByText("Dislikes 1")).toBeTruthy();
+  expect(getByText("Likes 0")).toBeTruthy();
+  expect(api.postReactionsBatch).toHaveBeenCalledWith("https://api.example.com", {
+    clientId: "507f1f77bcf86cd799439011",
+    postIds: ["user-post-1"],
+    witnessPostIds: [],
+  });
+  expect(api.postDislike).toHaveBeenCalledWith("https://api.example.com", "user-post-1", {
+    clientId: "507f1f77bcf86cd799439011",
+  });
   expect(api.getAnonymousUser).toHaveBeenCalledWith("https://api.example.com", "507f1f77bcf86cd799439099");
   expect(api.postByClientId).toHaveBeenCalledWith("https://api.example.com", "507f1f77bcf86cd799439099");
 });
@@ -1284,14 +1325,15 @@ test("publishes uploaded media with Link_cover for the selected cover image", as
   fireEvent.click(getByLabelText("Open menu"));
   fireEvent.click(getByText("Create Echo"));
   fireEvent.change(getByLabelText("Title"), { target: { value: "Cover publish" } });
-  fireEvent.change(getByLabelText("Body"), { target: { value: "intro" } });
+  const longBody = Array.from({ length: 170 }, (_, index) => `w${index + 1}`).join(" ");
+  fireEvent.change(getByLabelText("Body"), { target: { value: longBody } });
 
   const fileInput = document.querySelector(".echoid-hidden-file-input");
   const firstFile = new File(["first"], "first.png", { type: "image/png" });
   const secondFile = new File(["second"], "second.png", { type: "image/png" });
   fireEvent.change(fileInput, { target: { files: [firstFile, secondFile] } });
 
-  fireEvent.click(getByText("Make cover"));
+  fireEvent.click(await findByText("Make cover"));
   fireEvent.click(getByText("Preview Echo"));
   fireEvent.click(getByText("Publish Echo"));
 
@@ -1305,10 +1347,12 @@ test("publishes uploaded media with Link_cover for the selected cover image", as
     expect.objectContaining({
       title: "Cover publish",
       anonymity: true,
-      body:
-        "intro\n[Link:-https://cdn.example.com/1.png]\n[Link_cover:-https://cdn.example.com/2.png]",
     })
   );
+  const createPayload = api.createPost.mock.calls[0][1];
+  expect(createPayload.body).toContain("w170");
+  expect(createPayload.body).toContain("[Link:-https://cdn.example.com/1.png]");
+  expect(createPayload.body).toContain("[Link_cover:-https://cdn.example.com/2.png]");
   expect(api.postUploadDelete).not.toHaveBeenCalled();
 });
 
@@ -1355,6 +1399,7 @@ test("cleans up uploaded media when post creation fails", async () => {
   const fileInput = document.querySelector(".echoid-hidden-file-input");
   const file = new File(["cleanup"], "cleanup.png", { type: "image/png" });
   fireEvent.change(fileInput, { target: { files: [file] } });
+  expect(await findByText("cleanup.png")).toBeTruthy();
 
   fireEvent.click(getByText("Preview Echo"));
   fireEvent.click(getByText("Use profile"));

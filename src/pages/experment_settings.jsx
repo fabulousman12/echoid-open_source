@@ -16,6 +16,8 @@ import { api } from "../services/api";
 import { getRefreshToken, clearTokens } from "../services/authTokens";
 import { InAppBrowser } from '@awesome-cordova-plugins/in-app-browser';
 import WebSettingsPage from "./WebSettingsPage";
+import PrivacyPolicy from "../components/PrivacyPolicy";
+import TermsUse  from "../components/Terms_of_use"
 export default function SettingsPage({ ForAllSounfds, setForAllSounds, setismute, isnotmute, mode, setMode, messagesRef,setCurrentUser, adminUnread}) {
   const host = `https://${Maindata.SERVER_URL}`;
   const SUPPORT_URL = "https://buymeachai.ezee.li/Fabulousman";
@@ -398,7 +400,7 @@ const handleSoundUpload = async () => {
         <button className="action-btn admin-chat-btn" onClick={() => history.push("/AdminChat")}>
           {adminUnread && <span className="admin-unread-dot" />}
           <span className="action-icon"><RiAdminFill /></span>
-          <span>Admin Chat</span>
+          <span>Support Chat</span>
         </button>
         <button className="action-btn">
           <span className="action-icon">⭐</span>
@@ -417,10 +419,18 @@ const handleSoundUpload = async () => {
       </div>
     </div>
   )
+ const categories2 = [
+    { id: "notifications", title: "Notifications", icon: "N" },
+    { id: "ui", title: "UI Settings", icon: "UI" },
+    { id: "storage", title: "Storage", icon: "S" },
+    { id: "about", title: "About", icon: "i" },
+    { id: "support", title: "Support", icon: "+" },
+      
+  ]
 
   const renderCategoriesList = () => (
     <div className="categories-list">
-      {categories.map((category) => (
+      {categories2.map((category) => (
         <button key={category.id} className="category-item" onClick={() => setActiveCategory(category.id)}>
           <div className="category-left">
             <span className="category-icon">{category.icon}</span>
@@ -813,12 +823,12 @@ const handleSoundUpload = async () => {
           <h3 className="customtext">Developer Notes</h3>
           <p className="customtext-secondary">
             This app was built to combine modern communication with efficient file sharing, 
-            real-time messaging, and a polished UI inspired by WhatsApp and Telegram.
-            Its an advise for now dont log-in from any-other device other wise you might break security keys
+            real-time messaging,peer 2 peer audio-video call,group messaging,whatsapp story like features,anonymous posting with 3 layer identity and a polished UI inspired by WhatsApp and Telegram.
+            
           </p>
         </div>
   <div className="notification-card">
-          <h3 className="customtext">Creditqs</h3>
+          <h3 className="customtext">Credits</h3>
           <p className="customtext-secondary">
             Designed and developed by <strong>[Jit Chakraborty]</strong>
           </p>
@@ -826,7 +836,7 @@ const handleSoundUpload = async () => {
            <h2>About App</h2>
       <div className="about-item">
         <span>App Name</span>
-        <span className="about-value">Swipe</span>
+        <span className="about-value">EchoId</span>
       </div>
       <div className="about-item">
         <span>Version</span>
@@ -840,8 +850,13 @@ const handleSoundUpload = async () => {
         <span>Developer</span>
         <span className="about-value">Jit Chakraborty</span>
       </div>
-      <button className="privacy-btn">Privacy Policy test</button>
-      <button className="terms-btn">Terms of Service  </button>
+       <div className="about-item">
+        <span>Contact</span>
+        <span className="about-value">Email:- echoidsc@gmail.com</span>
+      </div>
+      
+      <button className="privacy-btn" onClick={() => setActiveCategory("privacyPolicy")}>Privacy Policy</button>
+      <button className="terms-btn" onClick={()=>setActiveCategory("termsOfUse")}>Terms of Service  </button>
     </div>
   )
 
@@ -874,7 +889,20 @@ const handleSoundUpload = async () => {
     else if (categoryId === "ui") content = renderUISettings()
     else if (categoryId === "storage") content = renderStorage()
     else if (categoryId === "about") content = renderAbout()
+    else if (categoryId === "privacyPolicy") content = (
+      <div className="settings-content">
+        <h2>Privacy Policy</h2>
+        <PrivacyPolicy title="" />
+      </div>
+    )
+    else if (categoryId === "termsOfUse") content = (
+      <div className="settings-content">
+        <h2>Terms of use</h2>
+        < TermsUse title="" />
+      </div>
+    )
     else if (categoryId === "support") content = renderSupport()
+    
 
     return (
       <div className="settings-detail">
@@ -890,6 +918,7 @@ const handleSoundUpload = async () => {
     { id: "storage", title: "Storage", icon: "S" },
     { id: "about", title: "About", icon: "i" },
     { id: "support", title: "Support", icon: "+" },
+        { id: "termsOfuse", title: "Terms Of Use", icon: "U" },
   ]
 
   const isDesktopWebSettings = !isPlatform('hybrid') && viewportWidth >= 940;

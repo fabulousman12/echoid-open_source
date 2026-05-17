@@ -49,6 +49,8 @@ const LoginProvider = (props) => {
     accepted_terms,
     accepted_terms_at,
     accepted_terms_version,
+    accepted_terms_of_use,
+    accepted_terms_of_use_version
   }) => {
   try {
     const deviceInfo = await getDeviceInfo();
@@ -79,6 +81,8 @@ const LoginProvider = (props) => {
       accepted_terms: !!accepted_terms,
       accepted_terms_at,
       accepted_terms_version,
+      accepted_terms_of_use,
+      accepted_terms_of_use_version,
       ...deviceInfo,
     };
 

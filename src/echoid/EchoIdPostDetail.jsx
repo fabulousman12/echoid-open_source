@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Share2, X } from "lucide-react";
+import { ArrowLeft, Copy, Maximize2, Pause, Play, Share2, Video, Volume2, VolumeX, X } from "lucide-react";
 import Skeleton from "react-loading-skeleton";
 
 const APP_POST_ORIGIN = "https://app.echoidchat.online";
@@ -36,13 +36,263 @@ const stripInlineMediaTokens = (value = "") =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+const isSafeMediaUrl = (url) => /^(https?:\/\/|blob:|data:image\/|data:video\/)/i.test(String(url || "").trim());
+const videoMediaUrlRegex = /\.(mp4|mov|webm|ogg|m4v)(?:[?#].*)?$/i;
+const getVideoThumbnailUrl = (url) => {
+  const raw = String(url || "").trim();
+  if (!raw || !videoMediaUrlRegex.test(raw)) return "";
+  return raw.replace(/\.(mp4|mov|webm|ogg|m4v)([?#].*)?$/i, ".png$2");
+};
+
+function useLazyDetailMedia(rootMargin = "280px") {
+  const ref = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) return undefined;
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isVisible, rootMargin]);
+
+  return [ref, isVisible];
+}
+
+function EchoIdDetailVideoThumbnail({ media, onOpenFullscreen }) {
+  const [mediaRef, isVisible] = useLazyDetailMedia();
+  const derivedPoster = media?.thumbnailUrl || getVideoThumbnailUrl(media?.url);
+  const [thumbnail, setThumbnail] = useState(derivedPoster);
+  const [didTryThumbnail, setDidTryThumbnail] = useState(Boolean(derivedPoster));
+  const [nativeFrameFailed, setNativeFrameFailed] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+  const [wantsPlayback, setWantsPlayback] = useState(false);
+  const [isPlaybackFocused, setIsPlaybackFocused] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const nextPoster = media?.thumbnailUrl || getVideoThumbnailUrl(media?.url);
+    setThumbnail(nextPoster);
+    setDidTryThumbnail(Boolean(nextPoster));
+    setNativeFrameFailed(false);
+    setHasActivatedPlayback(false);
+    setWantsPlayback(false);
+    setIsPlaying(false);
+    setIsMuted(false);
+    return undefined;
+  }, [isVisible, media?.thumbnailUrl, media?.url]);
+
+  const shouldRenderVideo = Boolean(media?.url && !nativeFrameFailed && hasActivatedPlayback);
+  const progressValue = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !hasActivatedPlayback || !wantsPlayback) return undefined;
+    if (!isPlaybackFocused) {
+      video.pause?.();
+      return undefined;
+    }
+    const playPromise = video.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => setIsPlaying(false));
+    }
+    return undefined;
+  }, [hasActivatedPlayback, isPlaybackFocused, media?.url, wantsPlayback]);
+
+  useEffect(() => {
+    const node = mediaRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsPlaybackFocused(typeof document === "undefined" || document.visibilityState !== "hidden");
+      return undefined;
+    }
+
+    const updateFocusFromViewport = () => {
+      if (document.visibilityState === "hidden") {
+        setIsPlaybackFocused(false);
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      const visibleArea = visibleWidth * visibleHeight;
+      const totalArea = Math.max(1, rect.width * rect.height);
+      setIsPlaybackFocused(visibleArea / totalArea >= 0.45);
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsPlaybackFocused(Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.45 && document.visibilityState !== "hidden"));
+      },
+      { threshold: [0, 0.45, 0.8] }
+    );
+
+    observer.observe(node);
+    document.addEventListener("visibilitychange", updateFocusFromViewport);
+    window.addEventListener("blur", updateFocusFromViewport);
+    window.addEventListener("focus", updateFocusFromViewport);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", updateFocusFromViewport);
+      window.removeEventListener("blur", updateFocusFromViewport);
+      window.removeEventListener("focus", updateFocusFromViewport);
+    };
+  }, [mediaRef]);
+
+  useEffect(() => {
+    if (isPlaybackFocused) return undefined;
+    videoRef.current?.pause?.();
+    return undefined;
+  }, [isPlaybackFocused]);
+
+  const togglePlayback = async (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const video = videoRef.current;
+    if (!video) {
+      setHasActivatedPlayback(true);
+      setWantsPlayback(true);
+      return;
+    }
+    if (video.paused) {
+      setWantsPlayback(true);
+      const playPromise = video.play?.();
+      if (playPromise?.catch) await playPromise.catch(() => {});
+    } else {
+      setWantsPlayback(false);
+      video.pause?.();
+    }
+  };
+
+  const openFullscreenPlayback = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    videoRef.current?.pause?.();
+    onOpenFullscreen?.();
+  };
+
+  const toggleMute = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setIsMuted((current) => {
+      const nextMuted = !current;
+      if (videoRef.current) {
+        videoRef.current.muted = nextMuted;
+      }
+      return nextMuted;
+    });
+  };
+
+  const handleTimelineChange = (event) => {
+    event.stopPropagation();
+    const video = videoRef.current;
+    const nextPercent = Number(event.target.value || 0);
+    if (!video || !duration) return;
+    const nextTime = (nextPercent / 100) * duration;
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
+  if (!isSafeMediaUrl(media?.url)) return null;
+
+  return (
+    <span
+      ref={mediaRef}
+      className={`echoid-post-media echoid-video-thumb-shell has-controls ${isPlaying ? "is-playing" : ""}`}
+      aria-label="Video preview"
+      role="button"
+      tabIndex={0}
+      onClick={togglePlayback}
+      onDoubleClick={openFullscreenPlayback}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        togglePlayback(event);
+      }}
+    >
+      {shouldRenderVideo ? (
+        <video
+          ref={videoRef}
+          src={media.url}
+          className="echoid-video-thumb-video"
+          playsInline
+          preload="metadata"
+          poster={thumbnail}
+          muted={isMuted}
+          onError={() => setNativeFrameFailed(true)}
+          onLoadedMetadata={(event) => setDuration(Number(event.currentTarget.duration || 0))}
+          onTimeUpdate={(event) => setCurrentTime(Number(event.currentTarget.currentTime || 0))}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => {
+            setIsPlaying(false);
+            setWantsPlayback(false);
+          }}
+        />
+      ) : thumbnail ? (
+        <img
+          src={thumbnail}
+          alt=""
+          className="echoid-video-thumb-image"
+          loading="lazy"
+          decoding="async"
+          onError={() => setThumbnail("")}
+        />
+      ) : (
+        <span className="echoid-video-thumb-fallback">
+          <Video size={16} />
+          <span>{isVisible && !didTryThumbnail ? "Loading" : "Video"}</span>
+        </span>
+      )}
+      <span className="echoid-video-play-overlay" aria-hidden="true">
+        {isPlaying ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" />}
+      </span>
+      {shouldRenderVideo ? (
+        <span className="echoid-video-thumb-controls" onClick={(event) => event.stopPropagation()}>
+          <button type="button" onClick={toggleMute} aria-label={isMuted ? "Unmute video" : "Mute video"}>
+            {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value={progressValue}
+            onChange={handleTimelineChange}
+            onPointerDown={(event) => event.stopPropagation()}
+            aria-label="Video timeline"
+          />
+          <button type="button" onClick={openFullscreenPlayback} aria-label="Open fullscreen video">
+            <Maximize2 size={15} />
+          </button>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 const renderPostMedia = (media, altText, index, onPreviewMedia) => {
   if (!media?.url) return null;
 
   return (
     <div
       key={`${media.url}-${index}`}
-      className="echoid-detail-media-frame"
+      className={`echoid-detail-media-frame ${media.kind === "video" ? "is-video" : "is-image"}`}
       onClick={() => onPreviewMedia?.(media, altText)}
       role="button"
       tabIndex={0}
@@ -54,7 +304,7 @@ const renderPostMedia = (media, altText, index, onPreviewMedia) => {
       }}
     >
       {media.kind === "video" ? (
-        <video src={media.url} className="echoid-post-media" controls playsInline preload="metadata" />
+        <EchoIdDetailVideoThumbnail media={media} onOpenFullscreen={() => onPreviewMedia?.(media, altText)} />
       ) : (
         <img src={media.url} alt={altText} className="echoid-post-media" loading="lazy" />
       )}

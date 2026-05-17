@@ -59,7 +59,8 @@ vi.mock("../services/authTokens", () => ({
 
 vi.mock("../services/deviceInfo", () => ({
   getDeviceId: vi.fn(async () => "device-1"),
-  getDeviceIdSync: vi.fn(() => "device-1")
+  getDeviceIdSync: vi.fn(() => "device-1"),
+  isAndroidNative: vi.fn(() => false)
 }));
 
 function createStorageMock() {
@@ -103,7 +104,7 @@ test("logout clears storage, tokens, and routes to login", async () => {
   expect(clearTokens).toHaveBeenCalled();
   expect(globalThis.storage.removeItem).toHaveBeenCalledWith("currentuser");
   expect(globalThis.storage.removeItem).toHaveBeenCalledWith("privateKey");
-  expect(globalThis.storage.removeItem).toHaveBeenCalledWith("device_token");
+  expect(globalThis.storage.removeItem).not.toHaveBeenCalledWith("device_token");
   expect(pushMock).toHaveBeenCalledWith("/login");
 });
 

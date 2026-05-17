@@ -13,6 +13,14 @@ const MessageProvider = (props) => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [isLoad, setIsLoad] = useState(true);
+  const [echoIdUnreadNotifications, setEchoIdUnreadNotifications] = useState(() => {
+    try {
+      const stored = globalThis.storage?.readJSON?.("echoIdNotifications", []) || [];
+      return Array.isArray(stored) ? stored.filter((item) => item && item.read !== true && item.view !== true).length : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   // Fetch users from storage or API
   const fetchUsers = useCallback(async (host) => {
@@ -119,6 +127,23 @@ const MessageProvider = (props) => {
     return () => window.removeEventListener("calls-updated", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event) => {
+      if (typeof event?.detail?.count === "number") {
+        setEchoIdUnreadNotifications(Math.max(0, event.detail.count));
+        return;
+      }
+      try {
+        const stored = globalThis.storage?.readJSON?.("echoIdNotifications", []) || [];
+        setEchoIdUnreadNotifications(Array.isArray(stored) ? stored.filter((item) => item && item.read !== true && item.view !== true).length : 0);
+      } catch {
+        setEchoIdUnreadNotifications(0);
+      }
+    };
+    window.addEventListener("echoid-notifications-updated", handler);
+    return () => window.removeEventListener("echoid-notifications-updated", handler);
+  }, []);
+
   return (
     <MessageContext.Provider
       value={{
@@ -140,6 +165,8 @@ const MessageProvider = (props) => {
        setAlertMessage,
        isLoad,
        setIsLoad,
+       echoIdUnreadNotifications,
+       setEchoIdUnreadNotifications,
        fetchUsers,
        getMessages,
        saveMessage,

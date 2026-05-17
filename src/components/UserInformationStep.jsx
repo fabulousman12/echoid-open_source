@@ -6,6 +6,8 @@ import { IonButton } from '@ionic/react';
 
 import google from '../pages/google.png';
 import data from '../data';
+import PrivacyPolicy from './PrivacyPolicy';
+import TermsUse from './Terms_of_use'
 const styles = {
   container: {
     minHeight: '100vh',
@@ -307,8 +309,9 @@ const UserInformationStep = ({ onNext, setAlertMessage, setShowAlert, countryCod
   const [password, setPassword] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [acctepuse, setAccepteduse] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
-
+  const [showterm,setShowterm] = useState(false)
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -466,11 +469,28 @@ return new Promise((resolve) => {
       setShowAlert(true)
       return setAlertMessage('Please accept the Privacy Policy to continue.');
     }
+       if (!acctepuse) {
+      setShowAlert(true)
+      return setAlertMessage('Please accept the Terms of use');
+    }
+          if (!name) {
+      setShowAlert(true)
+      return setAlertMessage('Please Enter a name');
+    }
+          if (!email) {
+      setShowAlert(true)
+      return setAlertMessage('Please enter a Email');
+    }
+          if (!password) {
+      setShowAlert(true)
+      return setAlertMessage('Please Enter a password');
+    }
+
     const normalizedCountryCode = (countryCode || '').trim().replace(/\s+/g, '');
     const finalCountryCode = normalizedCountryCode.startsWith('+')
       ? normalizedCountryCode
       : `+${normalizedCountryCode}`;
-    const userInfo = { name, email, countryCode: finalCountryCode, phone, password, profileImage, acceptedTerms };
+    const userInfo = { name, email, countryCode: finalCountryCode, phone, password, profileImage, acceptedTerms,acctepuse };
     onNext(userInfo);
   };
   const selectedCountry = COUNTRY_DIAL_CODES.find((c) => c.dialCode === countryCode);
@@ -504,7 +524,7 @@ return new Promise((resolve) => {
         <img src={profileImage} alt="Profile" style={styles.profilePreview} />
       </div>
     )}
-        <div style={styles.socialRow}>
+        {/* <div style={styles.socialRow}>
           <button type="button" style={{ ...styles.socialButton, ...styles.googleButton }}>
           <img
   src={google}
@@ -522,14 +542,14 @@ return new Promise((resolve) => {
             />
             Facebook
           </button>
-        </div>
+        </div> */}
 
         {/* Divider */}
-        <div style={styles.divider}>
+        {/* <div style={styles.divider}>
           <div style={styles.dividerLine} />
           <span style={styles.dividerText}>OR</span>
           <div style={styles.dividerLine} />
-        </div>
+        </div> */}
 
         {/* Inputs */}
         <div>
@@ -613,6 +633,55 @@ return new Promise((resolve) => {
             (version {data.TermsVersion}).
           </span>
         </label>
+        
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px' }}>
+          <span
+            onClick={() => setAccepteduse(!acctepuse)}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              border: '2px solid rgba(255,255,255,0.6)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: acctepuse ? '#22c55e' : 'transparent',
+              cursor: 'pointer',
+              flex: '0 0 auto'
+            }}
+            aria-hidden="true"
+          >
+            {acceptedTerms && (
+              <span style={{ width: 8, height: 8, background: '#0f172a', borderRadius: 2 }} />
+            )}
+          </span>
+          <input
+            type="checkbox"
+            name="accepteduse"
+            checked={acctepuse}
+            onChange={(e) => setAccepteduse(e.target.checked)}
+            style={{
+              position: 'absolute',
+              opacity: 0,
+              width: 1,
+              height: 1,
+              margin: 0,
+              padding: 0,
+              border: 0,
+            }}
+          />
+          <span style={{ lineHeight: 1.4 }}>
+            I agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowterm(true)}
+              style={{ color: '#8bd3ff', textDecoration: 'underline', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Terms of Use
+            </button>{" "}
+            (version {data.UseVersion}).
+          </span>
+        </label>
    
 
         <button type="submit" style={styles.button}>Next</button>
@@ -681,122 +750,34 @@ return new Promise((resolve) => {
       {showPolicy && (
         <div style={styles.cropperOverlay}>
           <div style={{ width: '90vw', maxWidth: 520, background: '#0f172a', color: '#e2e8f0', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Privacy Policy</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>
-              Version {data.TermsVersion}
-            </div>
-            <div style={{ fontSize: 13, lineHeight: 1.6, color: '#e2e8f0', maxHeight: '55vh', overflowY: 'auto' }}>
-              <p>
-                By using this app, you agree to this Privacy Policy. We respect your privacy and are
-                committed to protecting your information.
-              </p>
-              <p style={{ color: '#94a3b8', fontSize: 11, marginTop: 6 }}>
-                Privacy Policy version: {data.TermsVersion}
-              </p>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Information we store</div>
-                <div>
-                  We store basic account details you provide such as name, email, phone number, and
-                  profile image at account creation.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Messages and delivery</div>
-                <div>
-                  Messages are stored on our servers only while undelivered. After delivery, they are
-                  removed from the database.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Local device storage</div>
-                <div>
-                  Chat history, call history, app preferences (mute, notification sounds), and
-                  downloaded files are stored locally on your device for performance and offline access.
-                  You can delete local data from within the app.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Security and sessions</div>
-                <div>
-                  Device details like model and OS are used to manage login sessions and keep your
-                  account secure.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Session metadata</div>
-                <div>
-                  For security, we store session metadata such as device name, OS, app version,
-                  IP address, last active time, and user agent.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Encryption</div>
-                <div>
-                  Messages are encrypted using asymmetric RSA 2048-bit cryptography. Your private key
-                  stays only on your device. A one-way hash + salt is stored in the database for
-                  matching purposes. Passwords are also stored as one-way hash + salt.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Media and permissions</div>
-                <div>
-                  Camera and microphone access are used for calls and voice messages. Photo and media
-                  access are used for profile images and attachments. Contacts access is optional and
-                  only used to show your device contacts when you create a new chat.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Files and attachments</div>
-                <div>
-                  Files you send are uploaded to our servers for delivery and may be retained as needed
-                  for recipients to download. Downloaded files are saved on your device.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Location</div>
-                <div>
-                  If you choose to set a location, we use a location search service to help you pick
-                  it. Providing location is optional.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Notifications</div>
-                <div>
-                  Dead app delivery is handled by third-party services such as FCM and Pushy. We do
-                  not use extra data without your prior permission. We store a device token to send
-                  notifications.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Calls</div>
-                <div>
-                  Calls are designed to be peer-to-peer to bypass servers when possible. A TURN server
-                  is used as a fallback. Call history is saved locally on your device.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Your choices</div>
-                <div>
-                  You can edit your profile, manage sessions, and request account deletion.
-                </div>
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Contact</div>
-                <div>If you have questions about privacy, contact support.</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-              <button onClick={() => setShowPolicy(false)} style={styles.cancelButton}>Close</button>
-              <button
-                onClick={() => {
-                  setAcceptedTerms(true);
-                  setShowPolicy(false);
-                }}
-                style={styles.cropButton}
-              >
-                Accept
-              </button>
-            </div>
+            <PrivacyPolicy
+              variant="dark"
+              showVersionHeader
+              onClose={() => setShowPolicy(false)}
+              onAccept={() => {
+                setAcceptedTerms(true);
+                setShowPolicy(false);
+              }}
+              cancelButtonStyle={styles.cancelButton}
+              acceptButtonStyle={styles.cropButton}
+            />
+          </div>
+        </div>
+      )}
+       {showterm && (
+        <div style={styles.cropperOverlay}>
+          <div style={{ width: '90vw', maxWidth: 520, background: '#0f172a', color: '#e2e8f0', borderRadius: 12, padding: 16 }}>
+            <TermsUse
+              variant="dark"
+              showVersionHeader
+              onClose={() => setShowterm(false)}
+              onAccept={() => {
+                setAccepteduse(true);
+                setShowterm(false);
+              }}
+              cancelButtonStyle={styles.cancelButton}
+              acceptButtonStyle={styles.cropButton}
+            />
           </div>
         </div>
       )}

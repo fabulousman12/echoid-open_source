@@ -87,7 +87,8 @@ vi.mock("../services/authTokens", () => ({
 
 vi.mock("../services/deviceInfo", () => ({
   getDeviceId: vi.fn(async () => "device-1"),
-  getDeviceIdSync: vi.fn(() => "device-1")
+  getDeviceIdSync: vi.fn(() => "device-1"),
+  isAndroidNative: vi.fn(() => false)
 }));
 
 vi.mock("../services/keyHash", () => ({

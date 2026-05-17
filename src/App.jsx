@@ -81,6 +81,7 @@ import { Capacitor } from '@capacitor/core';
 import { startCallRingtone,stopCallRingtone,startCallTimeout,clearCallTimeout } from './services/callRingtone';
 import { appendCallLog } from "./services/callLog";
 import Swal from 'sweetalert2';
+import { Toast } from '@capacitor/toast';
 
 import { useNetworkStatus } from './services/useNetworkStatus';
 import { refreshAccessToken, refreshAccessTokenWithReason, isUserBannedResponse, showBannedAccountModal } from "./services/apiClient";
@@ -144,7 +145,7 @@ const isModeSwitchRoute = (pathname = "") => pathname === "/home" || pathname ==
 const getSocketClientType = () => (Capacitor.isNativePlatform() ? "native" : "web");
 
 const buildSocketUrl = (token, deviceId) =>
-  `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
+  `wss://${Maindata.SERVER_URL}?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
 
 const normalizeDeepLinkPath = (url) => {
   try {
@@ -263,6 +264,7 @@ const serverreconnected = useRef(true)
 const wsRefreshInFlight = useRef(false);
 const wsRefreshTried = useRef(false);
 const suppressWsStatusSwalRef = useRef(false);
+const chatSyncSwalOpenRef = useRef(false);
 const incomingCallerFetchInFlight = useRef(new Set());
  const [force, forceUpdate] = useState(true);
 const authSwalShown = useRef(false);
@@ -468,6 +470,7 @@ const { connected } = useNetworkStatus();
 const [show, setShow] = useState(false);
   const [lastStatus, setLastStatus] = useState(null);
   const location = useLocation();
+  const lastHomeBackPressRef = useRef(0);
   const [displayLocation, setDisplayLocation] = useState(location);
   const [routeTransitionStage, setRouteTransitionStage] = useState("idle");
   const [routeTransitionDirection, setRouteTransitionDirection] = useState("none");
@@ -2295,6 +2298,38 @@ useEffect(() => {
     console.log("all states", CallRuntime.showScreen, CallRuntime.overlayActive, restoringNow);
     if (!restoringNow && CallRuntime.showScreen && !CallRuntime.overlayActive) {
       enableOverlay();
+      return;
+    }
+
+    const pathname = String(location.pathname || "").toLowerCase();
+    const routesBackToHome = new Set([
+      "/settings",
+      "/profile",
+      "/blocklist",
+      "/adminchat",
+      "/archived",
+      "/helpchatbox",
+      "/group-chatwindow",
+      "/echoid",
+    ]);
+
+    if (pathname === "/home") {
+      const now = Date.now();
+      if (now - lastHomeBackPressRef.current < 2000) {
+        CapacitorApp.exitApp();
+        return;
+      }
+      lastHomeBackPressRef.current = now;
+      Toast.show({
+        text: "Press back again to exit",
+        duration: "short",
+      }).catch(() => {});
+      return;
+    }
+
+    if (routesBackToHome.has(pathname) || pathname.startsWith("/app/post/")) {
+      lastHomeBackPressRef.current = 0;
+      history.push("/home");
     }
   })).then((h) => { backHandle = h; }).catch(() => {});
 
@@ -2309,7 +2344,7 @@ useEffect(() => {
     if (backHandle && typeof backHandle.remove === "function") backHandle.remove();
     if (bgHandle && typeof bgHandle.remove === "function") bgHandle.remove();
   };
-}, []);
+}, [history, location.pathname]);
 
 
 /* RETURN FOREGROUND ? RESTORE */
@@ -3718,34 +3753,135 @@ const getMessagePeerId = (message, currentUserId) => {
   return sender === current ? recipient : sender;
 };
 
-const buildChatSyncPayload = ({ chatLimit = 20, messageLimit = 30 } = {}) => {
+const waitForChatSyncFrame = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const escapeChatSyncHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const getChatSyncSwalHtml = ({ percent, phase, direction = "export" } = {}) => {
+  const normalizedPercent = Number.isFinite(Number(percent))
+    ? Math.min(100, Math.max(0, Math.round(Number(percent))))
+    : null;
+  const label = escapeChatSyncHtml(phase || (direction === "export" ? "Exporting chats" : "Syncing chats"));
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:left;">
+      <div style="font-size:13px;color:#64748b;">${label}</div>
+      <div style="height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden;">
+        <div style="height:100%;width:${normalizedPercent ?? 8}%;border-radius:999px;background:#2563eb;transition:width .2s ease;"></div>
+      </div>
+      <strong style="text-align:center;font-size:18px;color:#0f172a;">${normalizedPercent !== null ? `${normalizedPercent}%` : "Working..."}</strong>
+    </div>
+  `;
+};
+
+const isChatSyncSwalVisible = () => Boolean(chatSyncSwalOpenRef.current && Swal.isVisible());
+
+const openChatSyncSwal = ({ percent = 0, phase = "Preparing export", direction = "export" } = {}) => {
+  chatSyncSwalOpenRef.current = true;
+  Swal.fire({
+    title: direction === "export" ? "Exporting chats" : "Syncing chats",
+    html: getChatSyncSwalHtml({ percent, phase, direction }),
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    width: 320,
+    customClass: { popup: "mobile-alert chat-sync-progress-swal" },
+    didOpen: () => Swal.showLoading(),
+    didClose: () => {
+      chatSyncSwalOpenRef.current = false;
+    },
+  });
+};
+
+const updateChatSyncSwal = ({ percent, phase, direction = "export" } = {}) => {
+  if (!isChatSyncSwalVisible()) return;
+  const normalizedPercent = Number.isFinite(Number(percent))
+    ? Math.min(100, Math.max(0, Math.round(Number(percent))))
+    : null;
+
+  Swal.update({
+    title: direction === "export" ? "Exporting chats" : "Syncing chats",
+    html: getChatSyncSwalHtml({ percent: normalizedPercent, phase, direction }),
+  });
+  Swal.showLoading();
+
+  if (normalizedPercent >= 100) {
+    window.setTimeout(() => {
+      if (isChatSyncSwalVisible()) Swal.close();
+    }, 450);
+  }
+};
+
+const emitChatSyncProgress = ({ requestId, percent, phase, direction = "export" } = {}) => {
+  const normalizedPercent = Number.isFinite(Number(percent))
+    ? Math.min(100, Math.max(0, Math.round(Number(percent))))
+    : null;
+  updateChatSyncSwal({ percent: normalizedPercent, phase, direction });
+  window.dispatchEvent(new CustomEvent("chat-sync-progress", {
+    detail: {
+      requestId,
+      percent: normalizedPercent,
+      phase: phase || "",
+      direction,
+    },
+  }));
+};
+
+const buildChatSyncPayload = async ({ chatLimit = 20, messageLimit = 30, requestId, onProgress } = {}) => {
+  const report = (percent, phase) => {
+    if (typeof onProgress === "function") {
+      onProgress({ requestId, percent, phase, direction: "export" });
+    }
+  };
   const normalizedChatLimit = Math.min(100, Math.max(1, Number(chatLimit) || 20));
   const normalizedMessageLimit = Math.min(100, Math.max(1, Number(messageLimit) || 30));
+  report(8, "Preparing chats");
+  await waitForChatSyncFrame();
   const allUsers = globalThis.storage.readJSON('usersMain', []) || [];
   const selectedUsers = [...allUsers]
     .filter((user) => user?.id || user?._id)
     .sort((a, b) => new Date(b?.timestamp || b?.updatedAt || 0) - new Date(a?.timestamp || a?.updatedAt || 0))
     .slice(0, normalizedChatLimit);
   const selectedUserIds = new Set(selectedUsers.map((user) => String(user.id || user._id)));
+  report(24, "Reading messages");
+  await waitForChatSyncFrame();
   const currentUserId = currentuserRef.current?._id;
   const allMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
   const messagesByPeer = new Map();
 
-  allMessages.forEach((message) => {
+  for (let index = 0; index < allMessages.length; index += 1) {
+    const message = allMessages[index];
     const peerId = getMessagePeerId(message, currentUserId);
-    if (!selectedUserIds.has(String(peerId))) return;
-    if (!messagesByPeer.has(peerId)) messagesByPeer.set(peerId, []);
-    messagesByPeer.get(peerId).push(message);
-  });
+    if (selectedUserIds.has(String(peerId))) {
+      if (!messagesByPeer.has(peerId)) messagesByPeer.set(peerId, []);
+      messagesByPeer.get(peerId).push(message);
+    }
+    if (index > 0 && index % 500 === 0) {
+      const scanProgress = 24 + Math.min(38, Math.round((index / allMessages.length) * 38));
+      report(scanProgress, "Scanning messages");
+      await waitForChatSyncFrame();
+    }
+  }
 
   const messagesToSync = [];
-  messagesByPeer.forEach((peerMessages) => {
+  const peerEntries = [...messagesByPeer.values()];
+  for (let index = 0; index < peerEntries.length; index += 1) {
+    const peerMessages = peerEntries[index];
     messagesToSync.push(
       ...peerMessages
         .sort((a, b) => new Date(b?.timestamp || 0) - new Date(a?.timestamp || 0))
         .slice(0, normalizedMessageLimit)
     );
-  });
+    const packProgress = 62 + Math.min(28, Math.round(((index + 1) / Math.max(peerEntries.length, 1)) * 28));
+    report(packProgress, "Packing export");
+    await waitForChatSyncFrame();
+  }
+  report(94, "Sending export");
 
   return {
     usersMain: selectedUsers,
@@ -4516,27 +4652,99 @@ case "ice-restart-answer": {
           type: "chat-sync-response",
           requestId: data.requestId,
           accepted: Boolean(result.isConfirmed),
-          ...(result.isConfirmed ? buildChatSyncPayload({ chatLimit, messageLimit }) : { message: "Denied on native device" }),
+          ...(result.isConfirmed ? {} : { message: "Denied on native device" }),
         };
+        if (result.isConfirmed) {
+          openChatSyncSwal({
+            percent: 1,
+            phase: "Preparing export",
+            direction: "export",
+          });
+          await waitForChatSyncFrame();
+          Object.assign(response, await buildChatSyncPayload({
+            chatLimit,
+            messageLimit,
+            requestId: data.requestId,
+            onProgress: (progress) => {
+              emitChatSyncProgress(progress);
+              if (socket.current?.readyState === WebSocket.OPEN) {
+                socket.current.send(JSON.stringify({
+                  type: "chat-sync-progress",
+                  requestId: data.requestId,
+                  percent: progress.percent,
+                  phase: progress.phase,
+                  direction: "export",
+                }));
+              }
+            },
+          }));
+        }
         if (socket.current?.readyState === WebSocket.OPEN) {
           socket.current.send(JSON.stringify(response));
+          if (result.isConfirmed) {
+            emitChatSyncProgress({
+              requestId: data.requestId,
+              percent: 100,
+              phase: "Export sent",
+              direction: "export",
+            });
+          }
         }
         return;
       }
+      if (data?.type === "chat-sync-progress") {
+        emitChatSyncProgress({
+          requestId: data.requestId,
+          percent: data.percent,
+          phase: data.phase || "Exporting chats",
+          direction: data.direction || "export",
+        });
+        return;
+      }
       if (data?.type === "chat-sync-response") {
+        emitChatSyncProgress({
+          requestId: data.requestId,
+          percent: 92,
+          phase: "Importing chats",
+          direction: "import",
+        });
         if (data.accepted === false) {
+          emitChatSyncProgress({
+            requestId: data.requestId,
+            percent: 100,
+            phase: "Import denied",
+            direction: "import",
+          });
           await Swal.fire("Chat sync denied", data.message || "Native device denied the request.", "info");
           return;
         }
         applyChatSyncPayload(data);
+        emitChatSyncProgress({
+          requestId: data.requestId,
+          percent: 100,
+          phase: "Import complete",
+          direction: "import",
+        });
         await Swal.fire("Chats imported", "Synced chats from your native device.", "success");
         return;
       }
       if (data?.type === "chat-sync-offline") {
+        emitChatSyncProgress({
+          requestId: data.requestId,
+          percent: 100,
+          phase: "Native device offline",
+          direction: "import",
+        });
         await Swal.fire("Native device offline", data.message || "Open EchoId on your phone and try again.", "info");
         return;
       }
       if (data?.type === "chat-sync-error") {
+        emitChatSyncProgress({
+          requestId: data.requestId,
+          percent: 100,
+          phase: "Sync failed",
+          direction: "import",
+        });
         await Swal.fire("Chat sync failed", data.message || "Could not sync chats.", "error");
         return;
       }
@@ -4552,6 +4760,10 @@ case "ice-restart-answer": {
       }
     } catch (err) {
       console.error("Error handling message:", err);
+      if (isChatSyncSwalVisible()) {
+        Swal.close();
+        await Swal.fire("Chat sync failed", err?.message || "Could not sync chats.", "error");
+      }
     }
   };
 
@@ -4915,9 +5127,10 @@ const newMessages = androidMessages.filter(
         const unreadCountsMap = new Map();
         const userIds = new Set();
         const latestMessageTimestampsMap = new Map();
+        const currentUserId = getCurrentUserRuntimeId(currentuserRef, currentUser);
     
         newMessages.forEach(msg => {
-          if (msg.read === 0 && msg.recipient === currentuserRef.current._id) {
+          if (currentUserId && msg.read === 0 && String(msg.recipient) === currentUserId) {
             if (!unreadCountsMap.has(msg.sender)) {
               unreadCountsMap.set(msg.sender, 0);
             }
@@ -5560,10 +5773,11 @@ if (normalizedUpdatePayload.type === "update" && normalizedUpdatePayload.updateT
         const unreadCountsMap = new Map();
         const userIds = new Set();
         const latestMessageTimestampsMap = new Map();
+        const currentUserId = getCurrentUserRuntimeId(currentuserRef, currentUser);
       
         // Iterate through each message in newMessages to update user data and unread count
         for (let msg of newMessages) {
-          if (msg.read === 0 && msg.recipient === currentuserRef.current._id) {
+          if (currentUserId && msg.read === 0 && String(msg.recipient) === currentUserId) {
             unreadCountsMap.set(msg.sender, (unreadCountsMap.get(msg.sender) || 0) + 1);
           }
           userIds.add(msg.sender);

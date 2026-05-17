@@ -45,7 +45,8 @@ vi.mock("../services/authTokens", () => ({
 }));
 
 vi.mock("../services/deviceInfo", () => ({
-  getDeviceInfo: vi.fn(async () => ({ deviceId: "device-1" }))
+  getDeviceInfo: vi.fn(async () => ({ deviceId: "device-1" })),
+  isAndroidNative: vi.fn(() => false)
 }));
 
 function createStorageMock() {

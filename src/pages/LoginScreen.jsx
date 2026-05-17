@@ -256,7 +256,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
         }
         await ensureSQLiteReady();
         const deviceId = (await getDeviceInfo()).deviceId;
-        const wsUrl = `wss://${Maindata.SERVER_URL}?token=${json.authtoken}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
+        const wsUrl = `wss://${Maindata.SERVER_URL}?token=${encodeURIComponent(json.authtoken)}&deviceId=${encodeURIComponent(deviceId)}&clientType=${getSocketClientType()}`;
         await connect(wsUrl);
         await sendPublicKeyToBackend(json.authtoken, password);
         history.push('/home');
@@ -314,7 +314,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
       <div className="login-screen-shell">
         {!isNative ? (
           <div className="login-web-brandbar">
-            <span>ECHOID</span>
+         
             <button type="button" className="login-help-dot" aria-label="Help">?</button>
           </div>
         ) : null}
@@ -322,7 +322,6 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
         <div className="login-screen-content">
           <section className="login-screen-brand-panel">
             <div className="login-brand-mark">ECHOID</div>
-            <div className="login-brand-subtitle">DIGITAL PULSE SYNCHRONIZATION</div>
           </section>
 
           <section className="login-screen-main-panel">
@@ -409,18 +408,13 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
               {!isNative ? <HiOutlineArrowNarrowRight size={20} className="login-guest-arrow" /> : null}
             </button>
 
-            {!isNative ? (
+           
               <div className="login-web-footer-links">
                 <span>PRIVACY PROTOCOL</span>
                 <span>TERMS OF SERVICE</span>
                 <span>SYSTEM STATUS</span>
               </div>
-            ) : (
-              <div className="login-native-footer">
-                <div className="login-native-pulse" />
-                <div className="login-native-copyright">© 2024 ECHOID NEXUS SYSTEMS</div>
-              </div>
-            )}
+            
           </section>
         </div>
 

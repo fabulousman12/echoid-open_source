@@ -95,7 +95,7 @@ const HomeScreen = ({
   connect,
   setCurrenuser,
   getmessages,
-  setUnreadCounts,
+  setUnreadCounts = () => {},
   selectedUser1,
   messagesRef,
   isIntialized,
@@ -144,6 +144,8 @@ const HomeScreen = ({
   setAlertMessage,
   isLoad,
   setIsLoad,
+  echoIdUnreadNotifications,
+  setEchoIdUnreadNotifications,
   } = useContext(MessageContext);
   const context = useContext(LoginContext);
   const { host, getuser } = context;
@@ -170,6 +172,12 @@ const [isloading, setIsLoading] = useState(false);
   });
   const [desktopSelectedUser, setDesktopSelectedUser] = useState(null);
   const [desktopSelectedGroup, setDesktopSelectedGroup] = useState(null);
+  const [chatSyncProgress, setChatSyncProgress] = useState({
+    active: false,
+    percent: null,
+    phase: "",
+    direction: "",
+  });
   const CURRENT_APP_VERSION = Maindata.AppVersion;
   const readJSON = useCallback((key, fallback) => {
     try {
@@ -189,6 +197,31 @@ const [isloading, setIsLoading] = useState(false);
       console.warn("Could not store in storage, likely quota exceeded", error);
     }
   }, []);
+  const normalizeEchoIdNotification = useCallback((notification) => {
+    const id = String(notification?.id || notification?._id || "").trim();
+    if (!id) return null;
+    const isRead = notification?.read === true || notification?.view === true;
+    const type = String(notification?.type || "").trim();
+    return {
+      ...notification,
+      id,
+      type,
+      postId: String(notification?.postId || ""),
+      title: notification?.title || notification?.heading || `${type || "EchoId"} notification`,
+      body: notification?.body || notification?.message || notification?.comment || notification?.copy || "",
+      createdAt: notification?.createdAt || notification?.timestamp || notification?.updatedAt || new Date().toISOString(),
+      isSent: notification?.isSent !== false,
+      read: isRead,
+      view: isRead,
+    };
+  }, []);
+  const persistEchoIdNotifications = useCallback((items) => {
+    const list = Array.isArray(items) ? items.map(normalizeEchoIdNotification).filter(Boolean) : [];
+    writeJSON("echoIdNotifications", list);
+    const unreadCount = list.filter((item) => item && item.read !== true).length;
+    setEchoIdUnreadNotifications?.(unreadCount);
+    window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: unreadCount } }));
+  }, [normalizeEchoIdNotification, setEchoIdUnreadNotifications, writeJSON]);
   const user = useMemo(() => readJSON('currentuser', null), [readJSON]);
   const contactsById = useMemo(() => {
     const list = Array.isArray(usersMain) ? usersMain : [];
@@ -388,7 +421,8 @@ user = await getuser()
       
       // Connect WebSocket
       const deviceId = getDeviceIdSync() || await getDeviceId();
-      const wsUrl = `wss://${Maindata.SERVER_URL}?token=${token}&deviceId=${encodeURIComponent(deviceId)}`;
+      const clientType = Capacitor.isNativePlatform?.() ? "native" : "web";
+      const wsUrl = `wss://${Maindata.SERVER_URL}?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}&clientType=${clientType}`;
      
       if (!socket || socket.readyState === WebSocket.CLOSED) {
         //console.log('%c Is this on developing phase :' + 'Connecting to ws throug home', 'color: blue; font-size: 15px; font-weight: bold;')
@@ -609,6 +643,51 @@ const handleCallNotification = (data) => {
 
   },[setMessages])
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncEchoIdNotifications = async () => {
+      try {
+        const response = await api.postNotifications(host, { limit: 100 });
+        const json = await response.json().catch(() => ({}));
+        if (cancelled || !response.ok || !json?.success) return;
+
+        const incoming = (Array.isArray(json.notifications) ? json.notifications : [])
+          .map(normalizeEchoIdNotification)
+          .filter(Boolean);
+        if (incoming.length === 0) {
+          const stored = readJSON("echoIdNotifications", []);
+          if (Array.isArray(stored)) {
+            persistEchoIdNotifications(stored);
+          }
+          return;
+        }
+
+        const stored = readJSON("echoIdNotifications", []);
+        const byId = new Map((Array.isArray(stored) ? stored : []).map((item) => [String(item?.id || ""), item]));
+        incoming.forEach((item) => {
+          const previous = byId.get(item.id);
+          const isRead = previous?.read === true || previous?.view === true || item.read === true;
+          byId.set(item.id, {
+            ...previous,
+            ...item,
+            read: isRead,
+            view: isRead,
+          });
+        });
+        const merged = [...byId.values()].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+        persistEchoIdNotifications(merged);
+      } catch (error) {
+        console.warn("Failed to sync EchoId notifications:", error?.message || error);
+      }
+    };
+
+    syncEchoIdNotifications();
+    return () => {
+      cancelled = true;
+    };
+  }, [host, normalizeEchoIdNotification, persistEchoIdNotifications, readJSON]);
+
 
 
   // Swipe Gesture Effect
@@ -681,6 +760,66 @@ const handleCallNotification = (data) => {
       setActiveFooter("Chats");
     }
   }, [activeFooter, setActiveFooter]);
+
+  useEffect(() => {
+    let hideTimer = null;
+    const handleChatSyncProgress = (event) => {
+      const detail = event?.detail || {};
+      const numericPercent = Number(detail.percent);
+      const hasPercent = Number.isFinite(numericPercent);
+      const nextPercent = hasPercent
+        ? Math.min(100, Math.max(0, Math.round(numericPercent)))
+        : null;
+
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+
+      setChatSyncProgress({
+        active: true,
+        percent: nextPercent,
+        phase: detail.phase || (detail.direction === "export" ? "Exporting chats" : "Syncing chats"),
+        direction: detail.direction || "",
+      });
+
+      if (nextPercent >= 100) {
+        hideTimer = window.setTimeout(() => {
+          setChatSyncProgress({
+            active: false,
+            percent: null,
+            phase: "",
+            direction: "",
+          });
+        }, 1400);
+      }
+    };
+
+    window.addEventListener("chat-sync-progress", handleChatSyncProgress);
+    return () => {
+      window.removeEventListener("chat-sync-progress", handleChatSyncProgress);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chatSyncProgress.active || chatSyncProgress.percent === null || chatSyncProgress.percent >= 90) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      setChatSyncProgress((current) => {
+        if (!current.active || current.percent === null || current.percent >= 90) return current;
+        return {
+          ...current,
+          percent: Math.min(90, current.percent + 1),
+          phase: current.phase || "Waiting for device",
+        };
+      });
+    }, 900);
+
+    return () => window.clearInterval(interval);
+  }, [chatSyncProgress.active, chatSyncProgress.percent]);
 
 
   const handleDeselectAll = () => {
@@ -1493,7 +1632,21 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
       messageLimit: 30,
     }));
 
-    await Swal.fire("Request sent", "Confirm the import on your native device.", "info");
+    setChatSyncProgress({
+      active: true,
+      percent: 6,
+      phase: "Waiting for device",
+      direction: "import",
+    });
+    Swal.fire({
+      title: "Request sent",
+      text: "Confirm the import on your native device.",
+      icon: "info",
+      toast: true,
+      position: "top",
+      timer: 2200,
+      showConfirmButton: false,
+    });
   }, [socket]);
 
   
@@ -1523,7 +1676,10 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
           <>
             <img src={user?.profilePhoto || '/img.jpg'} alt="name" className="home-screen-avatar" />
             <div className="home-screen-copy">
-              <h5 className="home-screen-title">{headerTitle}</h5>
+              <h5 className="home-screen-title">
+                {headerTitle}
+                {echoIdUnreadNotifications > 0 ? <span className="home-screen-echoid-dot" aria-label={`${echoIdUnreadNotifications} unread EchoId notifications`} /> : null}
+              </h5>
               <div className="home-screen-subtitle">{headerSubtitle}</div>
             </div>
           </>
@@ -1562,6 +1718,20 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
           </button>
         ) : (
           <>
+            {chatSyncProgress.active ? (
+              <div
+                className={`home-chat-sync-progress ${chatSyncProgress.percent === null ? "is-indeterminate" : ""}`}
+                title={chatSyncProgress.phase || "Syncing chats"}
+                aria-label={chatSyncProgress.phase || "Syncing chats"}
+                style={chatSyncProgress.percent !== null ? { "--chat-sync-progress": `${chatSyncProgress.percent}%` } : undefined}
+              >
+                {chatSyncProgress.percent !== null ? (
+                  <span>{chatSyncProgress.percent}%</span>
+                ) : (
+                  <span className="home-chat-sync-dot" />
+                )}
+              </div>
+            ) : null}
             {canCreateChat || activeFooter === "Group" ? (
               <button type="button" className="home-screen-action-btn" onClick={handlePrimaryAction}>
                 <FaRegEdit size={16} />

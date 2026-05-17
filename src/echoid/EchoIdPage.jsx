@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 import { useHistory } from "react-router";
 import Swal from "sweetalert2";
 import {
@@ -10,21 +11,29 @@ import {
   Filter,
   Home,
   Image as ImageIcon,
+  Maximize2,
   Menu,
   Minus,
   MessageSquarePlus,
+  Pause,
   Plus,
+  Play,
   Search,
+  Settings,
   Sparkles,
   TriangleAlert,
   Video,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
+import { Virtuoso } from "react-virtuoso";
 import "./EchoIdPage.css";
 import StarLoader from "../pages/StarLoader";
 import EchoIdPostDetail from "./EchoIdPostDetail";
 import { api } from "../services/api";
+import { MessageContext } from "../Contexts/MessagesContext";
 import {
   clearAnonymousProfile,
   readAnonymousProfile,
@@ -100,30 +109,6 @@ const postSeed = [
   },
 ];
 
-const alertSeed = [
-  {
-    id: "a1",
-    title: "Echo nearby",
-    copy: "A new post was published two blocks from your saved zone.",
-    minutesAgo: 3,
-    tone: "info",
-  },
-  {
-    id: "a2",
-    title: "Reply spike",
-    copy: "Your latest signal picked up 12 new replies in the last hour.",
-    minutesAgo: 19,
-    tone: "accent",
-  },
-  {
-    id: "a3",
-    title: "Watch alert",
-    copy: "Sector 9 entered elevated anomaly status. Filters updated automatically.",
-    minutesAgo: 54,
-    tone: "warning",
-  },
-];
-
 const tabs = [
   { id: "home", label: "Home", icon: Home },
   { id: "search", label: "Search", icon: Search },
@@ -165,7 +150,18 @@ const bodyImageLinkRegex = /\[(Link|Link_cover):-\s*(https?:\/\/[^\]\s]+)\s*\]/g
 const partialBodyImageLinkRegex = /\[(?:Link|Link_cover):-?[^\]\n]*\]?/gi;
 const postPreviewLimit = 110;
 const videoCoverUrlRegex = /\.(mp4|mov|webm|ogg|m4v)(?:[?#].*)?$/i;
+const imageCoverUrlRegex = /\.(png|jpe?g|gif|webp|avif|bmp|svg)(?:[?#].*)?$/i;
+const allowedMediaMimeRegex = /^(image|video)\/[a-z0-9.+-]+$/i;
+const allowedImageMimeRegex = /^image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml)$/i;
+const allowedVideoMimeRegex = /^video\/(mp4|quicktime|webm|ogg|x-m4v)$/i;
 const ECHOID_OWN_POSTS_CACHE_KEY = "echoidOwnPostsCache";
+const ECHOID_NOTIFICATIONS_KEY = "echoIdNotifications";
+const ECHOID_VIDEO_AUTOPLAY_KEY = "echoidVideoAutoplay";
+const ECHOID_PULL_REFRESH_THRESHOLD = 90;
+const ECHOID_PULL_REFRESH_HOLD = 68;
+const ECHOID_PULL_REFRESH_MAX = 148;
+const ECHOID_PULL_REFRESH_MIN_MS = 650;
+const ECHOID_PULL_REFRESH_MAX_MS = 10000;
 
 const initialComposeState = {
   anonymity: true,
@@ -173,6 +169,21 @@ const initialComposeState = {
   subCategory: "confession formal",
   title: "",
   body: "",
+};
+
+const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const withTimeout = async (promise, ms) => {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error("Refresh timed out.")), ms);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
 };
 
 const formatRelativeTime = (minutesAgo) => {
@@ -251,7 +262,105 @@ const getVisibilityBadgeLabel = (value) => {
 };
 
 const isVideoCoverUrl = (url) => videoCoverUrlRegex.test(String(url || "").trim());
-const getMediaKindFromUrl = (url) => (isVideoCoverUrl(url) ? "video" : "image");
+const isImageCoverUrl = (url) => imageCoverUrlRegex.test(String(url || "").trim());
+const isSafeMediaUrl = (url) => {
+  const raw = String(url || "").trim();
+  if (!raw || /[\u0000-\u001f]/.test(raw)) return false;
+  if (/^(javascript|vbscript|data:text|data:application):/i.test(raw)) return false;
+  return /^(https?:\/\/|blob:|data:image\/|data:video\/)/i.test(raw);
+};
+const getMediaKindFromUrl = (url) => {
+  if (isVideoCoverUrl(url)) return "video";
+  if (isImageCoverUrl(url) || /^data:image\//i.test(String(url || ""))) return "image";
+  if (/^data:video\//i.test(String(url || ""))) return "video";
+  return "";
+};
+const normalizeMediaKind = (value, fallbackUrl = "") => {
+  const explicitKind = String(value || "").trim().toLowerCase();
+  if (explicitKind.startsWith("video/") || explicitKind === "video") return "video";
+  if (explicitKind.startsWith("image/") || explicitKind === "image") return "image";
+  return getMediaKindFromUrl(fallbackUrl);
+};
+const isAllowedMediaFile = (file) => {
+  const mimeType = String(file?.type || "").trim().toLowerCase();
+  const name = String(file?.name || "").trim();
+  if (!allowedMediaMimeRegex.test(mimeType)) return false;
+  if (mimeType.startsWith("image/")) return allowedImageMimeRegex.test(mimeType);
+  if (mimeType.startsWith("video/")) return allowedVideoMimeRegex.test(mimeType) || videoCoverUrlRegex.test(name);
+  return false;
+};
+const isSafeMediaItem = (item) => Boolean(item?.url && isSafeMediaUrl(item.url) && (item.kind === "image" || item.kind === "video"));
+const getVideoThumbnailUrl = (url) => {
+  const raw = String(url || "").trim();
+  if (!raw || !isVideoCoverUrl(raw)) return "";
+  return raw.replace(/\.(mp4|mov|webm|ogg|m4v)([?#].*)?$/i, ".png$2");
+};
+
+const readEchoIdVideoAutoplay = () => {
+  try {
+    const stored = globalThis.storage?.readJSON?.(ECHOID_VIDEO_AUTOPLAY_KEY, null);
+    if (typeof stored === "boolean") return stored;
+    const raw = globalThis.storage?.getItem?.(ECHOID_VIDEO_AUTOPLAY_KEY);
+    if (raw === "false") return false;
+    if (raw === "true") return true;
+  } catch {
+    return false;
+  }
+  return false;
+};
+
+const readEchoIdVideoAutoplayPreference = async () => {
+  try {
+    const result = await Preferences.get({ key: ECHOID_VIDEO_AUTOPLAY_KEY });
+    if (result?.value === "false") return false;
+    if (result?.value === "true") return true;
+  } catch {
+    // Fall back to the synchronous app storage used during initial render.
+  }
+  return readEchoIdVideoAutoplay();
+};
+
+const saveEchoIdVideoAutoplayPreference = async (enabled) => {
+  const value = JSON.stringify(Boolean(enabled));
+  try {
+    await Preferences.set({ key: ECHOID_VIDEO_AUTOPLAY_KEY, value });
+  } catch {
+    // Keep the fallback write below so the toggle still persists in web/test shells.
+  }
+  try {
+    globalThis.storage?.setItem?.(ECHOID_VIDEO_AUTOPLAY_KEY, value);
+  } catch {
+    // Preference persistence is best-effort.
+  }
+};
+
+function useLazyMedia(rootMargin = "280px") {
+  const ref = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) return undefined;
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isVisible, rootMargin]);
+
+  return [ref, isVisible];
+}
 const getStructuredMediaUrl = (entry) => {
   if (!entry) return "";
   if (typeof entry === "string") return entry.trim();
@@ -278,21 +387,22 @@ const getStructuredMediaUrl = (entry) => {
 
 const getStructuredMediaKind = (entry, fallbackUrl = "") => {
   const explicitKind = String(entry?.kind || entry?.mediaType || entry?.type || entry?.mimeType || "").trim().toLowerCase();
-  if (explicitKind.startsWith("video")) return "video";
-  if (explicitKind.startsWith("image")) return "image";
-  return getMediaKindFromUrl(fallbackUrl);
+  return normalizeMediaKind(explicitKind, fallbackUrl);
 };
 
 const pushStructuredMediaItem = (items, seenUrls, entry, options = {}) => {
   const url = getStructuredMediaUrl(entry);
-  if (!url || seenUrls.has(url)) return;
+  if (!url || seenUrls.has(url) || !isSafeMediaUrl(url)) return;
+  const kind = getStructuredMediaKind(entry, url);
+  if (kind !== "image" && kind !== "video") return;
 
   seenUrls.add(url);
   items.push({
     token: "",
     url,
     isCover: Boolean(options.isCover || entry?.isCover || entry?.cover),
-    kind: getStructuredMediaKind(entry, url),
+    kind,
+    thumbnailUrl: entry?.thumbnailUrl || entry?.thumbnail_url || entry?.poster || entry?.posterUrl || getVideoThumbnailUrl(url),
   });
 };
 
@@ -306,13 +416,15 @@ const extractPostMediaItems = (body = "") => {
   while ((match = bodyImageLinkRegex.exec(source))) {
     const kindLabel = String(match[1] || "").trim().toLowerCase();
     const url = String(match[2] || "").trim();
-    if (!url || seenUrls.has(url)) continue;
+    const kind = getMediaKindFromUrl(url);
+    if (!url || seenUrls.has(url) || !isSafeMediaUrl(url) || !kind) continue;
     seenUrls.add(url);
     mediaItems.push({
       token: match[0],
       url,
       isCover: kindLabel === "link_cover",
-      kind: getMediaKindFromUrl(url),
+      kind,
+      thumbnailUrl: kind === "video" ? getVideoThumbnailUrl(url) : "",
     });
   }
   bodyImageLinkRegex.lastIndex = 0;
@@ -342,7 +454,7 @@ const getPostMediaItems = (post = {}) => {
     seenUrls,
     {
       url: post?.coverImage || post?.cover_image || post?.coverUrl || post?.cover_url || "",
-      kind: post?.coverType || post?.coverMimeType || "",
+      kind: post?.coverType || post?.coverMimeType || "image",
       isCover: true,
     },
     { isCover: true }
@@ -378,14 +490,15 @@ const getPostBodyBlocks = (post = {}) => {
 
     const kindLabel = String(match[1] || "").trim().toLowerCase();
     const url = String(match[2] || "").trim();
+    const kind = getMediaKindFromUrl(url);
     const media = {
       token: match[0],
       url,
       isCover: kindLabel === "link_cover",
-      kind: getMediaKindFromUrl(url),
+      kind,
     };
 
-    if (url && (!leadMedia || url !== leadMedia.url)) {
+    if (url && kind && isSafeMediaUrl(url) && (!leadMedia || url !== leadMedia.url)) {
       blocks.push({
         type: "media",
         key: `media-${match.index}`,
@@ -429,6 +542,44 @@ const getPostBodyBlocks = (post = {}) => {
 const readOwnPostsCache = () => {
   const cached = globalThis.storage?.readJSON?.(ECHOID_OWN_POSTS_CACHE_KEY, []);
   return Array.isArray(cached) ? cached : [];
+};
+
+const normalizeStoredEchoIdNotification = (notification = {}) => {
+  const id = String(notification?.id || notification?._id || "").trim();
+  if (!id) return null;
+  const isRead = notification?.read === true || notification?.view === true;
+  const type = String(notification?.type || "").trim();
+  return {
+    ...notification,
+    id,
+    type,
+    postId: String(notification?.postId || ""),
+    title: notification?.title || notification?.heading || `${type || "EchoId"} notification`,
+    body: notification?.body || notification?.message || notification?.comment || notification?.copy || "",
+    createdAt: notification?.createdAt || notification?.timestamp || notification?.updatedAt || new Date().toISOString(),
+    isSent: notification?.isSent !== false,
+    read: isRead,
+    view: isRead,
+  };
+};
+
+const readEchoIdNotifications = () => {
+  try {
+    const stored = globalThis.storage?.readJSON?.(ECHOID_NOTIFICATIONS_KEY, []) || [];
+    return Array.isArray(stored)
+      ? stored.map(normalizeStoredEchoIdNotification).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveEchoIdNotifications = (notifications) => {
+  const normalized = Array.isArray(notifications)
+    ? notifications.map(normalizeStoredEchoIdNotification).filter(Boolean)
+    : [];
+  globalThis.storage?.setItem?.(ECHOID_NOTIFICATIONS_KEY, JSON.stringify(normalized));
+  return normalized;
 };
 
 const saveOwnPostsCache = (posts) => {
@@ -660,10 +811,429 @@ function WitnessGlyph({ active = false }) {
   );
 }
 
-function PostMediaCarousel({ mediaItems, altText, compact = false, onMediaInteract, onPreviewMedia }) {
+const createVideoThumbnail = (src, preferredSecond = 1) =>
+  new Promise((resolve) => {
+    if (!src || typeof document === "undefined") {
+      resolve("");
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.setAttribute("preload", "metadata");
+
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+    const finish = (value = "") => {
+      cleanup();
+      resolve(value);
+    };
+
+    video.onerror = () => finish("");
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration || 0);
+      const targetSecond = duration > preferredSecond ? preferredSecond : Math.max(0, Math.min(1, duration * 0.5));
+      video.currentTime = Number.isFinite(targetSecond) ? targetSecond : 0;
+    };
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 180;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          finish("");
+          return;
+        }
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        finish(canvas.toDataURL("image/png"));
+      } catch {
+        finish("");
+      }
+    };
+    video.src = src;
+  });
+
+const dataUrlToBlob = async (dataUrl) => {
+  if (!/^data:image\//i.test(String(dataUrl || ""))) return null;
+  const response = await fetch(dataUrl);
+  return response.blob();
+};
+
+const createVideoThumbnailBlob = async (src) => {
+  const dataUrl = await createVideoThumbnail(src);
+  return dataUrlToBlob(dataUrl);
+};
+
+function LazyEchoIdImage({ src, alt = "", className = "", onLoadError }) {
+  const [mediaRef, isVisible] = useLazyMedia();
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <span ref={mediaRef} className={`${className} echoid-lazy-media-shell`}>
+      {isVisible && src && !failed ? (
+        <img
+          src={src}
+          alt={alt}
+          className="echoid-lazy-media-fill"
+          loading="lazy"
+          decoding="async"
+          onError={() => {
+            setFailed(true);
+            onLoadError?.();
+          }}
+        />
+      ) : null}
+      {!isVisible || failed ? (
+        <span className="echoid-media-placeholder" aria-label={failed ? "Media preview unavailable" : "Loading media"}>
+          {failed ? <Video size={18} /> : null}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function EchoIdVideoPlayer({ src, title = "Video", poster = "", className = "", autoPlay = false }) {
+  if (!isSafeMediaUrl(src)) return null;
+
+  return (
+    <video
+      className={`echoid-native-video-player ${className}`}
+      src={src}
+      title={title}
+      poster={poster || undefined}
+      autoPlay={autoPlay}
+      muted={autoPlay}
+      controls
+      playsInline
+      preload="metadata"
+    />
+  );
+}
+
+function EchoIdVideoThumbnail({
+  src,
+  poster = "",
+  className = "",
+  label = "Video preview",
+  autoPlayInView = false,
+  controls = false,
+  onOpenFullscreen,
+}) {
+  const [mediaRef, isVisible] = useLazyMedia();
+  const derivedPoster = poster || getVideoThumbnailUrl(src);
+  const [thumbnail, setThumbnail] = useState(derivedPoster);
+  const [didTryThumbnail, setDidTryThumbnail] = useState(Boolean(derivedPoster));
+  const [nativeFrameFailed, setNativeFrameFailed] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaybackFocused, setIsPlaybackFocused] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+  const [wantsPlayback, setWantsPlayback] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef(null);
+  const clickTimeoutRef = useRef(0);
+
+  useEffect(() => {
+    const nextPoster = poster || getVideoThumbnailUrl(src);
+    setThumbnail(nextPoster);
+    setDidTryThumbnail(Boolean(nextPoster));
+    setNativeFrameFailed(false);
+    setHasActivatedPlayback(false);
+    setWantsPlayback(false);
+    setIsPlaying(false);
+    setIsMuted(false);
+    return undefined;
+  }, [isVisible, poster, src]);
+
+  const hasThumbnail = Boolean(thumbnail);
+  const shouldAutoplayActive = Boolean(autoPlayInView && isVisible && isPlaybackFocused);
+  const shouldRenderVideo = Boolean(src && !nativeFrameFailed && (shouldAutoplayActive || hasActivatedPlayback));
+  const progressValue = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+
+  useEffect(() => {
+    const node = mediaRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsPlaybackFocused(typeof document === "undefined" || document.visibilityState !== "hidden");
+      return undefined;
+    }
+
+    const updateFocusFromViewport = () => {
+      if (document.visibilityState === "hidden") {
+        setIsPlaybackFocused(false);
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      const visibleArea = visibleWidth * visibleHeight;
+      const totalArea = Math.max(1, rect.width * rect.height);
+      setIsPlaybackFocused(visibleArea / totalArea >= 0.45);
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsPlaybackFocused(Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.45 && document.visibilityState !== "hidden"));
+      },
+      { threshold: [0, 0.45, 0.8] }
+    );
+
+    observer.observe(node);
+    document.addEventListener("visibilitychange", updateFocusFromViewport);
+    window.addEventListener("blur", updateFocusFromViewport);
+    window.addEventListener("focus", updateFocusFromViewport);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", updateFocusFromViewport);
+      window.removeEventListener("blur", updateFocusFromViewport);
+      window.removeEventListener("focus", updateFocusFromViewport);
+    };
+  }, [mediaRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+    if (!isPlaybackFocused) {
+      video.pause?.();
+      return undefined;
+    }
+    if (shouldAutoplayActive) {
+      video.muted = isMuted;
+      const playPromise = video.play?.();
+      if (playPromise?.catch) {
+        playPromise.catch(() => setIsPlaying(false));
+      }
+    } else {
+      video.pause?.();
+    }
+    return undefined;
+  }, [isMuted, isPlaybackFocused, shouldAutoplayActive, src]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !hasActivatedPlayback || !wantsPlayback || shouldAutoplayActive) return undefined;
+    if (!isPlaybackFocused) {
+      video.pause?.();
+      return undefined;
+    }
+    const playPromise = video.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => setIsPlaying(false));
+    }
+    return undefined;
+  }, [hasActivatedPlayback, isPlaybackFocused, shouldAutoplayActive, src, wantsPlayback]);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        window.clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = 0;
+      }
+    };
+  }, []);
+
+  const togglePlayback = async () => {
+    if (!controls) return;
+    const video = videoRef.current;
+    if (!video) {
+      setHasActivatedPlayback(true);
+      setWantsPlayback(true);
+      return;
+    }
+
+    try {
+      if (video.paused) {
+        setWantsPlayback(true);
+        const playPromise = video.play?.();
+        if (playPromise?.catch) await playPromise.catch(() => {});
+      } else {
+        setWantsPlayback(false);
+        video.pause?.();
+      }
+    } catch {
+      // Playback can be blocked by the browser until a trusted user gesture.
+    }
+  };
+
+  const handleVideoClick = (event) => {
+    if (!controls) return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    if (clickTimeoutRef.current) {
+      window.clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = 0;
+    }
+
+    clickTimeoutRef.current = window.setTimeout(() => {
+      clickTimeoutRef.current = 0;
+      togglePlayback();
+    }, 220);
+  };
+
+  const openFullscreenPlayback = (event) => {
+    if (!controls) return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if (clickTimeoutRef.current) {
+      window.clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = 0;
+    }
+    videoRef.current?.pause?.();
+    onOpenFullscreen?.();
+  };
+
+  const toggleMute = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setIsMuted((current) => {
+      const nextMuted = !current;
+      if (videoRef.current) {
+        videoRef.current.muted = nextMuted;
+      }
+      return nextMuted;
+    });
+  };
+
+  const handleTimelineChange = (event) => {
+    event.stopPropagation();
+    const video = videoRef.current;
+    const nextPercent = Number(event.target.value || 0);
+    if (!video || !duration) return;
+    const nextTime = (nextPercent / 100) * duration;
+    video.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
+  return (
+    <span
+      ref={mediaRef}
+      className={`${className} echoid-video-thumb-shell ${autoPlayInView && isVisible && isPlaybackFocused ? "is-autoplaying" : ""} ${
+        isPlaying ? "is-playing" : ""
+      } ${controls ? "has-controls" : ""}`}
+      aria-label={label}
+      role={controls ? "button" : undefined}
+      tabIndex={controls ? 0 : undefined}
+      onClick={handleVideoClick}
+      onDoubleClick={openFullscreenPlayback}
+      onKeyDown={(event) => {
+        if (!controls || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        togglePlayback();
+      }}
+    >
+      {shouldRenderVideo ? (
+        <video
+          ref={videoRef}
+          src={src}
+          className="echoid-video-thumb-video"
+          playsInline
+          loop={autoPlayInView}
+          preload="metadata"
+          autoPlay={autoPlayInView}
+          muted={isMuted}
+          poster={thumbnail || undefined}
+          onError={() => setNativeFrameFailed(true)}
+          onLoadedMetadata={(event) => setDuration(Number(event.currentTarget.duration || 0))}
+          onTimeUpdate={(event) => setCurrentTime(Number(event.currentTarget.currentTime || 0))}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => {
+            setIsPlaying(false);
+            setWantsPlayback(false);
+          }}
+        />
+      ) : hasThumbnail ? (
+        <img
+          src={thumbnail}
+          alt=""
+          className="echoid-video-thumb-image"
+          loading="lazy"
+          decoding="async"
+          onError={() => setThumbnail("")}
+        />
+      ) : (
+        <span className="echoid-video-thumb-fallback">
+          <Video size={16} />
+          <span>{isVisible && !didTryThumbnail ? "Loading" : "Video"}</span>
+        </span>
+      )}
+      <span className="echoid-video-play-overlay" aria-hidden="true">
+        {isPlaying ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" />}
+      </span>
+      {controls && shouldRenderVideo ? (
+        <span className="echoid-video-thumb-controls" onClick={(event) => event.stopPropagation()}>
+          <button type="button" onClick={toggleMute} aria-label={isMuted ? "Unmute video" : "Mute video"}>
+            {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value={progressValue}
+            onChange={handleTimelineChange}
+            onPointerDown={(event) => event.stopPropagation()}
+            aria-label="Video timeline"
+          />
+          <button type="button" onClick={openFullscreenPlayback} aria-label="Open fullscreen video">
+            <Maximize2 size={15} />
+          </button>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function EchoIdFeedMedia({ item, altText, autoPlayVideos = false, onAssumeVideo, onOpenFullscreen }) {
+  const [assumedKind, setAssumedKind] = useState(item?.kind || "image");
+
+  useEffect(() => {
+    setAssumedKind(item?.kind || "image");
+  }, [item?.kind, item?.url]);
+
+  if (assumedKind === "video") {
+    return (
+      <EchoIdVideoThumbnail
+        src={item.url}
+        poster={item.thumbnailUrl}
+        className="echoid-post-media"
+        autoPlayInView={autoPlayVideos}
+        controls
+        onOpenFullscreen={onOpenFullscreen}
+      />
+    );
+  }
+
+  return (
+    <LazyEchoIdImage
+      src={item.url}
+      alt={altText}
+      className="echoid-post-media"
+      onLoadError={() => {
+        setAssumedKind("video");
+        onAssumeVideo?.();
+      }}
+    />
+  );
+}
+
+function PostMediaCarousel({ mediaItems, altText, compact = false, autoPlayVideos = false, onMediaInteract, onPreviewMedia }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [assumedKinds, setAssumedKinds] = useState({});
   const touchStartRef = useRef(null);
-  const items = Array.isArray(mediaItems) ? mediaItems.filter((item) => item?.url) : [];
+  const items = Array.isArray(mediaItems)
+    ? mediaItems
+        .map((item) => ({ ...item, kind: assumedKinds[item?.url] || item?.kind }))
+        .filter(isSafeMediaItem)
+    : [];
 
   useEffect(() => {
     setActiveIndex(0);
@@ -677,6 +1247,10 @@ function PostMediaCarousel({ mediaItems, altText, compact = false, onMediaIntera
     if (!items.length) return;
     const normalized = (nextIndex + items.length) % items.length;
     setActiveIndex(normalized);
+  };
+  const markAsVideo = (url) => {
+    if (!url) return;
+    setAssumedKinds((current) => (current[url] === "video" ? current : { ...current, [url]: "video" }));
   };
   const handleTouchStart = (event) => {
     if (!canSwipe) return;
@@ -708,11 +1282,13 @@ function PostMediaCarousel({ mediaItems, altText, compact = false, onMediaIntera
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {activeItem.kind === "video" ? (
-          <video src={activeItem.url} className="echoid-post-media" controls playsInline preload="metadata" />
-        ) : (
-          <img src={activeItem.url} alt={altText} className="echoid-post-media" loading="lazy" />
-        )}
+        <EchoIdFeedMedia
+          item={activeItem}
+          altText={altText}
+          autoPlayVideos={autoPlayVideos}
+          onAssumeVideo={() => markAsVideo(activeItem.url)}
+          onOpenFullscreen={() => onPreviewMedia?.(activeItem, altText)}
+        />
       </div>
       {items.length > 1 ? (
         <>
@@ -743,9 +1319,14 @@ function PostMediaCarousel({ mediaItems, altText, compact = false, onMediaIntera
                 aria-label={`Preview media ${index + 1}`}
               >
                 {item.kind === "video" ? (
-                  <video src={item.url} className="echoid-post-carousel-thumb-media" muted playsInline preload="metadata" />
+                  <EchoIdVideoThumbnail src={item.url} poster={item.thumbnailUrl} className="echoid-post-carousel-thumb-media" />
                 ) : (
-                  <img src={item.url} alt="" className="echoid-post-carousel-thumb-media" loading="lazy" />
+                  <LazyEchoIdImage
+                    src={item.url}
+                    alt=""
+                    className="echoid-post-carousel-thumb-media"
+                    onLoadError={() => markAsVideo(item.url)}
+                  />
                 )}
               </button>
             ))}
@@ -758,10 +1339,55 @@ function PostMediaCarousel({ mediaItems, altText, compact = false, onMediaIntera
 
 function EchoIdMediaPreview({ preview, onClose }) {
   const [scale, setScale] = useState(1);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [isPreviewSettingsOpen, setIsPreviewSettingsOpen] = useState(false);
+  const [previewPlaybackRate, setPreviewPlaybackRate] = useState(1);
+  const previewVideoRef = useRef(null);
 
   useEffect(() => {
     setScale(1);
   }, [preview?.url, preview?.kind]);
+
+  useEffect(() => {
+    if (preview?.kind !== "video") return undefined;
+    const video = previewVideoRef.current;
+    if (!video) return undefined;
+
+    setIsPreviewPlaying(false);
+    setIsPreviewSettingsOpen(false);
+    video.playbackRate = previewPlaybackRate;
+    video.load?.();
+    const playPromise = video.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {});
+    }
+    return () => {
+      video.pause?.();
+    };
+  }, [preview?.kind, preview?.url]);
+
+  const togglePreviewPlayback = async (event) => {
+    event?.stopPropagation?.();
+    const video = previewVideoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      const playPromise = video.play?.();
+      if (playPromise?.catch) {
+        await playPromise.catch(() => {});
+      }
+    } else {
+      video.pause?.();
+    }
+  };
+
+  const setPreviewSpeed = (speed) => {
+    setPreviewPlaybackRate(speed);
+    if (previewVideoRef.current) {
+      previewVideoRef.current.playbackRate = speed;
+    }
+    setIsPreviewSettingsOpen(false);
+  };
 
   useEffect(() => {
     if (!preview) return undefined;
@@ -774,7 +1400,7 @@ function EchoIdMediaPreview({ preview, onClose }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, preview]);
 
-  if (!preview?.url) return null;
+  if (!preview?.url || !isSafeMediaItem(preview)) return null;
 
   const isImage = preview.kind !== "video";
 
@@ -822,7 +1448,61 @@ function EchoIdMediaPreview({ preview, onClose }) {
               style={{ transform: `scale(${scale})` }}
             />
           ) : (
-            <video src={preview.url} className="echoid-media-preview-video" controls playsInline autoPlay preload="metadata" />
+            <div className="echoid-media-preview-video-wrap">
+              <video
+                ref={previewVideoRef}
+                src={preview.url}
+                poster={preview.thumbnailUrl}
+                className="echoid-media-preview-video"
+                controls
+                playsInline
+                autoPlay
+                preload="metadata"
+                onClick={togglePreviewPlayback}
+                onPlay={() => setIsPreviewPlaying(true)}
+                onPause={() => setIsPreviewPlaying(false)}
+                onEnded={() => setIsPreviewPlaying(false)}
+              />
+              <button
+                type="button"
+                className={`echoid-media-preview-play ${isPreviewPlaying ? "is-playing" : ""}`}
+                onClick={togglePreviewPlayback}
+                aria-label={isPreviewPlaying ? "Pause video" : "Play video"}
+              >
+                {isPreviewPlaying ? <Pause size={38} fill="currentColor" /> : <Play size={44} fill="currentColor" />}
+              </button>
+              <div className="echoid-media-preview-settings">
+                <button
+                  type="button"
+                  className="echoid-media-preview-settings-btn"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsPreviewSettingsOpen((current) => !current);
+                  }}
+                  aria-label="Video settings"
+                  aria-expanded={isPreviewSettingsOpen}
+                >
+                  <Settings size={18} />
+                </button>
+                {isPreviewSettingsOpen ? (
+                  <div className="echoid-media-preview-settings-menu">
+                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                      <button
+                        key={speed}
+                        type="button"
+                        className={previewPlaybackRate === speed ? "is-active" : ""}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPreviewSpeed(speed);
+                        }}
+                      >
+                        {speed === 1 ? "Normal" : `${speed}x`}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -886,6 +1566,17 @@ const splitComposerBody = (body, mediaMap) => {
   return parts.length ? parts : [{ type: "text", key: "text-empty", value: "" }];
 };
 
+const isVisibleUserPost = (post = {}, anonymousProfile = null) => isExplicitlyNonAnonymousPost(post) || isOwnerPost(post, anonymousProfile);
+
+const EchoIdPullRefreshSpinner = React.forwardRef(function EchoIdPullRefreshSpinner(_, ref) {
+  return (
+    <div className="echoid-pull-refresh" aria-hidden="true" ref={ref}>
+      <div className="echoid-pull-refresh-spinner">
+        <span />
+      </div>
+    </div>
+  );
+});
 
 function EchoIdPostCardSkeleton({ count = 1, compact = true }) {
   return (
@@ -964,14 +1655,16 @@ function EchoIdProfileCardSkeleton() {
 
 const renderMediaCard = (media) => {
   if (!media?.previewUrl) return null;
+  const safePreview = isSafeMediaUrl(media.previewUrl) && (media.kind === "image" || media.kind === "video");
+  if (!safePreview) return null;
 
   return (
     <div className="echoid-inline-media-shell">
-      <div className="echoid-inline-media-frame">
+      <div className={`echoid-inline-media-frame ${media.kind === "video" ? "is-video" : ""}`}>
         {media.kind === "video" ? (
-          <video src={media.previewUrl} className="echoid-inline-media" controls playsInline preload="metadata" />
+          <EchoIdVideoPlayer src={media.previewUrl} poster={media.thumbnailUrl} title={media.name || "Selected video"} className="echoid-inline-media" />
         ) : (
-          <img src={media.previewUrl} alt={media.name || "Selected media"} className="echoid-inline-media" />
+          <img src={media.previewUrl} alt={media.name || "Selected media"} className="echoid-inline-media" loading="lazy" decoding="async" />
         )}
       </div>
       <div className="echoid-inline-media-meta">
@@ -998,6 +1691,7 @@ const renderPostCard = (post, options = {}) => {
     onPreviewMedia,
     onDelete,
     isDeletePending = false,
+    autoPlayVideos = false,
   } = options;
   const title = post.title || "";
   const author = post.name || "Anonymous";
@@ -1054,6 +1748,7 @@ const renderPostCard = (post, options = {}) => {
             mediaItems={mediaItems}
             altText={title || author}
             compact={compact}
+            autoPlayVideos={autoPlayVideos}
             onMediaInteract={stopEvent}
             onPreviewMedia={onPreviewMedia}
           />
@@ -1161,6 +1856,7 @@ function UserDetails({
   onOpenPost,
   onPreviewProfileImage,
   renderPostCard,
+  autoPlayVideos = false,
 }) {
   const displayName = String(user?.name || "Unknown user").trim() || "Unknown user";
   const handle = user?.username ? `@${user.username}` : "@unknown";
@@ -1235,6 +1931,7 @@ function UserDetails({
               ? posts.map((post) =>
                   renderPostCard(post, {
                     compact: true,
+                    autoPlayVideos,
                     onOpenPost,
                   })
                 )
@@ -1446,10 +2143,12 @@ export default function EchoIdPage({
   initialPostError = "",
 }) {
   const history = useHistory();
+  const { echoIdUnreadNotifications = 0, setEchoIdUnreadNotifications } = useContext(MessageContext) || {};
   const [isMobileLayout, setIsMobileLayout] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 768;
   });
+  const isNativeAndroid = Boolean(Capacitor.isNativePlatform?.() && Capacitor.getPlatform?.() === "android");
   const shouldShowBottomNav = Boolean(Capacitor.isNativePlatform?.() || isMobileLayout);
   const cachedAnonymousProfile = useMemo(() => readAnonymousProfile(), []);
   const cachedOwnPosts = useMemo(() => readOwnPostsCache(), []);
@@ -1457,7 +2156,27 @@ export default function EchoIdPage({
   const bodyInputRef = useRef(null);
   const mediaObjectUrlsRef = useRef([]);
   const isFeedRequestInFlightRef = useRef(false);
+  const isPullRefreshingFeedRef = useRef(false);
+  const pullRefreshSettledRef = useRef(false);
+  const skipNextFeedLoadRef = useRef(false);
   const feedCacheRef = useRef({});
+  const contentRef = useRef(null);
+  const [contentElement, setContentElement] = useState(null);
+  const homePullLayerRef = useRef(null);
+  const pullSpinnerRef = useRef(null);
+  const pullRefreshFrameRef = useRef(0);
+  const pullRefreshResetTimerRef = useRef(0);
+  const pullRefreshHardStopTimerRef = useRef(0);
+  const pullRefreshMountedRef = useRef(true);
+  const pullRefreshStateRef = useRef({
+    current: 0,
+    target: 0,
+    startY: 0,
+    touchId: null,
+    isPulling: false,
+    isRefreshing: false,
+    thresholdHapticFired: false,
+  });
   const interactionBatchSignatureRef = useRef("");
   const desktopFilterMenuRef = useRef(null);
   const mobileFilterMenuRef = useRef(null);
@@ -1466,6 +2185,7 @@ export default function EchoIdPage({
   const desktopDrawerButtonRef = useRef(null);
   const mobileDrawerButtonRef = useRef(null);
   const drawerRef = useRef(null);
+  const autoPlayPreferenceLoadedRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState("home");
   const [query, setQuery] = useState("");
@@ -1473,6 +2193,8 @@ export default function EchoIdPage({
   const [debouncedUserQuery, setDebouncedUserQuery] = useState("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [isPullRefreshUiVisible, setIsPullRefreshUiVisible] = useState(false);
+  const [pullRefreshNotice, setPullRefreshNotice] = useState("");
   const [sortBy, setSortBy] = useState("date");
   const [selectedHomeCategory, setSelectedHomeCategory] = useState("");
   const [anonymousProfile, setAnonymousProfile] = useState(cachedAnonymousProfile);
@@ -1482,6 +2204,10 @@ export default function EchoIdPage({
   const [isFeedLoadingMore, setIsFeedLoadingMore] = useState(false);
   const [feedPage, setFeedPage] = useState(1);
   const [feedHasMore, setFeedHasMore] = useState(false);
+  const [feedRefreshRevision, setFeedRefreshRevision] = useState(0);
+  const [autoPlayVideos, setAutoPlayVideos] = useState(() => readEchoIdVideoAutoplay());
+  const [storedNotifications, setStoredNotifications] = useState(() => readEchoIdNotifications());
+  const [visibleNotificationCount, setVisibleNotificationCount] = useState(10);
   const [ownPosts, setOwnPosts] = useState(cachedOwnPosts);
   const [isOwnPostsLoading, setIsOwnPostsLoading] = useState(() => !cachedOwnPosts.length);
   const [isOwnPostsSyncing, setIsOwnPostsSyncing] = useState(false);
@@ -1583,6 +2309,23 @@ export default function EchoIdPage({
   }, []);
 
   useEffect(() => {
+    let active = true;
+    readEchoIdVideoAutoplayPreference().then((enabled) => {
+      if (!active) return;
+      autoPlayPreferenceLoadedRef.current = true;
+      setAutoPlayVideos(Boolean(enabled));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!autoPlayPreferenceLoadedRef.current) return;
+    saveEchoIdVideoAutoplayPreference(autoPlayVideos);
+  }, [autoPlayVideos]);
+
+  useEffect(() => {
     const normalizedInitialPostId = String(initialPostId || "").trim();
     if (!normalizedInitialPostId) return;
 
@@ -1677,6 +2420,235 @@ export default function EchoIdPage({
       icon,
       title,
     });
+
+  const getElasticPullDistance = (rawDistance) => {
+    const distance = Math.max(0, Number(rawDistance) || 0);
+    // Drag physics: the denominator grows with distance, so every extra pixel of finger travel
+    // contributes less visual movement. This creates the "harder to pull further" native feel.
+    const resisted = distance / (1 + distance / 260);
+    return Math.min(ECHOID_PULL_REFRESH_MAX, resisted);
+  };
+
+  const clearPullRefreshStyles = () => {
+    const state = pullRefreshStateRef.current;
+    state.current = 0;
+    state.target = 0;
+    state.isPulling = false;
+    state.isRefreshing = false;
+    state.touchId = null;
+    state.thresholdHapticFired = false;
+    pullRefreshSettledRef.current = true;
+
+    if (pullRefreshFrameRef.current) {
+      window.cancelAnimationFrame(pullRefreshFrameRef.current);
+      pullRefreshFrameRef.current = 0;
+    }
+    if (pullRefreshHardStopTimerRef.current) {
+      window.clearTimeout(pullRefreshHardStopTimerRef.current);
+      pullRefreshHardStopTimerRef.current = 0;
+    }
+
+    const layer = homePullLayerRef.current;
+    const spinner = pullSpinnerRef.current;
+    if (layer) {
+      layer.style.transform = "";
+      layer.style.willChange = "";
+    }
+    if (spinner) {
+      spinner.style.opacity = "0";
+      spinner.style.transform = "translate3d(-50%, 0, 0) scale(0.72)";
+      spinner.classList.remove("is-refreshing");
+    }
+    if (pullRefreshMountedRef.current) {
+      setIsPullRefreshUiVisible(false);
+    }
+  };
+
+  const applyPullRefreshFrame = () => {
+    const state = pullRefreshStateRef.current;
+    pullRefreshFrameRef.current = 0;
+
+    // Momentum/easing: chase the target instead of snapping to it, which keeps both drag
+    // tracking and spring-back smooth without asking React to re-render every touch frame.
+    state.current += (state.target - state.current) * 0.24;
+    if (Math.abs(state.target - state.current) < 0.25) {
+      state.current = state.target;
+    }
+
+    const layer = homePullLayerRef.current;
+    const spinner = pullSpinnerRef.current;
+    const progress = clampNumber(state.current / ECHOID_PULL_REFRESH_THRESHOLD, 0, 1);
+    const opacity = state.isRefreshing ? 1 : progress;
+    const scale = state.isRefreshing ? 1 : 0.72 + progress * 0.28;
+
+    if (pullRefreshSettledRef.current && !state.isPulling && !state.isRefreshing && state.target === 0 && state.current < 1) {
+      clearPullRefreshStyles();
+      return;
+    }
+
+    if (layer) {
+      layer.style.transform = state.current > 0 ? `translate3d(0, ${state.current}px, 0)` : "";
+      layer.style.willChange = state.current > 0 ? "transform" : "";
+    }
+    if (spinner) {
+      spinner.style.opacity = String(opacity);
+      spinner.style.transform = `translate3d(-50%, ${Math.max(4, state.current * 0.34)}px, 0) scale(${scale})`;
+      spinner.classList.toggle("is-refreshing", state.isRefreshing);
+    }
+
+    if (Math.abs(state.target - state.current) > 0.25) {
+      pullRefreshFrameRef.current = window.requestAnimationFrame(applyPullRefreshFrame);
+      return;
+    }
+
+    if (!state.isPulling && !state.isRefreshing && state.current === 0) {
+      clearPullRefreshStyles();
+    }
+  };
+
+  const schedulePullRefreshFrame = () => {
+    if (pullRefreshFrameRef.current) return;
+    pullRefreshFrameRef.current = window.requestAnimationFrame(applyPullRefreshFrame);
+  };
+
+  const resetPullRefreshPosition = () => {
+    const state = pullRefreshStateRef.current;
+    if (pullRefreshResetTimerRef.current) {
+      window.clearTimeout(pullRefreshResetTimerRef.current);
+      pullRefreshResetTimerRef.current = 0;
+    }
+    pullRefreshSettledRef.current = true;
+    // Animation reset logic: release updates only the target; the RAF spring loop eases the
+    // content back to zero so failed pulls and completed refreshes both settle naturally.
+    state.target = 0;
+    state.isPulling = false;
+    state.isRefreshing = false;
+    state.thresholdHapticFired = false;
+    schedulePullRefreshFrame();
+
+    // Rerenders during a feed refresh can preserve inline transform/opacity at the hold point.
+    // This fallback force-clears the layer after the spring-back window, so the loader cannot
+    // get stuck visible even if the RAF is interrupted by data updates or route changes.
+    pullRefreshResetTimerRef.current = window.setTimeout(() => {
+      pullRefreshResetTimerRef.current = 0;
+      clearPullRefreshStyles();
+    }, 520);
+  };
+
+  const refreshHomeFeedFromPull = async () => {
+    const startedAt = Date.now();
+    const cacheKey = `${sortBy}::${selectedHomeCategory || "all"}`;
+
+    try {
+      if (!host) {
+        await wait(ECHOID_PULL_REFRESH_MIN_MS);
+        return;
+      }
+
+      isFeedRequestInFlightRef.current = true;
+      isPullRefreshingFeedRef.current = true;
+      pullRefreshSettledRef.current = false;
+      setIsFeedLoadingMore(false);
+      setFeedHasMore(true);
+      delete feedCacheRef.current[cacheKey];
+
+      const backendFilter = sortBy === "date" ? "time" : "like";
+      const response = await withTimeout(
+        api.postFeed(host, {
+          filter: backendFilter,
+          page: 1,
+          refreshKey: Date.now(),
+          ...(selectedHomeCategory ? { category: selectedHomeCategory } : {}),
+        }),
+        ECHOID_PULL_REFRESH_MAX_MS
+      );
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || `Feed refresh failed with status ${response.status}`);
+      }
+
+      // Pull refresh is a hard page-1 replacement: do not merge with the previous feed array,
+      // because stale card/component state should be discarded when the new feed arrives.
+      const nextPosts = normalizePostCollection(json.posts);
+      const sortedPosts =
+        sortBy === "least-popularity"
+          ? [...nextPosts].sort((left, right) => Number(left.likes || 0) - Number(right.likes || 0))
+          : nextPosts;
+
+      if (!pullRefreshMountedRef.current) return;
+      setFeedHasMore(Boolean(json?.hasMore));
+      if (feedPage !== 1) {
+        skipNextFeedLoadRef.current = true;
+      }
+      setFeedPage(1);
+      setFeedPosts(() => sortedPosts);
+      setFeedRefreshRevision((current) => current + 1);
+      pullRefreshSettledRef.current = true;
+      feedCacheRef.current[cacheKey] = {
+        posts: sortedPosts,
+        page: 1,
+        hasMore: Boolean(json?.hasMore),
+      };
+      fetchReactionBatch(sortedPosts);
+    } catch (error) {
+      console.warn("Failed to refresh EchoId feed:", error);
+      if (pullRefreshMountedRef.current) {
+        setPullRefreshNotice("Problem fetching feed");
+      }
+    } finally {
+      const remaining = ECHOID_PULL_REFRESH_MIN_MS - (Date.now() - startedAt);
+      if (remaining > 0) await wait(remaining);
+      isFeedRequestInFlightRef.current = false;
+      isPullRefreshingFeedRef.current = false;
+      pullRefreshSettledRef.current = true;
+      if (pullRefreshMountedRef.current) {
+        setIsFeedLoading(false);
+        setIsFeedLoadingMore(false);
+      }
+    }
+  };
+
+  const completePullRefresh = async () => {
+    const state = pullRefreshStateRef.current;
+    setIsPullRefreshUiVisible(true);
+    setPullRefreshNotice("");
+    pullRefreshSettledRef.current = false;
+    state.isRefreshing = true;
+    state.target = ECHOID_PULL_REFRESH_HOLD;
+    schedulePullRefreshFrame();
+
+    if (pullRefreshHardStopTimerRef.current) {
+      window.clearTimeout(pullRefreshHardStopTimerRef.current);
+    }
+    pullRefreshHardStopTimerRef.current = window.setTimeout(() => {
+      pullRefreshHardStopTimerRef.current = 0;
+      const wasSettled = pullRefreshSettledRef.current;
+      isFeedRequestInFlightRef.current = false;
+      isPullRefreshingFeedRef.current = false;
+      pullRefreshSettledRef.current = true;
+      if (pullRefreshMountedRef.current) {
+        setIsFeedLoading(false);
+        setIsFeedLoadingMore(false);
+        if (!wasSettled) {
+          setPullRefreshNotice("Problem fetching feed");
+        }
+      }
+      clearPullRefreshStyles();
+    }, ECHOID_PULL_REFRESH_MAX_MS);
+
+    try {
+      await refreshHomeFeedFromPull();
+    } finally {
+      if (!pullRefreshMountedRef.current) return;
+      pullRefreshSettledRef.current = true;
+      isPullRefreshingFeedRef.current = false;
+      state.isRefreshing = false;
+      resetPullRefreshPosition();
+      window.setTimeout(() => {
+        if (pullRefreshMountedRef.current) clearPullRefreshStyles();
+      }, 700);
+    }
+  };
 
   useEffect(() => {
     if (!host) {
@@ -1776,6 +2748,38 @@ export default function EchoIdPage({
   }, []);
 
   useEffect(() => {
+    if (activeTab === "home") return undefined;
+    resetPullRefreshPosition();
+    return undefined;
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!pullRefreshNotice) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setPullRefreshNotice("");
+    }, 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [pullRefreshNotice]);
+
+  useEffect(() => {
+    return () => {
+      pullRefreshMountedRef.current = false;
+      if (pullRefreshResetTimerRef.current) {
+        window.clearTimeout(pullRefreshResetTimerRef.current);
+        pullRefreshResetTimerRef.current = 0;
+      }
+      if (pullRefreshHardStopTimerRef.current) {
+        window.clearTimeout(pullRefreshHardStopTimerRef.current);
+        pullRefreshHardStopTimerRef.current = 0;
+      }
+      if (pullRefreshFrameRef.current) {
+        window.cancelAnimationFrame(pullRefreshFrameRef.current);
+        pullRefreshFrameRef.current = 0;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!host || activeTab !== "home") return;
     const cacheKey = `${sortBy}::${selectedHomeCategory || "all"}`;
     const cachedFeed = feedCacheRef.current[cacheKey];
@@ -1840,6 +2844,7 @@ export default function EchoIdPage({
     setFeedPosts((prev) => applyToPosts(prev));
     setSearchPosts((prev) => applyToPosts(prev));
     setOwnPosts((prev) => applyToPosts(prev));
+    setSelectedUserPosts((prev) => applyToPosts(prev));
     setSelectedPostDetailMap((prev) => {
       const current = prev[normalizedPostId];
       if (!current) return prev;
@@ -1884,6 +2889,7 @@ export default function EchoIdPage({
     setFeedPosts((prev) => applyToPosts(prev));
     setSearchPosts((prev) => applyToPosts(prev));
     setOwnPosts((prev) => applyToPosts(prev));
+    setSelectedUserPosts((prev) => applyToPosts(prev));
     setSelectedPostDetailMap((prev) => {
       const current = prev[normalizedPostId];
       if (!current) return prev;
@@ -1922,6 +2928,7 @@ export default function EchoIdPage({
     setFeedPosts((prev) => applyToPosts(prev));
     setSearchPosts((prev) => applyToPosts(prev));
     setOwnPosts((prev) => applyToPosts(prev));
+    setSelectedUserPosts((prev) => applyToPosts(prev));
     setSelectedPostDetailMap((prev) => {
       const current = prev[normalizedPostId];
       if (!current) return prev;
@@ -2115,6 +3122,10 @@ export default function EchoIdPage({
 
   useEffect(() => {
     if (!host || activeTab !== "home") return undefined;
+    if (skipNextFeedLoadRef.current) {
+      skipNextFeedLoadRef.current = false;
+      return undefined;
+    }
 
     let active = true;
 
@@ -2291,6 +3302,82 @@ export default function EchoIdPage({
     }
   }, [activeTab, ownPosts.length]);
 
+  useEffect(() => {
+    if (activeTab === "alerts") {
+      setVisibleNotificationCount(10);
+    }
+  }, [activeTab, storedNotifications.length]);
+
+  useEffect(() => {
+    if (!host) return undefined;
+    let active = true;
+
+    const syncNotifications = async () => {
+      try {
+        const response = await api.postNotifications(host, { limit: 100 });
+        const json = await response.json().catch(() => ({}));
+        if (!active || !response.ok || !json?.success) return;
+
+        const incoming = (Array.isArray(json.notifications) ? json.notifications : [])
+          .map(normalizeStoredEchoIdNotification)
+          .filter(Boolean);
+
+        setStoredNotifications((current) => {
+          const base = current.length ? current : readEchoIdNotifications();
+          const byId = new Map((Array.isArray(base) ? base : []).map((item) => [String(item?.id || ""), item]));
+
+          incoming.forEach((item) => {
+            const previous = byId.get(item.id);
+            const isRead = previous?.read === true || previous?.view === true || item.read === true;
+            byId.set(item.id, {
+              ...previous,
+              ...item,
+              read: isRead,
+              view: isRead,
+            });
+          });
+
+          const merged = [...byId.values()]
+            .map(normalizeStoredEchoIdNotification)
+            .filter(Boolean)
+            .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+          saveEchoIdNotifications(merged);
+          const unreadCount = merged.filter((item) => item?.read !== true && item?.view !== true).length;
+          setEchoIdUnreadNotifications?.(unreadCount);
+          window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: unreadCount } }));
+          return merged;
+        });
+      } catch (error) {
+        console.warn("Failed to sync EchoId notifications:", error?.message || error);
+      }
+    };
+
+    syncNotifications();
+    return () => {
+      active = false;
+    };
+  }, [host, setEchoIdUnreadNotifications]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleNotificationUpdate = () => {
+      setStoredNotifications(readEchoIdNotifications());
+    };
+    window.addEventListener("echoid-notifications-updated", handleNotificationUpdate);
+    return () => window.removeEventListener("echoid-notifications-updated", handleNotificationUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "alerts") return;
+    setStoredNotifications((current) => {
+      const next = current.map((notification) => ({ ...notification, read: true, view: true }));
+      saveEchoIdNotifications(next);
+      return next;
+    });
+    setEchoIdUnreadNotifications?.(0);
+    window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: 0 } }));
+  }, [activeTab, setEchoIdUnreadNotifications]);
+
   const searchMode = query.trim().startsWith("@") ? "users" : "posts";
   const hasSearchQuery = query.trim().length > 0;
 
@@ -2339,8 +3426,14 @@ export default function EchoIdPage({
   }, [feedPosts, sortBy]);
 
   const displayedHomePosts = host ? sortedHomePosts : localHomePosts;
+  const getVirtualPostKey = useCallback((post, index) => getPostId(post) || `post-${index}`, []);
   const displayedOwnPosts = useMemo(() => ownPosts.slice(0, visibleOwnPostsCount), [ownPosts, visibleOwnPostsCount]);
   const hasMoreOwnPosts = visibleOwnPostsCount < ownPosts.length;
+  const displayedStoredNotifications = useMemo(
+    () => storedNotifications.slice(0, visibleNotificationCount),
+    [storedNotifications, visibleNotificationCount]
+  );
+  const hasMoreStoredNotifications = visibleNotificationCount < storedNotifications.length;
   const selectedHomeCategoryLabel = selectedHomeCategory ? toDisplayCategory(selectedHomeCategory) : "All posts";
   const profileStats = useMemo(() => {
     const visibleCount = ownPosts.filter((post) => String(post?.visibility || "").toLowerCase() === "normal").length;
@@ -2518,20 +3611,24 @@ export default function EchoIdPage({
     event.target.value = "";
     if (!files.length) return;
 
-    const normalizedFiles = files
-      .filter((file) => String(file.type || "").startsWith("image/") || String(file.type || "").startsWith("video/"))
-      .map((file) => {
+    const normalizedFiles = await Promise.all(
+      files
+      .filter(isAllowedMediaFile)
+      .map(async (file) => {
         const previewUrl = URL.createObjectURL(file);
         mediaObjectUrlsRef.current.push(previewUrl);
+        const isVideo = String(file.type || "").startsWith("video/");
         return {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           name: file.name || "media",
           mimeType: file.type || "application/octet-stream",
-          kind: String(file.type || "").startsWith("video/") ? "video" : "image",
+          kind: isVideo ? "video" : "image",
           previewUrl,
+          thumbnailUrl: isVideo ? await createVideoThumbnail(previewUrl) : "",
           fileObject: file,
         };
-      });
+      })
+    );
 
     pushMediaIntoComposer(normalizedFiles);
   };
@@ -2541,16 +3638,22 @@ export default function EchoIdPage({
     try {
       if (window.NativeAds?.pickMediaNative) {
         const picked = await pickMediaNative();
-        const normalizedFiles = picked
-          .filter((file) => String(file.type || "").startsWith("image/") || String(file.type || "").startsWith("video/"))
-          .map((file) => ({
+        const normalizedFiles = await Promise.all(
+          picked
+          .filter(isAllowedMediaFile)
+          .map(async (file) => {
+            const isVideo = String(file.type || "").startsWith("video/");
+            return {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
             name: file.name || "media",
             mimeType: file.type || "application/octet-stream",
-            kind: String(file.type || "").startsWith("video/") ? "video" : "image",
+            kind: isVideo ? "video" : "image",
             previewUrl: file.preview || "",
+            thumbnailUrl: isVideo ? await createVideoThumbnail(file.preview || "") : "",
             fileObject: null,
-          }));
+          };
+        })
+        );
 
         pushMediaIntoComposer(normalizedFiles);
         return;
@@ -2759,7 +3862,7 @@ export default function EchoIdPage({
         throw new Error(json?.message || "Could not load posts right now.");
       }
 
-      const nextPosts = normalizePostCollection(json?.posts);
+      const nextPosts = normalizePostCollection(json?.posts).filter((post) => isVisibleUserPost(post, anonymousProfile));
       setSelectedUserPosts(nextPosts);
       fetchReactionBatch(nextPosts);
     } catch (error) {
@@ -2772,17 +3875,19 @@ export default function EchoIdPage({
 
   const handleOpenMediaPreview = (media, altText = "") => {
     const url = String(media?.url || media?.previewUrl || "").trim();
-    if (!url) return;
+    const kind = normalizeMediaKind(media?.kind || media?.mimeType || "", url);
+    if (!url || !isSafeMediaUrl(url) || (kind !== "image" && kind !== "video")) return;
     setMediaPreview({
       url,
-      kind: String(media?.kind || "").trim().toLowerCase().startsWith("video") ? "video" : "image",
+      kind,
       alt: String(altText || "").trim(),
+      thumbnailUrl: media?.thumbnailUrl || "",
     });
   };
 
   const handleOpenProfileImagePreview = (url, altText = "") => {
     const normalizedUrl = String(url || "").trim();
-    if (!normalizedUrl) return;
+    if (!normalizedUrl || !isSafeMediaUrl(normalizedUrl)) return;
     setMediaPreview({
       url: normalizedUrl,
       kind: "image",
@@ -3262,7 +4367,114 @@ export default function EchoIdPage({
     if (activeTab === "profile" && !isOwnPostsLoading && !isOwnPostsHidden && hasMoreOwnPosts && distanceFromBottom <= 320) {
       setVisibleOwnPostsCount((prev) => Math.min(prev + 10, ownPosts.length));
     }
+
+    if (activeTab === "alerts" && hasMoreStoredNotifications && distanceFromBottom <= 320) {
+      setVisibleNotificationCount((prev) => Math.min(prev + 10, storedNotifications.length));
+    }
   };
+
+  const handleContentRef = useCallback((node) => {
+    contentRef.current = node;
+    setContentElement((current) => (current === node ? current : node));
+  }, []);
+
+  const handleHomeFeedEndReached = useCallback(() => {
+    if (
+      host &&
+      activeTab === "home" &&
+      !isFeedRequestInFlightRef.current &&
+      !isFeedLoadingMore &&
+      feedHasMore
+    ) {
+      setFeedPage((prev) => prev + 1);
+    }
+  }, [activeTab, feedHasMore, host, isFeedLoadingMore]);
+
+  const handleFeedTouchStart = (event) => {
+    const touch = event.touches?.[0];
+    const content = contentRef.current;
+    const state = pullRefreshStateRef.current;
+    if (!touch || !content || activeTab !== "home" || state.isRefreshing || content.scrollTop !== 0) return;
+
+    state.startY = touch.clientY;
+    state.touchId = touch.identifier;
+    state.isPulling = false;
+    state.thresholdHapticFired = false;
+  };
+
+  const handleFeedTouchMove = (event) => {
+    const content = contentRef.current;
+    const state = pullRefreshStateRef.current;
+    if (!content || activeTab !== "home" || state.isRefreshing || state.touchId === null) return;
+
+    const touch = Array.from(event.touches || []).find((entry) => entry.identifier === state.touchId);
+    if (!touch) return;
+
+    const rawDistance = touch.clientY - state.startY;
+    if (rawDistance <= 0 && !state.isPulling) return;
+    if (content.scrollTop !== 0 && !state.isPulling) return;
+
+    // Browser pull-to-refresh prevention: once this gesture is ours, keep the browser from
+    // taking over the overscroll while still letting normal feed scrolls happen below top.
+    event.preventDefault();
+    setIsPullRefreshUiVisible(true);
+    setPullRefreshNotice("");
+    state.isPulling = true;
+
+    const nextDistance = getElasticPullDistance(rawDistance);
+    state.target = nextDistance;
+
+    // Refresh threshold logic: fire haptics once when the resisted visual pull crosses the
+    // commit line. The actual refresh only starts on touchend, matching native feeds.
+    if (nextDistance >= ECHOID_PULL_REFRESH_THRESHOLD && !state.thresholdHapticFired) {
+      state.thresholdHapticFired = true;
+      try {
+        navigator.vibrate?.(8);
+      } catch {
+        // Haptics are optional and not supported on every browser/device.
+      }
+    }
+
+    schedulePullRefreshFrame();
+  };
+
+  const handleFeedTouchEnd = () => {
+    const state = pullRefreshStateRef.current;
+    if (activeTab !== "home" || !state.isPulling) {
+      state.touchId = null;
+      return;
+    }
+
+    const shouldRefresh = state.current >= ECHOID_PULL_REFRESH_THRESHOLD || state.target >= ECHOID_PULL_REFRESH_THRESHOLD;
+    state.touchId = null;
+    state.isPulling = false;
+
+    if (shouldRefresh) {
+      completePullRefresh();
+      return;
+    }
+
+    resetPullRefreshPosition();
+  };
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || activeTab !== "home") return undefined;
+
+    // React's delegated touchmove can be passive in modern browser scroll paths. A native
+    // listener with passive:false is required so preventDefault can block browser refresh.
+    content.addEventListener("touchstart", handleFeedTouchStart, { passive: true });
+    content.addEventListener("touchmove", handleFeedTouchMove, { passive: false });
+    content.addEventListener("touchend", handleFeedTouchEnd, { passive: true });
+    content.addEventListener("touchcancel", handleFeedTouchEnd, { passive: true });
+
+    return () => {
+      content.removeEventListener("touchstart", handleFeedTouchStart);
+      content.removeEventListener("touchmove", handleFeedTouchMove);
+      content.removeEventListener("touchend", handleFeedTouchEnd);
+      content.removeEventListener("touchcancel", handleFeedTouchEnd);
+    };
+  }, [activeTab, handleFeedTouchEnd, handleFeedTouchMove, handleFeedTouchStart]);
 
   const buildMediaTag = (url, isCover = false) => {
     if (!url) return "";
@@ -3320,10 +4532,21 @@ export default function EchoIdPage({
         blob = await previewResponse.blob();
       }
 
-      preparedMedia.push({ media, blob });
+      let thumbnailBlob = null;
+      if (media.kind === "video") {
+        thumbnailBlob = await dataUrlToBlob(media.thumbnailUrl);
+        if (!thumbnailBlob && media.previewUrl) {
+          thumbnailBlob = await createVideoThumbnailBlob(media.previewUrl);
+        }
+        if (!(thumbnailBlob instanceof Blob)) {
+          throw new Error("Could not create video thumbnail");
+        }
+      }
+
+      preparedMedia.push({ media, blob, thumbnailBlob });
     }
 
-    const totalBytes = preparedMedia.reduce((sum, entry) => sum + (entry.blob?.size || 0), 0);
+    const totalBytes = preparedMedia.reduce((sum, entry) => sum + (entry.blob?.size || 0) + (entry.thumbnailBlob?.size || 0), 0);
     let uploadedBytes = 0;
 
     try {
@@ -3339,6 +4562,7 @@ export default function EchoIdPage({
           anonymity: Boolean(composeForm.anonymity),
           mimeType: media.mimeType,
           fileName: media.name,
+          ...(media.kind === "video" ? { thumbnailMimeType: "image/png" } : {}),
         });
         const initJson = await initRes.json().catch(() => ({}));
         console.log("[echoid-upload] upload init response", {
@@ -3347,11 +4571,17 @@ export default function EchoIdPage({
           body: initJson,
         });
 
+        const thumbnailUpload = initJson?.thumbnailUpload || initJson?.thumbnail || null;
+
         if (!initRes.ok || !initJson?.success || !initJson?.uploadUrl || !initJson?.publicUrl) {
           throw new Error(initJson?.message || "Failed to initialize media upload");
         }
+        if (media.kind === "video" && (!thumbnailUpload?.uploadUrl || !thumbnailUpload?.publicUrl)) {
+          throw new Error("Failed to initialize video thumbnail upload");
+        }
 
         initializedPublicUrls.push(initJson.publicUrl);
+        if (thumbnailUpload?.publicUrl) initializedPublicUrls.push(thumbnailUpload.publicUrl);
 
         await putToSignedUrlWithProgress(
           initJson.uploadUrl,
@@ -3368,6 +4598,22 @@ export default function EchoIdPage({
         );
 
         uploadedBytes += blob.size || 0;
+        if (media.kind === "video") {
+          await putToSignedUrlWithProgress(
+            thumbnailUpload.uploadUrl,
+            entry.thumbnailBlob,
+            thumbnailUpload.contentType || entry.thumbnailBlob.type || "image/png",
+            (loaded) => {
+              if (!totalBytes) {
+                setPublishProgress(90);
+                return;
+              }
+              const percent = Math.round(((uploadedBytes + loaded) / totalBytes) * 90);
+              setPublishProgress(Math.min(90, Math.max(1, percent)));
+            }
+          );
+          uploadedBytes += entry.thumbnailBlob.size || 0;
+        }
         if (totalBytes) {
           setPublishProgress(Math.min(90, Math.max(1, Math.round((uploadedBytes / totalBytes) * 90))));
         }
@@ -3391,7 +4637,7 @@ export default function EchoIdPage({
       throw error;
     }
 
-    return uploads;
+    return { uploads, publicUrls: initializedPublicUrls };
   };
 
   const handlePublish = async () => {
@@ -3428,8 +4674,9 @@ export default function EchoIdPage({
         mediaCount: composeMedia.length,
         selectedCoverMediaId,
       });
-      const uploadedMedia = await uploadComposeMedia();
-      const uploadedPublicUrls = Array.from(uploadedMedia.values());
+      const uploadedMediaResult = await uploadComposeMedia();
+      const uploadedMedia = uploadedMediaResult.uploads;
+      const uploadedPublicUrls = uploadedMediaResult.publicUrls;
       const replacedBody = normalizedBody
         .replace(mediaTokenRegex, (_, mediaId) => {
           const url = uploadedMedia.get(mediaId);
@@ -3439,11 +4686,8 @@ export default function EchoIdPage({
         .trim();
       const finalBody = replacedBody;
 
-      if (!stripMediaLinks(finalBody) && !bodyImageLinkRegex.test(finalBody)) {
+      if (!stripMediaLinks(finalBody) && extractPostMediaItems(finalBody).length === 0) {
         throw new Error("Body is required.");
-      }
-      if (finalBody.length > 1200) {
-        throw new Error("Post body is too long after media links were added.");
       }
 
       setPublishProgress(composeMedia.length ? 94 : 72);
@@ -3525,7 +4769,7 @@ export default function EchoIdPage({
   };
 
   const renderHome = () => (
-    <div className="echoid-feed">
+    <div className="echoid-feed echoid-pull-layer" ref={homePullLayerRef}>
       <section className="echoid-hero-card">
         <div className="echoid-hero-copy">
           <div className="echoid-hero-profile">
@@ -3571,31 +4815,90 @@ export default function EchoIdPage({
         })}
       </section>
 
-      <section className="echoid-section">
+      <section className="echoid-section" key={`home-feed-${feedRefreshRevision}`}>
         <div className="echoid-section-heading">
           <span className="echoid-section-label">{selectedHomeCategoryLabel}</span>
           <button type="button" onClick={() => setIsSortMenuOpen((current) => !current)}>
             {sortOptions.find((option) => option.id === sortBy)?.label || "By date"}
           </button>
         </div>
-        {isFeedLoading && host ? <EchoIdPostCardSkeleton count={3} /> : null}
+        {isFeedLoading && host && !isPullRefreshingFeedRef.current ? <EchoIdPostCardSkeleton count={3} /> : null}
         {!isFeedLoading && displayedHomePosts.length === 0 ? (
           <div className="echoid-empty-card">No posts in this category yet.</div>
         ) : null}
-        {displayedHomePosts.map((post) =>
-          renderPostCard(post, {
-            compact: true,
-            reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
-            witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
-            isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
-            isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
-            onLike: (targetPost) => handleReactToPost(targetPost, 1),
-            onDislike: (targetPost) => handleReactToPost(targetPost, -1),
-            onWitness: handleWitnessPost,
-            onOpenPost: handleOpenPost,
-            onOpenAuthor: handleOpenUserDetails,
-            onPreviewMedia: handleOpenMediaPreview,
-          })
+        {isNativeAndroid ? (
+          contentElement ? (
+            <Virtuoso
+              className="echoid-virtuoso-feed"
+              customScrollParent={contentElement}
+              data={displayedHomePosts}
+              computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+              endReached={handleHomeFeedEndReached}
+              increaseViewportBy={{ top: 520, bottom: 1040 }}
+              itemContent={(index, post) => (
+                <div className="echoid-virtual-post">
+                  {renderPostCard(post, {
+                    compact: true,
+                    autoPlayVideos,
+                    reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
+                    witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
+                    isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
+                    isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
+                    onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                    onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                    onWitness: handleWitnessPost,
+                    onOpenPost: handleOpenPost,
+                    onOpenAuthor: handleOpenUserDetails,
+                    onPreviewMedia: handleOpenMediaPreview,
+                  })}
+                </div>
+              )}
+            />
+          ) : (
+            displayedHomePosts.slice(0, 6).map((post) =>
+              renderPostCard(post, {
+                compact: true,
+                autoPlayVideos,
+                reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
+                witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
+                isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
+                isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
+                onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                onWitness: handleWitnessPost,
+                onOpenPost: handleOpenPost,
+                onOpenAuthor: handleOpenUserDetails,
+                onPreviewMedia: handleOpenMediaPreview,
+              })
+            )
+          )
+        ) : (
+               <Virtuoso
+              className="echoid-virtuoso-feed"
+              customScrollParent={contentElement}
+              data={displayedHomePosts}
+              computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+              endReached={handleHomeFeedEndReached}
+              increaseViewportBy={{ top: 520, bottom: 1040 }}
+              itemContent={(index, post) => (
+                <div className="echoid-virtual-post">
+                  {renderPostCard(post, {
+                    compact: true,
+                    autoPlayVideos,
+                    reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
+                    witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
+                    isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
+                    isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
+                    onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                    onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                    onWitness: handleWitnessPost,
+                    onOpenPost: handleOpenPost,
+                    onOpenAuthor: handleOpenUserDetails,
+                    onPreviewMedia: handleOpenMediaPreview,
+                  })}
+                </div>
+              )}
+            />
         )}
         {isFeedLoadingMore ? <EchoIdPostCardSkeleton count={2} /> : null}
       </section>
@@ -3671,23 +4974,41 @@ export default function EchoIdPage({
           ) : isSearchLoading && host ? (
             <EchoIdPostCardSkeleton count={3} />
           ) : postResults.length > 0 ? (
-            <div className="echoid-search-results">
-              {postResults.map((post) =>
-                renderPostCard(post, {
-                  compact: true,
-                  reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
-                  witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
-                  isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
-                  isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
-                  onLike: (targetPost) => handleReactToPost(targetPost, 1),
-                  onDislike: (targetPost) => handleReactToPost(targetPost, -1),
-                  onWitness: handleWitnessPost,
-                  onOpenPost: handleOpenPost,
-                  onOpenAuthor: handleOpenUserDetails,
-                  onPreviewMedia: handleOpenMediaPreview,
-                })
-              )}
-            </div>
+           <div className="echoid-search-results">
+  <Virtuoso
+    className="echoid-virtuoso-feed"
+    customScrollParent={contentElement}
+    data={postResults}
+    computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+    increaseViewportBy={{ top: 400, bottom: 900 }}
+    itemContent={(index, post) => (
+      <div className="echoid-virtual-post">
+        {renderPostCard(post, {
+          compact: true,
+          autoPlayVideos,
+          reactionValue: normalizeUserReactionValue(
+            postReactionMap[getPostId(post)] ?? post?.userReaction
+          ),
+          witnessValue: normalizeWitnessValue(
+            postWitnessMap[getPostId(post)] ?? post?.userWitness
+          ),
+          isReactionPending: Boolean(
+            reactionPendingByPostId[getPostId(post)]
+          ),
+          isWitnessPending: Boolean(
+            witnessPendingByPostId[getPostId(post)]
+          ),
+          onLike: (targetPost) => handleReactToPost(targetPost, 1),
+          onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+          onWitness: handleWitnessPost,
+          onOpenPost: handleOpenPost,
+          onOpenAuthor: handleOpenUserDetails,
+          onPreviewMedia: handleOpenMediaPreview,
+        })}
+      </div>
+    )}
+  />
+</div>
           ) : (
             <div className="echoid-empty-card">No matching posts yet.</div>
           )}
@@ -3705,18 +5026,30 @@ export default function EchoIdPage({
         </div>
       </section>
 
-      {alertSeed.map((alert) => (
-        <article key={alert.id} className={`echoid-alert-card tone-${alert.tone}`}>
-          <div className="echoid-alert-icon">
-            {alert.tone === "warning" ? <TriangleAlert size={18} /> : <Sparkles size={18} />}
-          </div>
-          <div className="echoid-alert-copy">
-            <strong>{alert.title}</strong>
-            <p>{alert.copy}</p>
-            <span>{formatRelativeTime(alert.minutesAgo)}</span>
-          </div>
-        </article>
-      ))}
+      {displayedStoredNotifications.length > 0 ? (
+        displayedStoredNotifications.map((alert) => {
+          const isWitnessAlert = String(alert.type || "").toUpperCase() === "WITNESS";
+          return (
+            <article
+              key={alert.id}
+              className={`echoid-alert-card tone-${isWitnessAlert ? "warning" : "accent"} ${alert.read ? "" : "is-unread"}`}
+            >
+              <div className="echoid-alert-icon">
+                {isWitnessAlert ? <TriangleAlert size={18} /> : <Sparkles size={18} />}
+              </div>
+              <div className="echoid-alert-copy">
+                <strong>{alert.title}</strong>
+                <p>{alert.body || "A new EchoId notification is ready."}</p>
+                <span>{formatRelativeTime(getRelativeMinutesFromDate(alert.createdAt))}</span>
+              </div>
+            </article>
+          );
+        })
+      ) : (
+        <div className="echoid-empty-card">No EchoId notifications yet.</div>
+      )}
+
+      {hasMoreStoredNotifications ? <div className="echoid-empty-card">Scroll to load more notifications.</div> : null}
     </div>
   );
 
@@ -3765,20 +5098,36 @@ export default function EchoIdPage({
         ) : null}
         {!isOwnPostsLoading &&
           !isOwnPostsHidden &&
-          displayedOwnPosts.map((post) =>
-            renderPostCard(post, {
-              compact: true,
-              showOwnerMeta: true,
-              witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
-              isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
-              isDeletePending: Boolean(deletePendingByPostId[getPostId(post)]),
-              onWitness: handleWitnessPost,
-              onDelete: handleDeletePost,
-              onOpenPost: handleOpenPost,
-              onOpenAuthor: handleOpenUserDetails,
-              onPreviewMedia: handleOpenMediaPreview,
-            })
-          )}
+       <Virtuoso
+  className="echoid-virtuoso-feed"
+  customScrollParent={contentElement}
+  data={ownPosts}
+  computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+  increaseViewportBy={{ top: 400, bottom: 900 }}
+  itemContent={(index, post) => (
+    <div className="echoid-virtual-post">
+      {renderPostCard(post, {
+        compact: true,
+        autoPlayVideos,
+        showOwnerMeta: true,
+        witnessValue: normalizeWitnessValue(
+          postWitnessMap[getPostId(post)] ?? post?.userWitness
+        ),
+        isWitnessPending: Boolean(
+          witnessPendingByPostId[getPostId(post)]
+        ),
+        isDeletePending: Boolean(
+          deletePendingByPostId[getPostId(post)]
+        ),
+        onWitness: handleWitnessPost,
+        onDelete: handleDeletePost,
+        onOpenPost: handleOpenPost,
+        onOpenAuthor: handleOpenUserDetails,
+        onPreviewMedia: handleOpenMediaPreview,
+      })}
+    </div>
+  )}
+/>}
         {!isOwnPostsLoading && !isOwnPostsHidden && hasMoreOwnPosts ? (
           <div className="echoid-empty-card">Scroll to load 10 more posts.</div>
         ) : null}
@@ -3883,9 +5232,9 @@ export default function EchoIdPage({
                 <div className="echoid-compose-media-chip-preview">
                   {media.previewUrl ? (
                     media.kind === "video" ? (
-                      <video src={media.previewUrl} className="echoid-compose-media-thumb" muted playsInline preload="metadata" />
+                      <EchoIdVideoThumbnail src={media.previewUrl} poster={media.thumbnailUrl} className="echoid-compose-media-thumb" />
                     ) : (
-                      <img src={media.previewUrl} alt={media.name || "Selected media"} className="echoid-compose-media-thumb" />
+                      <img src={media.previewUrl} alt={media.name || "Selected media"} className="echoid-compose-media-thumb" loading="lazy" decoding="async" />
                     )
                   ) : null}
                   <button
@@ -3999,9 +5348,11 @@ export default function EchoIdPage({
           onLoadPosts={handleLoadSelectedUserPosts}
           onOpenPost={handleOpenPost}
           onPreviewProfileImage={handleOpenProfileImagePreview}
+          autoPlayVideos={autoPlayVideos}
           renderPostCard={(post, options = {}) =>
             renderPostCard(post, {
               ...options,
+              autoPlayVideos,
               reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
               witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
               isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
@@ -4087,7 +5438,7 @@ export default function EchoIdPage({
   }
 
   return (
-    <div className={`echoid-page ${shouldShowBottomNav ? "" : "echoid-page--no-bottomnav"}`}>
+    <div className={`echoid-page ${shouldShowBottomNav ? "" : "echoid-page--no-bottomnav"} ${isNativeAndroid ? "is-native-android" : ""}`}>
       <button
         type="button"
         className="echoid-mobile-menu-button"
@@ -4099,15 +5450,26 @@ export default function EchoIdPage({
       </button>
 
       {activeTab === "home" ? (
-        <button
-          type="button"
-          className="echoid-mobile-filter-button"
-          aria-label="Open sort options"
-          ref={mobileFilterButtonRef}
-          onClick={() => setIsSortMenuOpen((current) => !current)}
-        >
-          <Filter size={18} />
-        </button>
+        <div className="echoid-mobile-controls">
+          <button
+            type="button"
+            className={`echoid-autoplay-toggle ${autoPlayVideos ? "is-active" : ""}`}
+            onClick={() => setAutoPlayVideos((current) => !current)}
+            aria-pressed={autoPlayVideos}
+            aria-label={`Turn video autoplay ${autoPlayVideos ? "off" : "on"}`}
+          >
+            Auto video {autoPlayVideos ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            className="echoid-mobile-filter-button"
+            aria-label="Open sort options"
+            ref={mobileFilterButtonRef}
+            onClick={() => setIsSortMenuOpen((current) => !current)}
+          >
+            <Filter size={18} />
+          </button>
+        </div>
       ) : null}
 
       {activeTab === "home" && isSortMenuOpen ? (
@@ -4198,12 +5560,13 @@ export default function EchoIdPage({
               : drawerNavItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
+                  const hasUnreadAlerts = item.id === "alerts" && echoIdUnreadNotifications > 0;
 
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      className={`echoid-drawer-item ${isActive ? "is-active" : ""}`}
+                      className={`echoid-drawer-item ${isActive ? "is-active" : ""} ${hasUnreadAlerts ? "has-echoid-alerts" : ""}`}
                       onClick={() => handleSelectDrawerTab(item.id)}
                       aria-current={isActive ? "page" : undefined}
                     >
@@ -4256,6 +5619,15 @@ export default function EchoIdPage({
             <div className="echoid-filter-wrap">
               <button
                 type="button"
+                className={`echoid-autoplay-toggle ${autoPlayVideos ? "is-active" : ""}`}
+                onClick={() => setAutoPlayVideos((current) => !current)}
+                aria-pressed={autoPlayVideos}
+                aria-label={`Turn video autoplay ${autoPlayVideos ? "off" : "on"}`}
+              >
+                Auto video {autoPlayVideos ? "On" : "Off"}
+              </button>
+              <button
+                type="button"
                 className="echoid-icon-button"
                 aria-label="Open sort options"
                 aria-expanded={isSortMenuOpen}
@@ -4286,19 +5658,30 @@ export default function EchoIdPage({
           ) : null}
         </header>
 
-        <main className="echoid-content" onScroll={handleContentScroll}>{renderActivePage()}</main>
+        <main
+          className="echoid-content"
+          ref={handleContentRef}
+          onScroll={handleContentScroll}
+        >
+          {activeTab === "home" && isPullRefreshUiVisible ? <EchoIdPullRefreshSpinner ref={pullSpinnerRef} /> : null}
+          {activeTab === "home" && pullRefreshNotice ? <div className="echoid-pull-refresh-notice">{pullRefreshNotice}</div> : null}
+          {renderActivePage()}
+        </main>
 
         {shouldShowBottomNav ? (
           <nav className="echoid-bottomnav" aria-label="EchoId navigation">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const hasUnreadAlerts = tab.id === "alerts" && echoIdUnreadNotifications > 0;
 
               return (
                 <button
                   key={tab.id}
                   type="button"
-                  className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""}`}
+                  className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""} ${
+                    hasUnreadAlerts ? "has-echoid-alerts" : ""
+                  }`}
                   onClick={() => {
                     setIsComposePreviewOpen(false);
                     setActiveTab(tab.id);

@@ -13,7 +13,8 @@ vi.mock("./authTokens", () => ({
 
 vi.mock("./deviceInfo", () => ({
   getDeviceInfo: vi.fn(async () => ({})),
-  getDeviceId: vi.fn(async () => "device-1")
+  getDeviceId: vi.fn(async () => "device-1"),
+  isAndroidNative: vi.fn(() => false)
 }));
 
 import { authFetch } from "./apiClient";

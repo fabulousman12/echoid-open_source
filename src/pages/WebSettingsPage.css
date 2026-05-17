@@ -334,6 +334,17 @@
   gap: 16px;
 }
 
+.web-settings-panel--privacy {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.web-settings--light .web-settings-panel--privacy {
+  border: 0;
+  background: transparent;
+}
+
 .web-settings-panel__row {
   display: flex;
   align-items: center;

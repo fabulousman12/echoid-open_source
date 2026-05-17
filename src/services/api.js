@@ -1,6 +1,6 @@
 import { authFetch } from "./apiClient";
 import Maindata from "../data";
-import { getDeviceInfo } from "./deviceInfo";
+import { getDeviceInfo, isAndroidNative } from "./deviceInfo";
 
 const defaultHost = `https://${Maindata.SERVER_URL}`;
 
@@ -42,6 +42,13 @@ export const api = {
       method: "PUT",
       headers,
       body
+    }, host),
+
+  changePassword: (host, oldPassword, newPassword) =>
+    authFetch(`${host}/user/change-password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oldPassword, newPassword })
     }, host),
 
   allUsers: (host, timestamps) =>
@@ -413,7 +420,10 @@ export const api = {
     fetch(`${host}/user/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken })
+      body: JSON.stringify({
+        refreshToken,
+        clearDeviceTokens: isAndroidNative()
+      })
     }),
 
   logoutAll: (host) =>
@@ -480,12 +490,13 @@ export const api = {
     ),
 
   postFeed: (host = defaultHost, params = {}) => {
-    const { category, subCategory, filter, page } = params || {};
+    const { category, subCategory, filter, page, refreshKey } = params || {};
     const search = new URLSearchParams();
     if (category) search.set("category", category);
     if (subCategory) search.set("subCategory", subCategory);
     if (filter) search.set("filter", filter);
     if (page) search.set("page", String(page));
+    if (refreshKey) search.set("_r", String(refreshKey));
     const qs = search.toString() ? `?${search.toString()}` : "";
     return authFetch(`${host}/post/feed${qs}`, { method: "GET" }, host);
   },
@@ -539,6 +550,14 @@ export const api = {
 
   postByClientId: (host = defaultHost, clientId) =>
     authFetch(`${host}/post/user/${encodeURIComponent(clientId)}`, { method: "GET" }, host),
+
+  postNotifications: (host = defaultHost, params = {}) => {
+    const { limit } = params || {};
+    const search = new URLSearchParams();
+    if (limit) search.set("limit", String(limit));
+    const qs = search.toString() ? `?${search.toString()}` : "";
+    return authFetch(`${host}/post/notifications${qs}`, { method: "GET" }, host);
+  },
 
   postWitness: (host = defaultHost, postId, payload = {}) =>
     authFetch(

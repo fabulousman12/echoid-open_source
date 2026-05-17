@@ -183,7 +183,7 @@ export default function TemporarySetupPage({ connectTemporarySocket, connect }) 
 
       await ensureSQLiteReady();
       const deviceId = (await getDeviceInfo()).deviceId;
-      const wsUrl = `wss://${Maindata.SERVER_URL}?token=${json.authtoken}&deviceId=${encodeURIComponent(deviceId)}`;
+      const wsUrl = `wss://${Maindata.SERVER_URL}?token=${encodeURIComponent(json.authtoken)}&deviceId=${encodeURIComponent(deviceId)}`;
       if (typeof connectTemporarySocket === "function") {
         await connectTemporarySocket(wsUrl);
       } else {

@@ -11,14 +11,16 @@ import {
   Moon,
   Palette,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Star,
   Sun,
   User,
   Users,
 } from "lucide-react";
+import PrivacyPolicy from "../components/PrivacyPolicy";
 import "./WebSettingsPage.css";
-
+import TermsUse from "../components/Terms_of_use";
 const bytesToLabel = (value) => {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return "0 MB";
@@ -70,6 +72,9 @@ export default function WebSettingsPage({
   const themeClass = isDarkMode ? "dark" : "light";
   const selectedCategory = activeCategory || "notifications";
   const safeCategories = Array.isArray(categories) ? categories : [];
+  const navCategories = safeCategories.some((category) => category.id === "privacy")
+    ? safeCategories
+    : [...safeCategories, { id: "privacy", title: "Privacy Policy" }];
   const currentName = currentUser?.name || "Chat User";
   const currentSubtitle = currentUser?.bio || currentUser?.about || "Manage your preferences";
   const profileAvatar = currentUser?.avatar || currentUser?.profilePhoto || currentUser?.profilePic || "/img.jpg";
@@ -297,10 +302,37 @@ export default function WebSettingsPage({
       return (
         <div className="web-settings-panel">
           <div className="web-settings-breakdown web-settings-breakdown--about">
-            <div><strong>Swipe</strong><span>App Name</span></div>
+            <div><strong>Echoid</strong><span>App Name</span></div>
             <div><strong>{appver || "Unknown"}</strong><span>Version</span></div>
             <div><strong>{formattedDate}</strong><span>Build Date</span></div>
           </div>
+              <div className="notification">
+          <h3 className="customtext">Developer Notes</h3>
+          <p className="customtext-secondary">
+            This app was built to combine modern communication with efficient file sharing, 
+            real-time messaging,peer 2 peer audio-video call,group messaging,whatsapp story like features,anonymous posting with 3 layer identity and a polished UI inspired by WhatsApp and Telegram.
+            
+          </p>
+        </div>
+            <div className="notification-card">
+          <h3 className="customtext">Credits</h3>
+          <p className="customtext-secondary">
+            Designed and developed by <strong>[Jit Chakraborty]</strong>
+          </p>
+        </div>
+            <div >
+          <h3 className="customtext">Technologies Used</h3>
+          <ul className="customtext-secondary"style={{ paddingLeft: "20px",}}>
+            <li>Ionic React Capacitor </li>
+            <li>Node.js + Express</li>
+            <li>WebSocket / Socket.IO</li>
+            <li>MySQL & MongoDB</li>
+            <li>SQLlite (for mobile offline storage)</li>
+            <li>AWS S3 (for file storage)</li>
+              <li> FCM and Pushy(for app killed state delivery )</li>
+                  <li>Capsawesome OTA </li>
+          </ul>
+        </div>
           <div className="web-settings-panel__subcard">
             <strong>About State Echo</strong>
             <span>Built with Ionic React, Capacitor, SQLite, Node.js, WebSocket delivery, and AWS-backed media storage.</span>
@@ -330,6 +362,21 @@ export default function WebSettingsPage({
       );
     }
 
+    if (selectedCategory === "privacy") {
+      return (
+        <div className="web-settings-panel web-settings-panel--privacy">
+          <PrivacyPolicy title="" variant={isDarkMode ? "dark" : "light"} />
+        </div>
+      );
+    }
+      if (selectedCategory === "termsOfuse") {
+      return (
+        <div className="web-settings-panel web-settings-panel--privacy">
+          <TermsUse title="" variant={isDarkMode ? "dark" : "light"} />
+        </div>
+      );
+    }
+
     return null;
   };
 
@@ -339,6 +386,7 @@ export default function WebSettingsPage({
     storage: <HardDrive size={16} />,
     about: <Info size={16} />,
     support: <Sparkles size={16} />,
+    privacy: <ShieldCheck size={16} />,
   };
 
   return (
@@ -356,7 +404,7 @@ export default function WebSettingsPage({
         </div>
 
         <nav className="web-settings-nav">
-          {safeCategories.map((category) => (
+          {navCategories.map((category) => (
             <button
               key={category.id}
               type="button"
@@ -379,7 +427,7 @@ export default function WebSettingsPage({
         <header className="web-settings-main__header">
           <div>
             <div className="web-settings-main__eyebrow">Chat Settings</div>
-            <h1>{safeCategories.find((item) => item.id === selectedCategory)?.title || "Settings"}</h1>
+            <h1>{navCategories.find((item) => item.id === selectedCategory)?.title || "Settings"}</h1>
           </div>
           <div className="web-settings-main__controls">
             <button type="button" className="web-settings-circle" onClick={toggleTheme} title="Toggle theme">
