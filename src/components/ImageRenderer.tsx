@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { IonSpinner,IonImg } from '@ionic/react';
 import { Capacitor } from '@capacitor/core';
-import imga from '../../public/favicon.png';
+const imga = '/favicon.png';
 import { createObjectUrlFromWebFileRef, isWebStoredFileRef, revokeResolvedObjectUrl } from '../services/webFileStore';
 
 interface Props {

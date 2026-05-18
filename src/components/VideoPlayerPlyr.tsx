@@ -3,7 +3,7 @@ import Plyr from "plyr-react";
 import { IonSpinner } from '@ionic/react';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { ffmpeg_thumnail } from "ionic-thumbnail";
-import imga from '../../public/favicon.png';
+const imga = '../../public/favicon.png';
 import { Capacitor } from '@capacitor/core';
 import { createObjectUrlFromWebFileRef, isWebStoredFileRef, revokeResolvedObjectUrl } from '../services/webFileStore';
 interface Props {

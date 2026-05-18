@@ -32,13 +32,13 @@
 /src/firebase-config.local.*
 /src/firebase-config.*
 /ios
-/android
+
 .DS_Store
 .env
 .env.local
 .env.*
 !.env.example
-google-services.json
+
 GoogleService-Info.plist
 
 .env.development.local
@@ -51,9 +51,8 @@ GoogleService-Info.plist
 .idea
 /firebase.json
 /.firebaserc
-/google-services.json
-/capacitor.config.ts
-/capacitor.config.json
+
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -87,9 +86,22 @@ replay_pid*.log
 android/.gradle/
 android/build/
 android/app/build/
+android/local.properties
 
-# Capacitor generated
+# Signing
+*.jks
+*.keystore
+key.properties
+
+# Firebase
+
+
+# Capacitor
 android/capacitor-cordova-android-plugins/
+
+# Env
+.env
+.env.*
 
 # Local plugin builds
 src/ionic-thumbnail/android/.gradle/

@@ -287,13 +287,19 @@ If your package name differs from `com.swipe`, update package declarations and i
 
 ---
 
-# Supported Versions
+## Development Environment
+
+Recommended versions for local development:
 
 ```txt
-Java <= 19
-Gradle = 8.2.1
+Node.js: 20+
+Java: 17 - 19
+Gradle: 8.2.1
+Android Gradle Plugin: 8.2.x
+Android Studio: Hedgehog or newer
 ```
 
+The repository already includes the Gradle wrapper configuration, so Gradle versions should sync automatically when opening the Android project in Android Studio.
 ---
 
 # Available Scripts

@@ -1,0 +1,18 @@
+{
+    "appId": "com.swipe",
+    "appName": "Echoid",
+    "webDir": "dist",
+    "bundledWebRuntime": false,
+      "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+     "plugins": {
+    "UnityAds": {
+      "gameId": "YOUR_UNITY_GAME_ID",
+      "testMode": true
+    }
+  }
+  }
+  }
+  
