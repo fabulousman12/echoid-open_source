@@ -145,12 +145,13 @@ cp .env.example .env
 cp src/data.example.ts src/data.ts
 
 Production secrets are intentionally excluded.
+4. Build it 
 
-4. Install Capacitor plugin
-npm install github:fabulousman12/ionic-thumnail
+ionic build
 npx cap sync
+
 5. Run web app
-npm run dev
+    ionic serve
 6. Run Android (optional)
 npx cap add android
 npx cap sync android
@@ -175,7 +176,8 @@ npm run preview
 npm run lint
 npm run test.unit
 npm run test.e2e
-
+ionic build
+ionic serve
 ```
 ## Contributing
 
