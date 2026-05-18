@@ -34,46 +34,35 @@ Unlike many communication platforms optimized mainly for engagement metrics, Ech
 - Practical performance
 - Developer accessibility
 
-The application is primarily built with Ionic React and Capacitor, allowing shared development across web and Android workflows.
-
 ---
 
 # Core Features
 
 ## 3-Layer Posting System
 
-EchoId includes a unique 3-layer communication and posting architecture:
-
 - Identity-based posting
 - Anonymous posting
-- Public discovery communication feeds
-
-This allows users to participate in communication differently depending on context instead of forcing every interaction through one rigid identity model.
+- Public discovery feeds
 
 ---
 
 ## Messaging & Communication
 
 - End-to-end encrypted messaging
-- One-to-one chats
-- Group chats
+- One-to-one and group chats
 - Temporary chat rooms
-- Realtime WebSocket messaging
-- Message sync and unread tracking
-- Media and file sharing
-- Status / story-style communication
-- Realtime feed interactions
+- WebSocket realtime messaging
+- Media sharing
+- Status / story-style updates
 
 ---
 
-## Calling & Realtime Infrastructure
+## Calling & Realtime
 
-- Peer-to-peer voice calls
-- Peer-to-peer video calls
-- WebRTC communication flows
-- Low-latency signaling systems
-- Presence and activity tracking
-- Realtime synchronization
+- WebRTC voice calls
+- WebRTC video calls
+- Low-latency signaling
+- Presence tracking
 
 ---
 
@@ -82,378 +71,158 @@ This allows users to participate in communication differently depending on conte
 - RSA + AES hybrid encryption
 - Privacy-first architecture
 - Minimal tracking philosophy
-- Reduced analytics dependency
-- Local-first handling in multiple flows
-- Session-aware authentication systems
+- Local-first data handling (where possible)
 
 ---
 
-# Why EchoId?
+# Important Open Source Notes
 
-Most modern communication platforms optimize heavily for:
+This repository has been cleaned for public release.
 
-- Engagement metrics
-- User retention analytics
-- Advertising visibility
-- Behavioral profiling
-- Platform lock-in
+## Removed (Not included in open source build)
 
-EchoId is intentionally built differently.
+- Google Play configuration
+- LiveUpdate / deployment keys
+- Firebase private configs
+- Signing keys and certificates
+- Production environment variables
 
-The project focuses on:
+## What works in open source mode
 
-- Privacy-first communication
-- Open-source transparency
-- Minimal unnecessary data collection
-- Realtime communication systems
-- Lightweight architecture
-- Developer-friendly extensibility
+- UI and client application
+- Core messaging logic
+- Realtime structure (requires backend setup)
+- Android project structure (Capacitor)
 
-The goal is not to create another analytics-heavy social platform.
+## What may not work without backend
 
-The goal is to explore what a modern privacy-focused realtime communication platform can look like.
+- Push notifications
+- Production authentication flows
+- Live sync services
+- Store deployment features
 
 ---
 
 # Tech Stack
 
 ## Frontend
-
 - React 18
 - Ionic React
+- TypeScript
 - Tailwind CSS
-- TypeScript + JavaScript
 
-## Mobile Runtime
-
+## Mobile
 - Capacitor
 
-## Realtime Infrastructure
+## Realtime
+- WebSockets
+- Redis Pub/Sub (server-side)
 
-- WebSocket-based communication
-- Redis Pub/Sub event propagation
-- Sync-aware realtime systems
+## Media
+- WebRTC
 
-## Calling & Media
-
-- WebRTC peer-to-peer communication
-- Media rendering and upload handling
-
-## State & UI
-
+## State
 - Zustand
-- Ionic UI
-- Material UI
 
-## Build & Testing
-
+## Build Tools
 - Vite
 - Vitest
 - Cypress
 
 ---
 
-# What This Repository Includes
+# Getting Started (Open Source Setup)
 
-- EchoId client application source code
-- Realtime messaging logic
-- Feed and posting systems
-- Chat and group communication flows
-- Encryption-related client utilities
-- Media interaction and rendering systems
-- Local persistence flows
-- Build, test, and lint configuration
-
----
-
-# What Is Intentionally Not Tracked
-
-Some files are intentionally excluded because they are deployment-specific, generated, sensitive, or local-only.
-
-This includes:
-
-- `.env` files
-- Private configuration files
-- Firebase service configuration
-- Android and iOS native folders
-- Signing keys and certificates
-- Generated release artifacts
-- Internal deployment infrastructure
-
-The goal is to keep the repository safe for public collaboration while preventing accidental exposure of secrets or private infrastructure details.
-
----
-
-# Usage Limitations
-
-Some platform-specific functionality is intentionally not fully reproducible from the public repository alone.
-
-This especially affects certain Android-native integrations such as:
-
-- Dead-state push handling
-- Floating overlay systems
-- Native lifecycle integrations
-- Some background notification behavior
-
-The web version remains the easiest environment for public testing and contribution work.
-
-If you contribute features affecting Android-native flows, please ensure the native implementation path is also considered.
-
----
-
-# Getting Started
-
-## 1. Clone the Repository
+## 1. Clone
 
 ```bash
 git clone https://github.com/fabulousman12/echoid.git
 cd echoid
-```
-
----
-
-## 2. Install Dependencies
-
-```bash
+2. Install dependencies
 npm install
-```
-
----
-
-## 3. Create Local Configuration Files
-
-Copy the example files:
-
-```bash
+3. Create local config
 cp .env.example .env
 cp src/data.example.ts src/data.ts
-```
 
-Then fill in your local configuration values.
+Production secrets are intentionally excluded.
 
----
-
-## 4. Install Thumbnail Plugin
-
-The thumbnail plugin is now publicly available as a separate package.
-
-Install it before using thumbnail-related functionality:
-
-```bash
+4. Install Capacitor plugin
 npm install github:fabulousman12/ionic-thumnail
 npx cap sync
-```
-
-Plugin repository:
-
-https://github.com/fabulousman12/ionic-thumnail
-
----
-
-## 5. Start Development Server
-
-```bash
+5. Run web app
 npm run dev
-```
+6. Run Android (optional)
+npx cap add android
+npx cap sync android
+npx cap open android
+
+Then build/run from Android Studio.
+## Development Requirements
+
+- Node.js 20+
+- Java 17–19
+- Android Studio Hedgehog or newer
+- Gradle (wrapper included)
 
 ---
 
-# Android Native Helper Files
-
-If you are adding Android support with Capacitor, also copy the helper files from:
-
-```txt
-src/additatinalfiles/swipe
-```
-
-into:
-
-```txt
-android/app/src/main/java/<your-package>/
-```
-
-This includes files such as:
-
-- MainActivity.java
-- MyApplication.java
-- MyFirebaseMessagingService.java
-- PushyMessagingService.java
-- NotificationHelper.java
-- AppLifecycleTracker.java
-- Constants.java
-- AuthBridgePlugin.java
-
-If your package name differs from `com.swipe`, update package declarations and imports before building.
-
----
-
-## Development Environment
-
-Recommended versions for local development:
-
-```txt
-Node.js: 20+
-Java: 17 - 19
-Gradle: 8.2.1
-Android Gradle Plugin: 8.2.x
-Android Studio: Hedgehog or newer
-```
-
-The repository already includes the Gradle wrapper configuration, so Gradle versions should sync automatically when opening the Android project in Android Studio.
----
-
-# Available Scripts
+## Available Scripts
 
 ```bash
 npm run dev
 npm run build
 npm run preview
+npm run lint
 npm run test.unit
 npm run test.e2e
-npm run lint
+
 ```
-
----
-
-# Notes on Local Configuration
-
-- `.env.example` contains placeholder environment variables
-- `src/data.example.ts` contains public-safe configuration examples
-- Your actual `src/data.ts` should remain local
-- Firebase, Android, and iOS-specific files must be configured locally
-
----
-
-# Contributing
+## Contributing
 
 Contributions are welcome.
 
-You can help by:
+### Focus Areas
+- Messaging reliability
+- Realtime performance
+- Android stability
+- WebRTC improvements
+- Encryption flows
+- UX refinement
+- Architecture simplification
 
-- Fixing bugs
-- Improving architecture
-- Cleaning up legacy flows
-- Improving Android compatibility
-- Optimizing realtime behavior
-- Improving encryption workflows
-- Improving documentation
-- Improving onboarding for contributors
-
-Focused and deterministic pull requests are easier to review and merge.
-
-See:
-
-```txt
-CONTRIBUTING.md
-```
-
-if available in your checkout.
+### Guidelines
+- Keep pull requests small
+- Keep changes focused on a single issue
+- Ensure code is easy to review and test
+- Avoid unrelated refactors in the same PR
 
 ---
 
-# Open Code, Protected Brand
+## Branding Notice
 
-The source code is open under the license in:
+This project is open source under the MIT License.
 
-```txt
-LICENSE
-```
+However, the following are not included for reuse in commercial forks or rebranded distributions:
 
-However:
-
-- The EchoId name
-- Logos
-- Artwork
+- EchoId name
+- Logo
 - Branding assets
 - Visual identity
 
-are not automatically granted for unrestricted commercial reuse.
-
-If you fork the project publicly, use your own branding unless explicit permission is granted.
+These are reserved to prevent impersonation of the official EchoId project.
 
 ---
 
-# Project Context
+## Links
 
-EchoId started primarily as a real-world learning project exploring:
-
-- Realtime systems
-- Messaging infrastructure
-- WebRTC communication
-- Sync systems
-- Mobile platform behavior
-- Encryption flows
-- Realtime social communication
-
-Some parts of the codebase may still reflect rapid iteration, unfinished cleanup, experimentation, or architectural evolution.
-
-Improvements to maintainability, clarity, reliability, and onboarding are all valuable.
+- Website: https://echoidchat.online  
+- Product Hunt: https://www.producthunt.com/p/echoid  
+- APK Releases: https://github.com/fabulousman12/Echoid_apk/releases  
+- Dev Article: https://dev.to/jit_chakraborty_4222410eb/i-built-echoid-a-privacy-focused-messaging-app-with-encrypted-chat-and-voice-calls-2ang  
+- Source Repo: https://github.com/fabulousman12/echoid-open_source  
 
 ---
 
-# Development Journey
+## License
 
-EchoId started as my first serious mobile and realtime communication project.
-
-The early versions were rough.
-
-Building reliable messaging, SQLite persistence, sync systems, WebRTC flows, and realtime communication infrastructure took multiple rewrites and several months of experimentation.
-
-Things accelerated heavily once AI-assisted development tools like Codex and Stitch became part of the workflow, especially for repetitive structural work and refactors.
-
-Today EchoId supports:
-
-- End-to-end encrypted messaging
-- Group chats
-- WebRTC voice/video calling
-- Temporary chat rooms
-- Realtime feeds
-- Anonymous posting
-- 3-layer communication architecture
-- Push delivery systems
-- Sync-aware communication
-
-The project is still evolving heavily.
-
-The goal is not perfection.
-
-The goal is learning deeply by building actual realtime systems at scale instead of endlessly theorizing about them.
-
-Honest feedback is genuinely valuable, especially around:
-
-- Overengineering
-- Missing functionality
-- UX friction
-- Realtime reliability
-- Privacy tradeoffs
-- Architecture decisions
-
----
-
-# Links
-
-🌐 Website: https://echoidchat.online
-
-🚀 Product Hunt:
-https://www.producthunt.com/p/echoid
-
-📦 APK Releases:
-https://github.com/fabulousman12/Echoid_apk/releases
-
-📝 Dev.to Article:
-https://dev.to/jit_chakraborty_4222410eb/i-built-echoid-a-privacy-focused-messaging-app-with-encrypted-chat-and-voice-calls-2ang
-
-💻 Open Source Repository:
-https://github.com/fabulousman12/echoid-open_source
-
----
-
-# License
-
-This project is licensed under the MIT License.
-
-See:
-
-```txt
-LICENSE
-```
+MIT License
