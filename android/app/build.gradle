@@ -1,0 +1,82 @@
+
+apply plugin : 'com.android.application'
+android {
+    namespace "com.swipe"
+    compileSdk rootProject.ext.compileSdkVersion
+     lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+    defaultConfig {
+        applicationId "com.swipe"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 7
+        versionName "2.5.0x"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+//        ndk {
+//            //noinspection ChromeOsAbiSupport
+//            abiFilters 'armeabi-v7a', 'arm64-v8a'
+//        }
+    }
+
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    //    applicationVariants.all { variant ->
+    //     variant.outputs.all { output ->
+    //         def appName = "Conversa" // Change to your desired name
+    //         def buildType = variant.buildType.name
+    //         def versionName = variant.versionName
+    //         def versionCode = variant.versionCode
+
+    //         // Rename the output file
+    //         output.outputFileName = "${appName}-${buildType}-v${versionName}(${versionCode}).apk"
+    //     }
+    // }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+   // implementation platform('com.google.firebase:firebase-bom:32.2.0') // Firebase dependencies
+    implementation platform('com.google.firebase:firebase-bom:33.13.0') // Make sure you are using Firebase BOM
+    implementation 'com.google.firebase:firebase-messaging'
+  
+
+implementation 'me.pushy:sdk:1.0.121'
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+          implementation "androidx.datastore:datastore-preferences:1.0.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+    implementation 'com.airbnb.android:lottie:6.0.0'
+implementation 'com.google.code.gson:gson:2.10.1' // Use the latest version
+
+  implementation 'com.unity3d.ads:unity-ads:4.7.0'
+
+}
+
+apply from: 'capacitor.build.gradle'
+apply plugin: 'com.google.gms.google-services'  // <-- Add this at the end
