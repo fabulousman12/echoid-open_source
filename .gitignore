@@ -79,3 +79,18 @@ vite.config.ts.timestamp-*.mjs
 /android/app/debug
 hs_err_pid*.log
 replay_pid*.log
+# Gradle
+.gradle/
+**/.gradle/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+
+# Capacitor generated
+android/capacitor-cordova-android-plugins/
+
+# Local plugin builds
+src/ionic-thumbnail/android/.gradle/
+src/ionic-thumbnail/android/build/
