@@ -76,6 +76,7 @@ const ProfilePage = ({host}) => {
   const [anonymousSyncing, setAnonymousSyncing] = useState(false);
   const [anonymousMissing, setAnonymousMissing] = useState(false);
   const [anonymousError, setAnonymousError] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const lastScrollTopRef = useRef(0);
   
   useEffect(() => {
@@ -485,6 +486,8 @@ if (
   };
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       const refreshToken = await getRefreshToken();
       if (refreshToken) {
@@ -867,11 +870,11 @@ if (
   };
   
 
-  if (loading) {
+  if (loading || isLoggingOut) {
     return (
       <div style={{ textAlign: 'center',display: 'flex', justifyContent: 'center', alignItems: 'center',position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',background: 'linear-gradient(135deg, #141E30, #243B55)',height: '100vh',width:'100%',overflowY: 'auto' }}>
       <StarLoader />
-   
+      {isLoggingOut ? <div style={{ color: "#fff", marginTop: 12, fontWeight: 700 }}>Logging out...</div> : null}
     </div>
     );
   }
@@ -1046,7 +1049,7 @@ if (
         </div>
 
         <div className="profile-web-signout-wrap">
-          <button type="button" className="profile-web-signout" onClick={handleLogout}>
+          <button type="button" className="profile-web-signout" onClick={handleLogout} disabled={isLoggingOut}>
             <LogOut size={15} />
             <span>Sign Out</span>
           </button>
@@ -1230,7 +1233,7 @@ if (
           </div>
 
           <div className="profile-settings-web__footer">
-            <button type="button" className="profile-settings-web__logout" onClick={handleLogout}>
+            <button type="button" className="profile-settings-web__logout" onClick={handleLogout} disabled={isLoggingOut}>
               Logout
             </button>
             <div className="profile-settings-web__version">EchoId Version</div>
@@ -1660,7 +1663,7 @@ if (
                 </div>
 
                 <div className="profile-web-signout-wrap profile-mobile-detail-signout">
-                  <button type="button" className="profile-web-signout" onClick={handleLogout}>
+                  <button type="button" className="profile-web-signout" onClick={handleLogout} disabled={isLoggingOut}>
                     <LogOut size={15} />
                     <span>Sign Out</span>
                   </button>
@@ -1688,6 +1691,7 @@ if (
           <div className="p-3">
             <button
               onClick={handleLogout}
+              disabled={isLoggingOut}
               className="logout-btn w-full"
             >
               Logout

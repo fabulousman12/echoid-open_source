@@ -1,100 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Cropper from 'react-easy-crop';
 import { useHistory } from 'react-router';
 import FileOpenIcon from '@mui/icons-material/FileOpen';
-import { IonButton } from '@ionic/react';
-
-import google from '../pages/google.png';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import data from '../data';
 import PrivacyPolicy from './PrivacyPolicy';
-import TermsUse from './Terms_of_use'
+import TermsUse from './Terms_of_use';
+// Reusing classes from LoginScreen.css
 const styles = {
-  container: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #141E30, #243B55)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    
-    boxSizing: 'border-box',
-    fontFamily: 'sans-serif',
-  },
-  header: {
-    width: '100%',
-    maxWidth: 360,
-    display: 'flex',
-    alignItems: 'center',
-    position: 'absolute',
-top: 0,
-    left: 0,    
-    
-    gap: 12,
-    zIndex:200,
-    marginBottom: 20,
-    color: '#fff',
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: '50%',
-  },
-  titleText: {
-    fontSize: 15,
-    fontWeight: 600,
-  },
-  form: {
-    width: '90%',
-    maxWidth: 360,
-    marginTop: 100,
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 17,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-    boxShadow: '0 0 10px rgba(0, 0, 0, 0.5)',
-    backdropFilter: 'blur(10px)',
-    color: '#fff',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#eee',
-  },
-  input: {
-    width: '100%',
-    padding: '12px 14px',
-    fontSize: 13,
-    borderRadius: 8,
-    border: 'none',
-    outline: 'none',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: '#fff',
-  },
-  button: {
-    backgroundColor: '#4CAF50',
-    color: '#fff',
-    padding: '14px 20px',
-    fontSize: 16,
-    border: 'none',
-    borderRadius: 10,
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-  },
-  previewContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  profilePreview: {
-    width: 150,
-    height: 150,
-    borderRadius: '50%',
-    objectFit: 'cover',
-    border: '3px solid #fff',
-  },
   cropperOverlay: {
     position: 'fixed',
     top: 0,
@@ -102,7 +15,7 @@ top: 0,
     width: '100vw',
     height: '100vh',
     backgroundColor: 'rgba(0,0,0,0.9)',
-    zIndex: 999,
+    zIndex: 9991,
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
@@ -138,103 +51,40 @@ top: 0,
     zIndex: 999,
     cursor: 'pointer',
   },
-  socialRow: {
+  previewContainer: {
     display: 'flex',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  socialButton: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: '10px 15px',
-    fontWeight: 600,
-    fontSize: 15,
-    borderRadius: 8,
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
+    marginBottom: 20,
   },
-  googleButton: {
-    backgroundColor: '#fff',
-    color: '#444',
-    border: '1px solid #ddd',
-  },
-  facebookButton: {
-    backgroundColor: '#1877f2',
-    color: '#fff',
-    border: 'none',
-  },
-  socialIcon: {
-    marginRight: 10,
-    height: 20,
-  },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    textAlign: 'center',
-    margin: '10px 0',
-    color: '#ccc',
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ccc',
-    opacity: 0.3,
-  },
-  dividerText: {
-    padding: '0 10px',
-    fontSize: 14,
-  },
-  loginText: {
-    textAlign: 'center',
-    marginTop: 10,
-    fontSize: 14,
-    color: '#ccc',
-  },
-  loginLink: {
-    color: '#4CAF50',
-    marginLeft: 5,
-    textDecoration: 'underline',
-    cursor: 'pointer',
-  },
-  countryPickerButton: {
-    width: 130,
-    padding: '12px 10px',
-    fontSize: 13,
-    borderRadius: 8,
-    border: 'none',
-    outline: 'none',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: '#fff',
-    textAlign: 'left',
-    cursor: 'pointer',
-    overflow: 'hidden',
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
+  profilePreview: {
+    width: 100,
+    height: 100,
+    borderRadius: '50%',
+    objectFit: 'cover',
+    border: '2px solid #050505',
   },
   pickerPanel: {
     width: '92vw',
     maxWidth: 420,
-    background: '#0f172a',
-    color: '#e2e8f0',
-    borderRadius: 12,
-    padding: 14,
-    border: '1px solid rgba(148,163,184,0.35)',
+    background: '#fff',
+    color: '#050505',
+    borderRadius: 0,
+    padding: 24,
+    border: '1px solid #050505',
   },
   pickerList: {
-    maxHeight: '55vh',
+    maxHeight: '40vh',
     overflowY: 'auto',
     marginTop: 10,
-    border: '1px solid rgba(148,163,184,0.25)',
-    borderRadius: 8,
+    border: '1px solid #050505',
+    borderRadius: 0,
   },
   pickerItem: {
     width: '100%',
     background: 'transparent',
-    color: '#e2e8f0',
+    color: '#050505',
     border: 'none',
-    borderBottom: '1px solid rgba(148,163,184,0.2)',
+    borderBottom: '1px solid #eee',
     textAlign: 'left',
     padding: '10px 12px',
     cursor: 'pointer',
@@ -299,25 +149,27 @@ const COUNTRY_DIAL_CODES = [
   { name: 'Peru', dialCode: '+51' },
 ];
 
-const UserInformationStep = ({ onNext, setAlertMessage, setShowAlert, countryCode: defaultCountryCode = '+91' }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [countryCode, setCountryCode] = useState(defaultCountryCode);
+const UserInformationStep = ({ onNext, setAlertMessage, setShowAlert, countryCode: defaultCountryCode = '+91', initialInfo }) => {
+  const [name, setName] = useState(initialInfo?.name || '');
+  const [email, setEmail] = useState(initialInfo?.email || '');
+  const [countryCode, setCountryCode] = useState(initialInfo?.countryCode || defaultCountryCode);
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [profileImage, setProfileImage] = useState(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-    const [acctepuse, setAccepteduse] = useState(false);
+  const [phone, setPhone] = useState(initialInfo?.phone || '');
+  const [password, setPassword] = useState(initialInfo?.password || '');
+  const [profileImage, setProfileImage] = useState(initialInfo?.profileImage || null);
+  const [acceptedTerms, setAcceptedTerms] = useState(initialInfo?.acceptedTerms || false);
+  const [acctepuse, setAccepteduse] = useState(initialInfo?.acctepuse || false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
-  const [showterm,setShowterm] = useState(false)
+  const [showterm, setShowterm] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
 const history = useHistory();
+  const fileInputRef = useRef(null);
   const onCropComplete = useCallback((_, croppedPixels) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
@@ -391,7 +243,10 @@ const handlePickNative = async () => {
     const files = await pickMediaAndSaveToShared();
 
     if (!files || !files.length) {
-      console.warn("No media selected");
+      console.warn("No native media selected, falling back to web picker");
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
       return;
     }
 
@@ -506,191 +361,181 @@ return new Promise((resolve) => {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <img
-          src="/echoidv2.png"
-          alt="App Logo"
-          style={styles.logo}
-        />
+      {profileImage && (
+        <div style={styles.previewContainer}>
+          <img src={profileImage} alt="Profile" style={styles.profilePreview} />
+        </div>
+      )}
+
+      <div style={{ padding: '0 0 24px' }}>
         <span style={styles.titleText}>Sign up to EchoId</span>
       </div>
 
-    
+      <form onSubmit={handleSubmit} noValidate>
 
-      <form onSubmit={handleSubmit} style={styles.form} noValidate>
-        {/* Social Logins */}  {profileImage && (
-        <div style={styles.previewContainer}>
-        <img src={profileImage} alt="Profile" style={styles.profilePreview} />
-      </div>
-    )}
-        {/* <div style={styles.socialRow}>
-          <button type="button" style={{ ...styles.socialButton, ...styles.googleButton }}>
-          <img
-  src={google}
-  alt="Google"
-  style={styles.socialIcon}
-/>
+        <label className="login-label">Name</label>
+        <input 
+          className="login-input" 
+          type="text" 
+          value={name} 
+          placeholder="John Doe"
+          onChange={(e) => setName(e.target.value)} 
+          required 
+        />
 
-            Google
+        <label className="login-label login-security-label">Email</label>
+        <input 
+          className="login-input" 
+          type="email" 
+          value={email} 
+          placeholder="email@example.com"
+          onChange={(e) => setEmail(e.target.value)} 
+          required 
+        />
+
+        <label className="login-label login-security-label">Phone</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button 
+            type="button" 
+            className="login-input" 
+            style={{ width: '100px', fontSize: '16px' }}
+            onClick={() => setShowCountryPicker(true)}
+          >
+            {selectedCountry ? `${selectedCountry.dialCode}` : countryCode}
           </button>
-          <button type="button" style={{ ...styles.socialButton, ...styles.facebookButton }}>
-            <img
-              src="https://upload.wikimedia.org/wikipedia/commons/0/05/Facebook_Logo_%282019%29.png"
-              alt="Facebook"
-              style={styles.socialIcon}
-            />
-            Facebook
+          <input
+            className="login-input"
+            type="tel"
+            value={phone}
+            placeholder="0000000000"
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
+        </div>
+
+        <label className="login-label login-security-label">Password</label>
+        <div className="login-input-wrapper">
+          <input 
+            className="login-input" 
+            type={showPassword ? "text" : "password"} 
+            value={password} 
+            placeholder="........"
+            onChange={(e) => setPassword(e.target.value)} 
+            required 
+          />
+          <button
+            type="button"
+            className="login-password-toggle"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
-        </div> */}
-
-        {/* Divider */}
-        {/* <div style={styles.divider}>
-          <div style={styles.dividerLine} />
-          <span style={styles.dividerText}>OR</span>
-          <div style={styles.dividerLine} />
-        </div> */}
-
-        {/* Inputs */}
-        <div>
-          <label style={styles.label}>Name</label>
-          <input style={styles.input} type="text" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
-        <div>
-          <label style={styles.label}>Email</label>
-          <input style={styles.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+
+        <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center' }}>
+          <label className="login-label" style={{ marginBottom: 0, cursor: 'pointer' }} onClick={handlePickNative}>
+            Profile Image
+          </label>
+          <FileOpenIcon style={{ marginLeft: '12px', cursor: 'pointer', color: '#050505' }} onClick={handlePickNative}/>
         </div>
-        <div>
-          <label style={styles.label}>Phone</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" style={styles.countryPickerButton} onClick={() => setShowCountryPicker(true)}>
-              {selectedCountry ? `${selectedCountry.dialCode}` : countryCode}
-            </button>
+
+        <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#050505', cursor: 'pointer' }}>
+            <span
+              onClick={() => setAcceptedTerms(!acceptedTerms)}
+              style={{
+                width: 18,
+                height: 18,
+                border: '1px solid #050505',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: acceptedTerms ? '#050505' : 'transparent',
+                flex: '0 0 auto'
+              }}
+              aria-hidden="true"
+            >
+              {acceptedTerms && (
+                <span style={{ width: 8, height: 8, background: '#fff' }} />
+              )}
+            </span>
             <input
-              style={styles.input}
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              style={{ display: 'none' }}
             />
-          </div>
-        </div>
-        <div>
-          <label style={styles.label}>Password</label>
-          <input style={styles.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </div>
-        <div className='mx-1'>
-          <label style={styles.label} onClick={handlePickNative}>Profile Image</label>
-        <FileOpenIcon className='mx-2' onClick={handlePickNative}/>
-
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px' }}>
-          <span
-            onClick={() => setAcceptedTerms(!acceptedTerms)}
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 4,
-              border: '2px solid rgba(255,255,255,0.6)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: acceptedTerms ? '#22c55e' : 'transparent',
-              cursor: 'pointer',
-              flex: '0 0 auto'
-            }}
-            aria-hidden="true"
-          >
-            {acceptedTerms && (
-              <span style={{ width: 8, height: 8, background: '#0f172a', borderRadius: 2 }} />
-            )}
-          </span>
-          <input
-            type="checkbox"
-            name="acceptedTerms"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            style={{
-              position: 'absolute',
-              opacity: 0,
-              width: 1,
-              height: 1,
-              margin: 0,
-              padding: 0,
-              border: 0,
-            }}
-          />
-          <span style={{ lineHeight: 1.4 }}>
-            I agree to the{" "}
-            <button
-              type="button"
-              onClick={() => setShowPolicy(true)}
-              style={{ color: '#8bd3ff', textDecoration: 'underline', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+            <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+              I agree to the{" "}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowPolicy(true); }}
+                style={{ textDecoration: 'underline', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+              >
+                Privacy Policy
+              </button>
+            </span>
+          </label>
+          
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#050505', cursor: 'pointer' }}>
+            <span
+              onClick={() => setAccepteduse(!acctepuse)}
+              style={{
+                width: 18,
+                height: 18,
+                border: '1px solid #050505',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: acctepuse ? '#050505' : 'transparent',
+                flex: '0 0 auto'
+              }}
+              aria-hidden="true"
             >
-              Privacy Policy
-            </button>{" "}
-            (version {data.TermsVersion}).
-          </span>
-        </label>
-        
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px' }}>
-          <span
-            onClick={() => setAccepteduse(!acctepuse)}
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 4,
-              border: '2px solid rgba(255,255,255,0.6)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: acctepuse ? '#22c55e' : 'transparent',
-              cursor: 'pointer',
-              flex: '0 0 auto'
-            }}
-            aria-hidden="true"
-          >
-            {acceptedTerms && (
-              <span style={{ width: 8, height: 8, background: '#0f172a', borderRadius: 2 }} />
-            )}
-          </span>
-          <input
-            type="checkbox"
-            name="accepteduse"
-            checked={acctepuse}
-            onChange={(e) => setAccepteduse(e.target.checked)}
-            style={{
-              position: 'absolute',
-              opacity: 0,
-              width: 1,
-              height: 1,
-              margin: 0,
-              padding: 0,
-              border: 0,
-            }}
-          />
-          <span style={{ lineHeight: 1.4 }}>
-            I agree to the{" "}
-            <button
-              type="button"
-              onClick={() => setShowterm(true)}
-              style={{ color: '#8bd3ff', textDecoration: 'underline', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              Terms of Use
-            </button>{" "}
-            (version {data.UseVersion}).
-          </span>
-        </label>
-   
+              {acctepuse && (
+                <span style={{ width: 8, height: 8, background: '#fff' }} />
+              )}
+            </span>
+            <input
+              type="checkbox"
+              checked={acctepuse}
+              onChange={(e) => setAccepteduse(e.target.checked)}
+              style={{ display: 'none' }}
+            />
+            <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+              I agree to the{" "}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowterm(true); }}
+                style={{ textDecoration: 'underline', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+              >
+                Terms of Use
+              </button>
+            </span>
+          </label>
+        </div>
 
-        <button type="submit" style={styles.button}>Next</button>
+        <button type="submit" className="login-submit-btn">
+          <span>Initialize Verification</span>
+          <ArrowRight size={17} strokeWidth={2} />
+        </button>
 
-        <div style={styles.loginText}>
-          Already have an account?
-          <span style={styles.loginLink} onClick={() => history.push('/login')}>Log in</span>
+        <div className="login-mobile-signup" style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
+          <span>Already registered?</span>
+          <button type="button" className="login-signup-link" onClick={() => history.push('/login')}>
+            Log in
+          </button>
         </div>
       </form>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageChange}
+        accept="image/*"
+        style={{ display: 'none' }}
+      />
 
       {showCropper && (
         <div style={styles.cropperOverlay}>
@@ -715,13 +560,14 @@ return new Promise((resolve) => {
       {showCountryPicker && (
         <div style={styles.cropperOverlay}>
           <div style={styles.pickerPanel}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Select Country Code</div>
+            <div style={{ fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Select Country Code</div>
             <input
-              style={styles.input}
+              className="login-input"
+              style={{ height: '44px', fontSize: '16px' }}
               type="text"
               value={countrySearch}
               onChange={(e) => setCountrySearch(e.target.value)}
-              placeholder="Search country or code"
+              placeholder="Search country..."
             />
             <div style={styles.pickerList}>
               {filteredCountries.map((country) => (
@@ -734,12 +580,9 @@ return new Promise((resolve) => {
                   {country.name} ({country.dialCode})
                 </button>
               ))}
-              {filteredCountries.length === 0 && (
-                <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>No countries found.</div>
-              )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button type="button" onClick={() => setShowCountryPicker(false)} style={styles.cancelButton}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" onClick={() => setShowCountryPicker(false)} className="login-signup-cta" style={{ minWidth: '80px' }}>
                 Close
               </button>
             </div>
@@ -781,8 +624,8 @@ return new Promise((resolve) => {
           </div>
         </div>
       )}
-    </div>
-  );
+      </div>
+    );
 };
 
 export default UserInformationStep;

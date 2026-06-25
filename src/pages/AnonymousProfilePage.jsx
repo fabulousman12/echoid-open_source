@@ -9,6 +9,12 @@ import ghostAnimation from "../assets/empty ghost.json";
 import { api } from "../services/api";
 import { uploadAnonymousProfileImageInChunks } from "../services/profileChunkUpload";
 import { clearAnonymousProfile, readAnonymousProfile, saveAnonymousProfile } from "../services/anonymousProfileStorage";
+import {
+  encryptAnonymousPosterVault,
+  generateAnonymousPosterCredentials,
+  saveAnonymousPosterSecret,
+  saveAnonymousPosterSecretFromVault,
+} from "../services/anonymousPosterVault";
 
 const NAME_LIMIT = 60;
 const ABOUT_LIMIT = 500;
@@ -288,6 +294,21 @@ export default function AnonymousProfilePage({ host }) {
         payload.profileUploadId = upload.uploadId;
       }
 
+      let generatedPosterSecret = null;
+      if (mode !== "edit") {
+        const currentUser = globalThis.storage?.readJSON?.("currentuser", null) || {};
+        const publicKey = String(currentUser?.publicKey || "").trim();
+        if (!publicKey) {
+          throw new Error("Your account public key is required to create anonymous posting credentials.");
+        }
+
+        generatedPosterSecret = generateAnonymousPosterCredentials();
+        payload.anonymousId = generatedPosterSecret.anonymousId;
+        payload.anonymousscret = generatedPosterSecret.authsec;
+        payload.anonymousPosterVault = await encryptAnonymousPosterVault(generatedPosterSecret, publicKey);
+        if (currentUser?.PackagePoster) payload.Package = currentUser.PackagePoster;
+      }
+
       const request = mode === "edit" ? api.editAnonymousUser(host, payload) : api.createAnonymousUser(host, payload);
       const response = await request;
       const json = await response.json();
@@ -305,6 +326,11 @@ export default function AnonymousProfilePage({ host }) {
       const user = json.userResponse;
       if (user) {
         saveAnonymousProfile(user);
+        if (user.anonymousPosterVault) {
+          await saveAnonymousPosterSecretFromVault(user.anonymousPosterVault).catch(() => null);
+        } else if (generatedPosterSecret) {
+          saveAnonymousPosterSecret(generatedPosterSecret);
+        }
         setInitialUsername(user.username || normalizedUsername || "");
       }
       history.replace("/Profile", { activeSection: "anonymous" });

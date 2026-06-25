@@ -1,5 +1,6 @@
 import { storage } from "./prefStorage";
 import { isAndroidNative } from "./deviceInfo";
+import { clearAnonymousProfile } from "./anonymousProfileStorage";
 
 const ACCESS_TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -175,6 +176,7 @@ export async function clearTokens() {
   if (isAndroidNative()) {
     storage.removeItem(DEVICE_TOKEN_KEY);
   }
+  clearAnonymousProfile();
   writeCookieItem(ACCESS_TOKEN_KEY, "");
   writeCookieItem(REFRESH_TOKEN_KEY, "");
 }

@@ -548,6 +548,28 @@ export const api = {
   postMyPosts: (host = defaultHost) =>
     authFetch(`${host}/post/my-posts`, { method: "GET" }, host),
 
+  postMyAnonymousPosts: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/my-anompost`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  anonymousPostById: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/anom/${encodeURIComponent(postId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
   postByClientId: (host = defaultHost, clientId) =>
     authFetch(`${host}/post/user/${encodeURIComponent(clientId)}`, { method: "GET" }, host),
 
@@ -587,6 +609,17 @@ export const api = {
   postDelete: (host = defaultHost, postId, payload = {}) =>
     authFetch(
       `${host}/post/${encodeURIComponent(postId)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  anonymousPostDelete: (host = defaultHost, postId, payload = {}) =>
+    authFetch(
+      `${host}/post/anom/${encodeURIComponent(postId)}`,
       {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -658,6 +691,17 @@ export const api = {
   createPost: (host = defaultHost, payload = {}) =>
     authFetch(
       `${host}/post/create`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      host
+    ),
+
+  createAnonymousPost: (host = defaultHost, payload = {}) =>
+    authFetch(
+      `${host}/post/AnomPost`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

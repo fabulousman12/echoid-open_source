@@ -6,14 +6,17 @@ import Swal from "sweetalert2";
 import {
   ArrowLeft,
   Bell,
+  Ban,
   ChevronRight,
   CircleUserRound,
   Filter,
+  Flag,
   Home,
   Image as ImageIcon,
   Maximize2,
   Menu,
   Minus,
+  MessageCircle,
   MessageSquarePlus,
   Pause,
   Plus,
@@ -21,6 +24,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  ThumbsUp,
   TriangleAlert,
   Video,
   Volume2,
@@ -32,6 +36,7 @@ import { Virtuoso } from "react-virtuoso";
 import "./EchoIdPage.css";
 import StarLoader from "../pages/StarLoader";
 import EchoIdPostDetail from "./EchoIdPostDetail";
+import EchoIdMediaViewer from "./EchoIdMediaViewer";
 import { api } from "../services/api";
 import { MessageContext } from "../Contexts/MessagesContext";
 import {
@@ -39,6 +44,7 @@ import {
   readAnonymousProfile,
   saveAnonymousProfile,
 } from "../services/anonymousProfileStorage";
+import { readAnonymousPosterSecret, saveAnonymousPosterSecretFromVault } from "../services/anonymousPosterVault";
 
 const postSeed = [
   {
@@ -163,6 +169,7 @@ const ECHOID_PULL_REFRESH_MAX = 148;
 const ECHOID_PULL_REFRESH_MIN_MS = 650;
 const ECHOID_PULL_REFRESH_MAX_MS = 10000;
 
+
 const initialComposeState = {
   anonymity: true,
   category: "confessions",
@@ -171,6 +178,22 @@ const initialComposeState = {
   body: "",
 };
 
+const copyTextToClipboard = async (text) => {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
+};
 const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const withTimeout = async (promise, ms) => {
   let timeoutId;
@@ -187,7 +210,16 @@ const withTimeout = async (promise, ms) => {
 };
 
 const formatRelativeTime = (minutesAgo) => {
-  if (!Number.isFinite(minutesAgo) || minutesAgo <= 0) return "Just now";
+  if (!Number.isFinite(minutesAgo)) return "Unknown";
+  if (minutesAgo < -1) {
+    const futureMinutes = Math.abs(minutesAgo);
+    if (futureMinutes < 60) return `in ${futureMinutes} min`;
+    const futureHours = Math.floor(futureMinutes / 60);
+    if (futureHours < 24) return `in ${futureHours} hr`;
+    const futureDays = Math.floor(futureHours / 24);
+    return `in ${futureDays} day${futureDays > 1 ? "s" : ""}`;
+  }
+  if (minutesAgo <= 0) return "Just now";
   if (minutesAgo < 60) return `${minutesAgo} min ago`;
   const hours = Math.floor(minutesAgo / 60);
   if (hours < 24) return `${hours} hr ago`;
@@ -209,7 +241,7 @@ const formatExpiryDate = (value) => {
 const getRelativeMinutesFromDate = (createdAt) => {
   const time = Date.parse(String(createdAt || ""));
   if (!Number.isFinite(time)) return Number.NaN;
-  return Math.max(0, Math.floor((Date.now() - time) / 60000));
+  return Math.floor((Date.now() - time) / 60000);
 };
 
 const shouldShowWitness = (category) => categoriesWithWitness.has(String(category || "").trim().toLowerCase());
@@ -367,21 +399,21 @@ const getStructuredMediaUrl = (entry) => {
 
   return String(
     entry?.url ||
-      entry?.mediaUrl ||
-      entry?.media_url ||
-      entry?.publicUrl ||
-      entry?.public_url ||
-      entry?.signedUrl ||
-      entry?.signed_url ||
-      entry?.previewUrl ||
-      entry?.preview_url ||
-      entry?.imageUrl ||
-      entry?.image_url ||
-      entry?.videoUrl ||
-      entry?.video_url ||
-      entry?.coverImage ||
-      entry?.cover_image ||
-      ""
+    entry?.mediaUrl ||
+    entry?.media_url ||
+    entry?.publicUrl ||
+    entry?.public_url ||
+    entry?.signedUrl ||
+    entry?.signed_url ||
+    entry?.previewUrl ||
+    entry?.preview_url ||
+    entry?.imageUrl ||
+    entry?.image_url ||
+    entry?.videoUrl ||
+    entry?.video_url ||
+    entry?.coverImage ||
+    entry?.cover_image ||
+    ""
   ).trim();
 };
 
@@ -525,13 +557,13 @@ const getPostBodyBlocks = (post = {}) => {
     .map((block) =>
       block.type === "text"
         ? {
-            ...block,
-            value: String(block.value || "")
-              .replace(/[ \t]+\n/g, "\n")
-              .replace(/\n[ \t]+/g, "\n")
-              .replace(/[ \t]{2,}/g, " ")
-              .replace(/\n{3,}/g, "\n\n"),
-          }
+          ...block,
+          value: String(block.value || "")
+            .replace(/[ \t]+\n/g, "\n")
+            .replace(/\n[ \t]+/g, "\n")
+            .replace(/[ \t]{2,}/g, " ")
+            .replace(/\n{3,}/g, "\n\n"),
+        }
         : block
     )
     .filter((block) => (block.type === "text" ? String(block.value || "").trim().length > 0 : Boolean(block.value?.url)));
@@ -544,16 +576,33 @@ const readOwnPostsCache = () => {
   return Array.isArray(cached) ? cached : [];
 };
 
+const readRawEchoIdNotifications = () => {
+  try {
+    const stored = globalThis.storage?.readJSON?.(ECHOID_NOTIFICATIONS_KEY, []) || [];
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+};
+
 const normalizeStoredEchoIdNotification = (notification = {}) => {
   const id = String(notification?.id || notification?._id || "").trim();
   if (!id) return null;
   const isRead = notification?.read === true || notification?.view === true;
   const type = String(notification?.type || "").trim();
+  const postId = String(
+    notification?.postId ||
+    notification?.postID ||
+    notification?.targetPostId ||
+    notification?.post?._id ||
+    notification?.post?.id ||
+    ""
+  ).trim();
   return {
     ...notification,
     id,
     type,
-    postId: String(notification?.postId || ""),
+    postId,
     title: notification?.title || notification?.heading || `${type || "EchoId"} notification`,
     body: notification?.body || notification?.message || notification?.comment || notification?.copy || "",
     createdAt: notification?.createdAt || notification?.timestamp || notification?.updatedAt || new Date().toISOString(),
@@ -564,22 +613,52 @@ const normalizeStoredEchoIdNotification = (notification = {}) => {
 };
 
 const readEchoIdNotifications = () => {
-  try {
-    const stored = globalThis.storage?.readJSON?.(ECHOID_NOTIFICATIONS_KEY, []) || [];
-    return Array.isArray(stored)
-      ? stored.map(normalizeStoredEchoIdNotification).filter(Boolean)
-      : [];
-  } catch {
-    return [];
-  }
+  return readRawEchoIdNotifications().map(normalizeStoredEchoIdNotification).filter(Boolean);
 };
 
 const saveEchoIdNotifications = (notifications) => {
-  const normalized = Array.isArray(notifications)
-    ? notifications.map(normalizeStoredEchoIdNotification).filter(Boolean)
-    : [];
-  globalThis.storage?.setItem?.(ECHOID_NOTIFICATIONS_KEY, JSON.stringify(normalized));
-  return normalized;
+  const rawNotifications = Array.isArray(notifications) ? notifications : [];
+  globalThis.storage?.setItem?.(ECHOID_NOTIFICATIONS_KEY, JSON.stringify(rawNotifications));
+  return rawNotifications;
+};
+
+const getEchoIdNotificationUnreadCount = () =>
+  readEchoIdNotifications().filter((item) => item?.read !== true && item?.view !== true).length;
+
+const markEchoIdNotificationsRead = (predicate = () => true) => {
+  const stored = readRawEchoIdNotifications();
+  const next = stored.map((notification) => {
+    const normalized = normalizeStoredEchoIdNotification(notification);
+    return normalized && predicate(normalized) ? { ...notification, read: true, view: true } : notification;
+  });
+  saveEchoIdNotifications(next);
+  return next;
+};
+
+const getEchoIdNotificationPresentation = (notification = {}) => {
+  const type = String(notification?.type || "").trim().toUpperCase();
+  if (type.includes("BAN") || type.includes("BLOCK")) {
+    return { tone: "banned", Icon: Ban, label: "Account" };
+  }
+  if (type.includes("FLAG") || type.includes("REPORT") || type.includes("MODERAT") || type.includes("HIDDEN")) {
+    return { tone: "flagged", Icon: Flag, label: "Review" };
+  }
+  if (type.includes("COMMENT") || type.includes("REPLY")) {
+    return { tone: "comment", Icon: MessageCircle, label: type.includes("REPLY") ? "Reply" : "Comment" };
+  }
+  if (type.includes("LIKE") || type.includes("REACTION") || type.includes("UPVOTE")) {
+    return { tone: "like", Icon: ThumbsUp, label: "Reaction" };
+  }
+  if (type.includes("WITNESS") || type.includes("VERIFY")) {
+    return { tone: "witness", Icon: TriangleAlert, label: "Witness" };
+  }
+  if (type.includes("DELETE") || type.includes("REMOVE")) {
+    return { tone: "banned", Icon: Ban, label: "Removed" };
+  }
+  if (type.includes("PROMO") || type.includes("FEATURE") || type.includes("SYSTEM")) {
+    return { tone: "info", Icon: Bell, label: "Update" };
+  }
+  return { tone: "info", Icon: Sparkles, label: "EchoId" };
 };
 
 const saveOwnPostsCache = (posts) => {
@@ -608,6 +687,8 @@ const normalizeWitnessValue = (value) => {
 const normalizePostRecord = (post = {}) => {
   const normalized = { ...post };
   normalized._id = getPostId(post);
+  normalized.isPromotion = Boolean(post?.isPromotion || post?.type === "promotion" || normalized._id.startsWith("promotion:"));
+  normalized.createdAt = post?.createdAt || post?.created_at || post?.created || post?.timestamp || post?.updatedAt || new Date().toISOString();
   normalized.likes = Number(post?.likes || 0);
   normalized.dislike = Number(post?.dislike ?? post?.dislikes ?? 0);
   normalized.dislikes = normalized.dislike;
@@ -628,6 +709,19 @@ const isExplicitlyNonAnonymousPost = (post = {}) => {
 const normalizePostCollection = (posts) =>
   Array.isArray(posts) ? posts.map((post) => normalizePostRecord(post)).filter((post) => post._id) : [];
 
+const insertPromotionsIntoFeed = (posts, promotions) => {
+  const basePosts = normalizePostCollection(posts).filter((post) => !post.isPromotion);
+  const promoPosts = normalizePostCollection(promotions).filter((post) => post.isPromotion);
+  if (!promoPosts.length) return basePosts;
+
+  const next = [...basePosts];
+  promoPosts.forEach((promotion, index) => {
+    const insertAt = Math.min(next.length, index === 0 ? 1 : 1 + index * 4);
+    next.splice(insertAt, 0, promotion);
+  });
+  return next;
+};
+
 const normalizeCommentCollection = (comments) =>
   (Array.isArray(comments) ? comments : [])
     .map((comment, index) => {
@@ -642,12 +736,12 @@ const normalizeCommentCollection = (comments) =>
         id: String(comment?._id || comment?.id || `comment-${index}`),
         clientId: String(
           comment?.clientId ||
-            comment?.posterId ||
-            comment?.userClientId ||
-            comment?.authorClientId ||
-            comment?.commentClientId ||
-            comment?.anonymousClientId ||
-            ""
+          comment?.posterId ||
+          comment?.userClientId ||
+          comment?.authorClientId ||
+          comment?.commentClientId ||
+          comment?.anonymousClientId ||
+          ""
         ).trim(),
         name: name || author,
         username,
@@ -685,15 +779,17 @@ const mergeWitnessEntriesIntoMap = (currentMap, witnesses) => {
   return next;
 };
 
-const getAnonymousOwnerIds = (anonymousProfile) =>
-  [anonymousProfile?.clientId, anonymousProfile?.PostId].map((value) => String(value || "").trim()).filter(Boolean);
+const getAnonymousOwnerIds = (anonymousProfile, anonymousPosterSecret = null) =>
+  [anonymousProfile?.clientId, anonymousProfile?.PostId, anonymousProfile?.postId, anonymousPosterSecret?.anonymousId]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
 
-const isOwnerPost = (post, anonymousProfile) => {
+const isOwnerPost = (post, anonymousProfile, anonymousPosterSecret = null) => {
   const posterId = String(post?.posterId || "").trim();
   if (!posterId) return false;
-  return getAnonymousOwnerIds(anonymousProfile).includes(posterId);
+  return getAnonymousOwnerIds(anonymousProfile, anonymousPosterSecret).includes(posterId);
 };
 
 const normalizeAnonymousUserDetail = (payload = {}) => ({
@@ -1051,7 +1147,7 @@ function EchoIdVideoThumbnail({
       if (video.paused) {
         setWantsPlayback(true);
         const playPromise = video.play?.();
-        if (playPromise?.catch) await playPromise.catch(() => {});
+        if (playPromise?.catch) await playPromise.catch(() => { });
       } else {
         setWantsPlayback(false);
         video.pause?.();
@@ -1114,9 +1210,8 @@ function EchoIdVideoThumbnail({
   return (
     <span
       ref={mediaRef}
-      className={`${className} echoid-video-thumb-shell ${autoPlayInView && isVisible && isPlaybackFocused ? "is-autoplaying" : ""} ${
-        isPlaying ? "is-playing" : ""
-      } ${controls ? "has-controls" : ""}`}
+      className={`${className} echoid-video-thumb-shell ${autoPlayInView && isVisible && isPlaybackFocused ? "is-autoplaying" : ""} ${isPlaying ? "is-playing" : ""
+        } ${controls ? "has-controls" : ""}`}
       aria-label={label}
       role={controls ? "button" : undefined}
       tabIndex={controls ? 0 : undefined}
@@ -1231,8 +1326,8 @@ function PostMediaCarousel({ mediaItems, altText, compact = false, autoPlayVideo
   const touchStartRef = useRef(null);
   const items = Array.isArray(mediaItems)
     ? mediaItems
-        .map((item) => ({ ...item, kind: assumedKinds[item?.url] || item?.kind }))
-        .filter(isSafeMediaItem)
+      .map((item) => ({ ...item, kind: assumedKinds[item?.url] || item?.kind }))
+      .filter(isSafeMediaItem)
     : [];
 
   useEffect(() => {
@@ -1359,7 +1454,7 @@ function EchoIdMediaPreview({ preview, onClose }) {
     video.load?.();
     const playPromise = video.play?.();
     if (playPromise?.catch) {
-      playPromise.catch(() => {});
+      playPromise.catch(() => { });
     }
     return () => {
       video.pause?.();
@@ -1374,7 +1469,7 @@ function EchoIdMediaPreview({ preview, onClose }) {
     if (video.paused) {
       const playPromise = video.play?.();
       if (playPromise?.catch) {
-        await playPromise.catch(() => {});
+        await playPromise.catch(() => { });
       }
     } else {
       video.pause?.();
@@ -1431,12 +1526,12 @@ function EchoIdMediaPreview({ preview, onClose }) {
           onWheel={
             isImage
               ? (event) => {
-                  event.preventDefault();
-                  setScale((current) => {
-                    const next = current + (event.deltaY < 0 ? 0.2 : -0.2);
-                    return Math.min(4, Math.max(1, Number(next.toFixed(2))));
-                  });
-                }
+                event.preventDefault();
+                setScale((current) => {
+                  const next = current + (event.deltaY < 0 ? 0.2 : -0.2);
+                  return Math.min(4, Math.max(1, Number(next.toFixed(2))));
+                });
+              }
               : undefined
           }
         >
@@ -1653,6 +1748,8 @@ function EchoIdProfileCardSkeleton() {
   );
 }
 
+const isPromotionPost = (post = {}) => Boolean(post?.isPromotion || post?.type === "promotion" || getPostId(post).startsWith("promotion:"));
+
 const renderMediaCard = (media) => {
   if (!media?.previewUrl) return null;
   const safePreview = isSafeMediaUrl(media.previewUrl) && (media.kind === "image" || media.kind === "video");
@@ -1694,8 +1791,15 @@ const renderPostCard = (post, options = {}) => {
     autoPlayVideos = false,
   } = options;
   const title = post.title || "";
+  const isPromotion = isPromotionPost(post);
   const author = post.name || "Anonymous";
-  const handle = post.username ? `@${post.username}` : "@anonymous";
+  const isAnonymousPost = post?.anonymity === true || String(post?.anonymity || "").toLowerCase() === "true";
+  const anonymousPosterId = String(post?.posterId || post?.postId || post?.PostId || "").trim();
+  const handle = isAnonymousPost
+    ? `@${anonymousPosterId || "anonymous"}`
+    : post.username
+      ? `@${post.username}`
+      : "@anonymous";
   const category = toDisplayCategory(post.category);
   const previewText = getPostBodyPreview(post.body);
   const mediaItems = getPostMediaItems(post);
@@ -1708,39 +1812,89 @@ const renderPostCard = (post, options = {}) => {
   const handleOpenPost = () => onOpenPost?.(post);
   const handleOpenAuthor = (event) => {
     stopEvent(event);
+    if (isPromotion || isAnonymousPost) return;
     onOpenAuthor?.(post);
+  };
+  const handleCopyAnonymousPosterId = async (event) => {
+    stopEvent(event);
+    if (!isAnonymousPost || !anonymousPosterId) return;
+    try {
+      await copyTextToClipboard(anonymousPosterId);
+      await Swal.fire({
+        toast: true,
+        position: "top",
+        icon: "success",
+        title: "Poster id copied",
+        showConfirmButton: false,
+        timer: 1300,
+      });
+    } catch {
+      await Swal.fire({
+        toast: true,
+        position: "top",
+        icon: "error",
+        title: "Could not copy poster id",
+        showConfirmButton: false,
+        timer: 1500,
+      });
+    }
+  };
+  const authorAvatarUrl = String(post.profilePic || post.profileUrl || post.userProfile || "").trim();
+  const mediaPreviewContext = {
+    author,
+    handle,
+    title,
+    relativeTimeLabel: formatRelativeTime(minutesAgo),
+    avatarUrl: authorAvatarUrl,
   };
 
   return (
     <article
       key={post._id || post.id}
-      className={`echoid-post-card ${compact ? "is-compact" : ""} ${onOpenPost ? "is-clickable" : ""}`}
-      onClick={handleOpenPost}
+      className={`echoid-post-card ${compact ? "is-compact" : ""} ${isPromotion ? "is-promotion" : ""} ${onOpenPost && !isPromotion ? "is-clickable" : ""}`}
+      onClick={isPromotion ? undefined : handleOpenPost}
     >
       <div className="echoid-post-top">
-        <div>
-          <h3>
-            <button type="button" className="echoid-inline-identity-button" onClick={handleOpenAuthor}>
-              {author}
-            </button>
-          </h3>
-          <div className="echoid-post-meta">
-            <span>
+        <div className="echoid-post-author-row">
+          <button
+            type="button"
+            className={`echoid-post-avatar ${authorAvatarUrl ? "is-clickable" : ""}`}
+            onClick={handleOpenAuthor}
+            aria-label={`Open ${author}'s profile`}
+          >
+            {authorAvatarUrl ? <img src={authorAvatarUrl} alt={author} /> : <span>{getDisplayInitial(author, "A")}</span>}
+          </button>
+          <div className="echoid-post-author-copy">
+            <h3>
               <button type="button" className="echoid-inline-identity-button" onClick={handleOpenAuthor}>
-                {handle}
+                {author}
               </button>
-            </span>
-            <span>{formatRelativeTime(minutesAgo)}</span>
+            </h3>
+            <div className="echoid-post-meta">
+              <span>
+                <button
+                  type="button"
+                  className={`echoid-inline-identity-button ${isAnonymousPost ? "is-anonymous-poster-id" : ""}`}
+                  onClick={isAnonymousPost ? handleCopyAnonymousPosterId : handleOpenAuthor}
+                  title={isAnonymousPost && anonymousPosterId ? "Copy poster id" : undefined}
+                >
+                  {handle}
+                </button>
+              </span>
+              <span>{formatRelativeTime(minutesAgo)}</span>
+            </div>
           </div>
         </div>
         <div className="echoid-post-badges">
-          <span className="echoid-post-tag">{category}</span>
+          <span className="echoid-post-tag">{isPromotion ? post.label || category || "Promotion" : category}</span>
           {visibilityBadge ? <span className={`echoid-visibility-badge tone-${String(post.visibility || "").toLowerCase()}`}>{visibilityBadge}</span> : null}
           {isExpired ? <span className="echoid-visibility-badge tone-expired">Expired</span> : null}
         </div>
       </div>
 
       {title ? <h4 className="echoid-post-title">{title}</h4> : null}
+
+      {previewText ? <p>{previewText}</p> : <p className="echoid-post-muted">Media-only post</p>}
 
       {mediaItems.length > 0 ? (
         <div className="echoid-post-imagewrap">
@@ -1750,12 +1904,10 @@ const renderPostCard = (post, options = {}) => {
             compact={compact}
             autoPlayVideos={autoPlayVideos}
             onMediaInteract={stopEvent}
-            onPreviewMedia={onPreviewMedia}
+            onPreviewMedia={(media, altText) => onPreviewMedia?.(media, altText, mediaPreviewContext)}
           />
         </div>
       ) : null}
-
-      {previewText ? <p>{previewText}</p> : <p className="echoid-post-muted">Media-only post</p>}
       {isTruncated ? <div className="echoid-post-read-note">Open the post to finish reading before reacting.</div> : null}
 
       {showOwnerMeta ? (
@@ -1765,7 +1917,7 @@ const renderPostCard = (post, options = {}) => {
         </div>
       ) : null}
 
-      <div className="echoid-post-actions">
+      {isPromotion ? null : <div className="echoid-post-actions">
         <button
           type="button"
           className={`echoid-post-action-button ${reactionValue === 1 ? "is-selected is-like" : ""}`}
@@ -1782,6 +1934,24 @@ const renderPostCard = (post, options = {}) => {
             <span>Likes {Number(post.likes || 0)}</span>
           </span>
         </button>
+        {!showOwnerMeta ? (
+          <button
+            type="button"
+            className={`echoid-post-action-button ${reactionValue === -1 ? "is-selected is-dislike" : ""}`}
+            onClick={(event) => {
+              stopEvent(event);
+              onDislike?.(post);
+            }}
+            disabled={isReactionPending || reactionsLocked}
+            aria-pressed={reactionValue === -1}
+            title={reactionsLocked ? "Open the post and read the full body to react." : undefined}
+          >
+            <span className="echoid-post-action-label">
+              <ReactionGlyph kind="dislike" active={reactionValue === -1} />
+              <span>Dislikes {Number(post.dislike || 0)}</span>
+            </span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={(event) => {
@@ -1803,24 +1973,7 @@ const renderPostCard = (post, options = {}) => {
           >
             {isDeletePending ? "Deleting..." : "Delete"}
           </button>
-        ) : (
-          <button
-            type="button"
-            className={`echoid-post-action-button ${reactionValue === -1 ? "is-selected is-dislike" : ""}`}
-            onClick={(event) => {
-              stopEvent(event);
-              onDislike?.(post);
-            }}
-            disabled={isReactionPending || reactionsLocked}
-            aria-pressed={reactionValue === -1}
-            title={reactionsLocked ? "Open the post and read the full body to react." : undefined}
-          >
-            <span className="echoid-post-action-label">
-              <ReactionGlyph kind="dislike" active={reactionValue === -1} />
-              <span>Dislikes {Number(post.dislike || 0)}</span>
-            </span>
-          </button>
-        )}
+        ) : null}
         {shouldShowWitness(post.category) ? (
           <button
             type="button"
@@ -1838,7 +1991,7 @@ const renderPostCard = (post, options = {}) => {
             </span>
           </button>
         ) : null}
-      </div>
+      </div>}
     </article>
   );
 };
@@ -1929,12 +2082,12 @@ function UserDetails({
             {!postsLoading && postsError ? <div className="echoid-empty-card">{postsError}</div> : null}
             {!postsLoading && !postsError && postsLoaded && Array.isArray(posts) && posts.length > 0
               ? posts.map((post) =>
-                  renderPostCard(post, {
-                    compact: true,
-                    autoPlayVideos,
-                    onOpenPost,
-                  })
-                )
+                renderPostCard(post, {
+                  compact: true,
+                  autoPlayVideos,
+                  onOpenPost,
+                })
+              )
               : null}
             {!postsLoading && !postsError && !postsLoaded ? (
               <div className="echoid-empty-card">Tap load posts to view this user's public feed.</div>
@@ -2200,14 +2353,22 @@ export default function EchoIdPage({
   const [anonymousProfile, setAnonymousProfile] = useState(cachedAnonymousProfile);
   const [isAnonymousBootstrapLoading, setIsAnonymousBootstrapLoading] = useState(() => !cachedAnonymousProfile && !!host);
   const [feedPosts, setFeedPosts] = useState(postSeed);
+  const [feedPromotions, setFeedPromotions] = useState([]);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [isFeedLoadingMore, setIsFeedLoadingMore] = useState(false);
   const [feedPage, setFeedPage] = useState(1);
   const [feedHasMore, setFeedHasMore] = useState(false);
   const [feedRefreshRevision, setFeedRefreshRevision] = useState(0);
   const [autoPlayVideos, setAutoPlayVideos] = useState(() => readEchoIdVideoAutoplay());
-  const [storedNotifications, setStoredNotifications] = useState(() => readEchoIdNotifications());
+  const [notificationStorageRevision, setNotificationStorageRevision] = useState(0);
   const [visibleNotificationCount, setVisibleNotificationCount] = useState(10);
+  const storedNotifications = useMemo(() => {
+    const fromStorage = readEchoIdNotifications();
+    return fromStorage.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [notificationStorageRevision]);
+  const refreshStoredNotifications = useCallback(() => {
+    setNotificationStorageRevision((revision) => revision + 1);
+  }, []);
   const [ownPosts, setOwnPosts] = useState(cachedOwnPosts);
   const [isOwnPostsLoading, setIsOwnPostsLoading] = useState(() => !cachedOwnPosts.length);
   const [isOwnPostsSyncing, setIsOwnPostsSyncing] = useState(false);
@@ -2263,7 +2424,13 @@ export default function EchoIdPage({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishProgress, setPublishProgress] = useState(0);
   const [isComposePreviewOpen, setIsComposePreviewOpen] = useState(false);
+  const anonymousPosterSecret = readAnonymousPosterSecret();
   const anonymousClientId = String(anonymousProfile?.clientId || cachedAnonymousProfile?.clientId || "").trim();
+  const anonymousPosterClientId = String(anonymousPosterSecret?.anonymousId || "").trim();
+  const anonymousPosterAuthsec = String(anonymousPosterSecret?.authsec || "").trim();
+  const anonymousPostAuthPayload = anonymousPosterClientId && anonymousPosterAuthsec
+    ? { clientId: anonymousPosterClientId, authsec: anonymousPosterAuthsec }
+    : null;
   const updateAnonymousProfileState = (patch) => {
     if (!patch) return;
     setAnonymousProfile((prev) => {
@@ -2272,11 +2439,11 @@ export default function EchoIdPage({
         patch?.trustScoreDelta !== undefined
           ? { ...prev, trustScore: clampNumber(Number(prev?.trustScore || 0) + Number(patch.trustScoreDelta || 0), -10, 45) }
           : {
-              ...prev,
-              ...patch,
-              trustScore:
-                patch?.trustScore !== undefined ? clampNumber(patch.trustScore, -10, 45) : clampNumber(prev?.trustScore, -10, 45),
-            };
+            ...prev,
+            ...patch,
+            trustScore:
+              patch?.trustScore !== undefined ? clampNumber(patch.trustScore, -10, 45) : clampNumber(prev?.trustScore, -10, 45),
+          };
       saveAnonymousProfile(next);
       return next;
     });
@@ -2570,6 +2737,7 @@ export default function EchoIdPage({
       // Pull refresh is a hard page-1 replacement: do not merge with the previous feed array,
       // because stale card/component state should be discarded when the new feed arrives.
       const nextPosts = normalizePostCollection(json.posts);
+      const nextPromotions = normalizePostCollection(json.promotions).filter(isPromotionPost);
       const sortedPosts =
         sortBy === "least-popularity"
           ? [...nextPosts].sort((left, right) => Number(left.likes || 0) - Number(right.likes || 0))
@@ -2581,11 +2749,13 @@ export default function EchoIdPage({
         skipNextFeedLoadRef.current = true;
       }
       setFeedPage(1);
+      setFeedPromotions(nextPromotions);
       setFeedPosts(() => sortedPosts);
       setFeedRefreshRevision((current) => current + 1);
       pullRefreshSettledRef.current = true;
       feedCacheRef.current[cacheKey] = {
         posts: sortedPosts,
+        promotions: nextPromotions,
         page: 1,
         hasMore: Boolean(json?.hasMore),
       };
@@ -2680,6 +2850,9 @@ export default function EchoIdPage({
         }
 
         saveAnonymousProfile(nextAnonymousProfile);
+        if (nextAnonymousProfile.anonymousPosterVault) {
+          await saveAnonymousPosterSecretFromVault(nextAnonymousProfile.anonymousPosterVault).catch(() => null);
+        }
         setAnonymousProfile(nextAnonymousProfile);
       } catch (err) {
         if (!active) return;
@@ -2785,6 +2958,7 @@ export default function EchoIdPage({
     const cachedFeed = feedCacheRef.current[cacheKey];
     if (cachedFeed) {
       setFeedPosts(cachedFeed.posts || []);
+      setFeedPromotions(cachedFeed.promotions || []);
       setFeedPage(cachedFeed.page || 1);
       setFeedHasMore(Boolean(cachedFeed.hasMore));
       return;
@@ -2793,11 +2967,12 @@ export default function EchoIdPage({
     setFeedPage(1);
     setFeedHasMore(true);
     setFeedPosts([]);
+    setFeedPromotions([]);
   }, [activeTab, host, sortBy, selectedHomeCategory]);
 
   const fetchReactionBatch = async (posts) => {
     if (!host || !anonymousClientId) return;
-    const normalizedPosts = normalizePostCollection(posts);
+    const normalizedPosts = normalizePostCollection(posts).filter((post) => !isPromotionPost(post));
     const postIds = normalizedPosts.map((post) => post._id).filter(Boolean);
     const witnessPostIds = normalizedPosts.filter((post) => shouldShowWitness(post.category)).map((post) => post._id);
     if (!postIds.length) return;
@@ -3068,7 +3243,13 @@ export default function EchoIdPage({
 
   const handleDeletePost = async (post) => {
     const postId = getPostId(post);
-    if (!host || !anonymousClientId || !postId || deletePendingByPostId[postId]) return;
+    const isAnonymousPosterPost = Boolean(post?.anonymity) && String(post?.posterId || "").trim() === anonymousPosterClientId;
+    if (!host || !postId || deletePendingByPostId[postId]) return;
+    if (isAnonymousPosterPost && !anonymousPostAuthPayload) {
+      await showEchoToast("Anonymous posting credentials are missing. Login to anonymous mode again.", "error");
+      return;
+    }
+    if (!isAnonymousPosterPost && !anonymousClientId) return;
 
     const result = await Swal.fire({
       title: "Delete post?",
@@ -3081,10 +3262,15 @@ export default function EchoIdPage({
 
     setDeletePendingByPostId((prev) => ({ ...prev, [postId]: true }));
     try {
-      const response = await api.postDelete(host, postId, {
-        clientId: anonymousClientId,
-        reason: "deleting request from owner",
-      });
+      const response = isAnonymousPosterPost
+        ? await api.anonymousPostDelete(host, postId, {
+          ...anonymousPostAuthPayload,
+          reason: "deleting request from owner",
+        })
+        : await api.postDelete(host, postId, {
+          clientId: anonymousClientId,
+          reason: "deleting request from owner",
+        });
       const json = await response.json().catch(() => ({}));
       if (!response.ok || !json?.success) {
         throw new Error(json?.message || "Could not delete this post.");
@@ -3148,8 +3334,12 @@ export default function EchoIdPage({
         if (!active || !response.ok || !json?.success) return;
 
         const nextPosts = mergeIncomingPostCollectionWithLocalState(json.posts, feedPage === 1 ? [] : feedPosts);
+        const nextPromotions = normalizePostCollection(json.promotions).filter(isPromotionPost);
         setFeedHasMore(Boolean(json?.hasMore));
         fetchReactionBatch(nextPosts);
+        if (feedPage === 1) {
+          setFeedPromotions(nextPromotions);
+        }
         setFeedPosts((prev) => {
           const merged = feedPage === 1 ? nextPosts : [...prev, ...nextPosts];
           const deduped = merged.filter(
@@ -3160,6 +3350,7 @@ export default function EchoIdPage({
             : deduped;
           feedCacheRef.current[`${sortBy}::${selectedHomeCategory || "all"}`] = {
             posts: sortedPosts,
+            promotions: feedPage === 1 ? nextPromotions : feedPromotions,
             page: feedPage,
             hasMore: Boolean(json?.hasMore),
           };
@@ -3273,10 +3464,19 @@ export default function EchoIdPage({
       setIsOwnPostsLoading(!ownPosts.length);
       setIsOwnPostsSyncing(Boolean(ownPosts.length));
       try {
-        const response = await api.postMyPosts(host);
-        const json = await response.json().catch(() => ({}));
-        if (!active || !response.ok || !json?.success) return;
-        const nextPosts = mergeIncomingPostCollectionWithLocalState(json.posts, ownPosts);
+        const responses = await Promise.all([
+          api.postMyPosts(host),
+          anonymousPostAuthPayload ? api.postMyAnonymousPosts(host, anonymousPostAuthPayload) : Promise.resolve(null),
+        ]);
+        const [normalResponse, anonymousResponse] = responses;
+        const normalJson = await normalResponse.json().catch(() => ({}));
+        const anonymousJson = anonymousResponse ? await anonymousResponse.json().catch(() => ({})) : { posts: [] };
+        if (!active || !normalResponse.ok || !normalJson?.success) return;
+        const allPosts = [
+          ...(Array.isArray(normalJson.posts) ? normalJson.posts : []),
+          ...(anonymousResponse?.ok && anonymousJson?.success && Array.isArray(anonymousJson.posts) ? anonymousJson.posts : []),
+        ];
+        const nextPosts = mergeIncomingPostCollectionWithLocalState(allPosts, ownPosts);
         setOwnPosts(nextPosts);
         saveOwnPostsCache(nextPosts);
       } catch (error) {
@@ -3294,7 +3494,7 @@ export default function EchoIdPage({
     return () => {
       active = false;
     };
-  }, [activeTab, host]);
+  }, [activeTab, host, anonymousPosterClientId, anonymousPosterAuthsec]);
 
   useEffect(() => {
     if (activeTab === "profile") {
@@ -3318,35 +3518,46 @@ export default function EchoIdPage({
         const json = await response.json().catch(() => ({}));
         if (!active || !response.ok || !json?.success) return;
 
-        const incoming = (Array.isArray(json.notifications) ? json.notifications : [])
-          .map(normalizeStoredEchoIdNotification)
-          .filter(Boolean);
+        const incoming = Array.isArray(json.notifications) ? json.notifications : [];
+        const base = readRawEchoIdNotifications();
+        const byId = new Map();
 
-        setStoredNotifications((current) => {
-          const base = current.length ? current : readEchoIdNotifications();
-          const byId = new Map((Array.isArray(base) ? base : []).map((item) => [String(item?.id || ""), item]));
-
-          incoming.forEach((item) => {
-            const previous = byId.get(item.id);
-            const isRead = previous?.read === true || previous?.view === true || item.read === true;
-            byId.set(item.id, {
-              ...previous,
-              ...item,
-              read: isRead,
-              view: isRead,
-            });
-          });
-
-          const merged = [...byId.values()]
-            .map(normalizeStoredEchoIdNotification)
-            .filter(Boolean)
-            .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
-          saveEchoIdNotifications(merged);
-          const unreadCount = merged.filter((item) => item?.read !== true && item?.view !== true).length;
-          setEchoIdUnreadNotifications?.(unreadCount);
-          window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: unreadCount } }));
-          return merged;
+        base.forEach((item) => {
+          const normalized = normalizeStoredEchoIdNotification(item);
+          if (normalized?.id) {
+            byId.set(normalized.id, item);
+          }
         });
+
+        incoming.forEach((item) => {
+          const normalizedIncoming = normalizeStoredEchoIdNotification(item);
+          if (!normalizedIncoming?.id) return;
+
+          const previous = byId.get(normalizedIncoming.id);
+          const normalizedPrevious = normalizeStoredEchoIdNotification(previous || {});
+          const isRead = normalizedPrevious?.read === true || normalizedPrevious?.view === true || normalizedIncoming.read === true;
+
+          byId.set(normalizedIncoming.id, {
+            ...previous,
+            ...item,
+            id: normalizedIncoming.id,
+            read: isRead,
+            view: isRead,
+          });
+        });
+
+        const merged = [...byId.values()]
+          .filter((item) => normalizeStoredEchoIdNotification(item))
+          .sort((a, b) => {
+            const left = normalizeStoredEchoIdNotification(a);
+            const right = normalizeStoredEchoIdNotification(b);
+            return new Date(right?.createdAt || 0) - new Date(left?.createdAt || 0);
+          });
+        saveEchoIdNotifications(merged);
+        const unreadCount = getEchoIdNotificationUnreadCount();
+        setEchoIdUnreadNotifications?.(unreadCount);
+        refreshStoredNotifications();
+        window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: unreadCount } }));
       } catch (error) {
         console.warn("Failed to sync EchoId notifications:", error?.message || error);
       }
@@ -3356,27 +3567,24 @@ export default function EchoIdPage({
     return () => {
       active = false;
     };
-  }, [host, setEchoIdUnreadNotifications]);
+  }, [host, refreshStoredNotifications, setEchoIdUnreadNotifications]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleNotificationUpdate = () => {
-      setStoredNotifications(readEchoIdNotifications());
+      refreshStoredNotifications();
     };
     window.addEventListener("echoid-notifications-updated", handleNotificationUpdate);
     return () => window.removeEventListener("echoid-notifications-updated", handleNotificationUpdate);
-  }, []);
+  }, [refreshStoredNotifications]);
 
   useEffect(() => {
     if (activeTab !== "alerts") return;
-    setStoredNotifications((current) => {
-      const next = current.map((notification) => ({ ...notification, read: true, view: true }));
-      saveEchoIdNotifications(next);
-      return next;
-    });
+    markEchoIdNotificationsRead();
+    refreshStoredNotifications();
     setEchoIdUnreadNotifications?.(0);
     window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: 0 } }));
-  }, [activeTab, setEchoIdUnreadNotifications]);
+  }, [activeTab, refreshStoredNotifications, setEchoIdUnreadNotifications]);
 
   const searchMode = query.trim().startsWith("@") ? "users" : "posts";
   const hasSearchQuery = query.trim().length > 0;
@@ -3425,7 +3633,7 @@ export default function EchoIdPage({
     }
   }, [feedPosts, sortBy]);
 
-  const displayedHomePosts = host ? sortedHomePosts : localHomePosts;
+  const displayedHomePosts = host ? insertPromotionsIntoFeed(sortedHomePosts, feedPromotions) : localHomePosts;
   const getVirtualPostKey = useCallback((post, index) => getPostId(post) || `post-${index}`, []);
   const displayedOwnPosts = useMemo(() => ownPosts.slice(0, visibleOwnPostsCount), [ownPosts, visibleOwnPostsCount]);
   const hasMoreOwnPosts = visibleOwnPostsCount < ownPosts.length;
@@ -3480,12 +3688,12 @@ export default function EchoIdPage({
       selectedPostPreview ||
       (selectedPostId
         ? normalizePostRecord({
-            _id: selectedPostId,
-            name: "Anonymous",
-            username: "anonymous",
-            createdAt: new Date().toISOString(),
-            body: "",
-          })
+          _id: selectedPostId,
+          name: "Anonymous",
+          username: "anonymous",
+          createdAt: new Date().toISOString(),
+          body: "",
+        })
         : null),
     [selectedPostDetailMap, selectedPostId, selectedPostPreview]
   );
@@ -3502,7 +3710,7 @@ export default function EchoIdPage({
   const selectedPostHasFullDetail = Boolean(selectedPostId && selectedPostDetailMap[selectedPostId]);
   const selectedPostContentLoading = Boolean(host && selectedPostId && (selectedPostLoading || !selectedPostHasFullDetail));
   const selectedPostWitnessValue = normalizeWitnessValue(postWitnessMap[selectedPostId] ?? selectedPost?.userWitness);
-  const selectedPostIsOwner = isOwnerPost(selectedPost, anonymousProfile);
+  const selectedPostIsOwner = isOwnerPost(selectedPost, anonymousProfile, anonymousPosterSecret);
   const selectedPostWitnessPanelOpen = Boolean(selectedPostId && witnessPanelPostId === selectedPostId);
   const selectedPostWitnessEntries = selectedPostId ? witnessEntriesByPostId[selectedPostId] || [] : [];
   const selectedPostWitnessEntriesLoading = Boolean(selectedPostId && witnessEntriesLoadingByPostId[selectedPostId]);
@@ -3550,9 +3758,9 @@ export default function EchoIdPage({
       [normalizedPostId]: (prev[normalizedPostId] || []).map((entry) =>
         entry.id === normalizedCommentId
           ? {
-              ...entry,
-              replyCount: Math.max(0, Number(nextReplyCount ?? entry?.replyCount ?? 0)),
-            }
+            ...entry,
+            replyCount: Math.max(0, Number(nextReplyCount ?? entry?.replyCount ?? 0)),
+          }
           : entry
       ),
     }));
@@ -3613,21 +3821,21 @@ export default function EchoIdPage({
 
     const normalizedFiles = await Promise.all(
       files
-      .filter(isAllowedMediaFile)
-      .map(async (file) => {
-        const previewUrl = URL.createObjectURL(file);
-        mediaObjectUrlsRef.current.push(previewUrl);
-        const isVideo = String(file.type || "").startsWith("video/");
-        return {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-          name: file.name || "media",
-          mimeType: file.type || "application/octet-stream",
-          kind: isVideo ? "video" : "image",
-          previewUrl,
-          thumbnailUrl: isVideo ? await createVideoThumbnail(previewUrl) : "",
-          fileObject: file,
-        };
-      })
+        .filter(isAllowedMediaFile)
+        .map(async (file) => {
+          const previewUrl = URL.createObjectURL(file);
+          mediaObjectUrlsRef.current.push(previewUrl);
+          const isVideo = String(file.type || "").startsWith("video/");
+          return {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            name: file.name || "media",
+            mimeType: file.type || "application/octet-stream",
+            kind: isVideo ? "video" : "image",
+            previewUrl,
+            thumbnailUrl: isVideo ? await createVideoThumbnail(previewUrl) : "",
+            fileObject: file,
+          };
+        })
     );
 
     pushMediaIntoComposer(normalizedFiles);
@@ -3640,19 +3848,19 @@ export default function EchoIdPage({
         const picked = await pickMediaNative();
         const normalizedFiles = await Promise.all(
           picked
-          .filter(isAllowedMediaFile)
-          .map(async (file) => {
-            const isVideo = String(file.type || "").startsWith("video/");
-            return {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            name: file.name || "media",
-            mimeType: file.type || "application/octet-stream",
-            kind: isVideo ? "video" : "image",
-            previewUrl: file.preview || "",
-            thumbnailUrl: isVideo ? await createVideoThumbnail(file.preview || "") : "",
-            fileObject: null,
-          };
-        })
+            .filter(isAllowedMediaFile)
+            .map(async (file) => {
+              const isVideo = String(file.type || "").startsWith("video/");
+              return {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                name: file.name || "media",
+                mimeType: file.type || "application/octet-stream",
+                kind: isVideo ? "video" : "image",
+                previewUrl: file.preview || "",
+                thumbnailUrl: isVideo ? await createVideoThumbnail(file.preview || "") : "",
+                fileObject: null,
+              };
+            })
         );
 
         pushMediaIntoComposer(normalizedFiles);
@@ -3715,15 +3923,29 @@ export default function EchoIdPage({
     setSelectedPostError("");
   };
 
+  const handleOpenNotification = (notification) => {
+    if (!notification?.id) return;
+    markEchoIdNotificationsRead((item) => item.id === notification.id);
+    const unreadCount = getEchoIdNotificationUnreadCount();
+    setEchoIdUnreadNotifications?.(unreadCount);
+    refreshStoredNotifications();
+    window.dispatchEvent(new CustomEvent("echoid-notifications-updated", { detail: { count: unreadCount } }));
+
+    const postId = String(notification?.postId || "").trim();
+    if (postId) {
+      history.push(`/app/post/${encodeURIComponent(postId)}`);
+    }
+  };
+
   const handleOpenUserDetails = async (source) => {
     const clientId = String(
       source?.clientId ||
-        source?.posterId ||
-        source?.userClientId ||
-        source?.authorClientId ||
-        source?.commentClientId ||
-        source?.anonymousClientId ||
-        ""
+      source?.posterId ||
+      source?.userClientId ||
+      source?.authorClientId ||
+      source?.commentClientId ||
+      source?.anonymousClientId ||
+      ""
     ).trim();
     const username = String(source?.username || source?.userName || "").trim().replace(/^@+/, "");
 
@@ -3776,7 +3998,7 @@ export default function EchoIdPage({
 
   const handleOpenWitnessPanel = async (post) => {
     const postId = getPostId(post);
-    if (!host || !postId || !isOwnerPost(post, anonymousProfile)) return;
+    if (!host || !postId || !isOwnerPost(post, anonymousProfile, anonymousPosterSecret)) return;
 
     setWitnessPanelPostId(postId);
     if (witnessEntriesByPostId[postId] || witnessEntriesLoadingByPostId[postId]) return;
@@ -3873,7 +4095,7 @@ export default function EchoIdPage({
     }
   };
 
-  const handleOpenMediaPreview = (media, altText = "") => {
+  const handleOpenMediaPreview = (media, altText = "", context = {}) => {
     const url = String(media?.url || media?.previewUrl || "").trim();
     const kind = normalizeMediaKind(media?.kind || media?.mimeType || "", url);
     if (!url || !isSafeMediaUrl(url) || (kind !== "image" && kind !== "video")) return;
@@ -3882,6 +4104,11 @@ export default function EchoIdPage({
       kind,
       alt: String(altText || "").trim(),
       thumbnailUrl: media?.thumbnailUrl || "",
+      title: String(context?.title || "").trim(),
+      author: String(context?.author || "").trim(),
+      handle: String(context?.handle || "").trim(),
+      relativeTimeLabel: String(context?.relativeTimeLabel || "").trim(),
+      avatarUrl: String(context?.avatarUrl || "").trim(),
     });
   };
 
@@ -4562,6 +4789,7 @@ export default function EchoIdPage({
           anonymity: Boolean(composeForm.anonymity),
           mimeType: media.mimeType,
           fileName: media.name,
+          ...(Boolean(composeForm.anonymity) && anonymousPostAuthPayload ? anonymousPostAuthPayload : {}),
           ...(media.kind === "video" ? { thumbnailMimeType: "image/png" } : {}),
         });
         const initJson = await initRes.json().catch(() => ({}));
@@ -4629,6 +4857,7 @@ export default function EchoIdPage({
           await api.postUploadDelete(host, {
             anonymity: Boolean(composeForm.anonymity),
             publicUrls: initializedPublicUrls,
+            ...(Boolean(composeForm.anonymity) && anonymousPostAuthPayload ? anonymousPostAuthPayload : {}),
           });
         } catch (cleanupError) {
           console.warn("Failed to cleanup uploaded post media after upload error:", cleanupError);
@@ -4653,6 +4882,10 @@ export default function EchoIdPage({
 
     if (!host) {
       setComposeError("Publishing requires a backend host.");
+      return;
+    }
+    if (anonymity && !anonymousPostAuthPayload) {
+      setComposeError("Anonymous posting credentials are missing. Login to anonymous mode again.");
       return;
     }
     if (!anonymity && (!requestedName || !requestedUsername)) {
@@ -4700,14 +4933,20 @@ export default function EchoIdPage({
         requestedName: !anonymity ? requestedName : "",
         requestedUsername: !anonymity ? requestedUsername : "",
       });
-      const response = await api.createPost(host, {
+      const postPayload = {
         anonymity,
         title: normalizedTitle,
         body: finalBody,
         category,
         ...(!anonymity ? { name: requestedName, username: requestedUsername } : {}),
         ...(subCategory ? { subCategory } : {}),
-      });
+      };
+      const response = anonymity
+        ? await api.createAnonymousPost(host, {
+          ...postPayload,
+          ...anonymousPostAuthPayload,
+        })
+        : await api.createPost(host, postPayload);
       const json = await response.json().catch(() => ({}));
       console.log("[echoid-publish] create post response", {
         ok: response.ok,
@@ -4726,6 +4965,7 @@ export default function EchoIdPage({
             await api.postUploadDelete(host, {
               anonymity,
               publicUrls: uploadedPublicUrls,
+              ...(anonymity && anonymousPostAuthPayload ? anonymousPostAuthPayload : {}),
             });
           } catch (cleanupError) {
             console.warn("Failed to cleanup uploaded post media after create error:", cleanupError);
@@ -4855,50 +5095,52 @@ export default function EchoIdPage({
               )}
             />
           ) : (
-            displayedHomePosts.slice(0, 6).map((post) =>
-              renderPostCard(post, {
-                compact: true,
-                autoPlayVideos,
-                reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
-                witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
-                isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
-                isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
-                onLike: (targetPost) => handleReactToPost(targetPost, 1),
-                onDislike: (targetPost) => handleReactToPost(targetPost, -1),
-                onWitness: handleWitnessPost,
-                onOpenPost: handleOpenPost,
-                onOpenAuthor: handleOpenUserDetails,
-                onPreviewMedia: handleOpenMediaPreview,
-              })
-            )
+            displayedHomePosts.slice(0, 6).map((post, index) => (
+              <React.Fragment key={getVirtualPostKey(post, index)}>
+                {renderPostCard(post, {
+                  compact: true,
+                  autoPlayVideos,
+                  reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
+                  witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
+                  isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
+                  isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
+                  onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                  onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                  onWitness: handleWitnessPost,
+                  onOpenPost: handleOpenPost,
+                  onOpenAuthor: handleOpenUserDetails,
+                  onPreviewMedia: handleOpenMediaPreview,
+                })}
+              </React.Fragment>
+            ))
           )
         ) : (
-               <Virtuoso
-              className="echoid-virtuoso-feed"
-              customScrollParent={contentElement}
-              data={displayedHomePosts}
-              computeItemKey={(index, post) => getVirtualPostKey(post, index)}
-              endReached={handleHomeFeedEndReached}
-              increaseViewportBy={{ top: 520, bottom: 1040 }}
-              itemContent={(index, post) => (
-                <div className="echoid-virtual-post">
-                  {renderPostCard(post, {
-                    compact: true,
-                    autoPlayVideos,
-                    reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
-                    witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
-                    isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
-                    isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
-                    onLike: (targetPost) => handleReactToPost(targetPost, 1),
-                    onDislike: (targetPost) => handleReactToPost(targetPost, -1),
-                    onWitness: handleWitnessPost,
-                    onOpenPost: handleOpenPost,
-                    onOpenAuthor: handleOpenUserDetails,
-                    onPreviewMedia: handleOpenMediaPreview,
-                  })}
-                </div>
-              )}
-            />
+          <Virtuoso
+            className="echoid-virtuoso-feed"
+            customScrollParent={contentElement}
+            data={displayedHomePosts}
+            computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+            endReached={handleHomeFeedEndReached}
+            increaseViewportBy={{ top: 520, bottom: 1040 }}
+            itemContent={(index, post) => (
+              <div className="echoid-virtual-post">
+                {renderPostCard(post, {
+                  compact: true,
+                  autoPlayVideos,
+                  reactionValue: normalizeUserReactionValue(postReactionMap[getPostId(post)] ?? post?.userReaction),
+                  witnessValue: normalizeWitnessValue(postWitnessMap[getPostId(post)] ?? post?.userWitness),
+                  isReactionPending: Boolean(reactionPendingByPostId[getPostId(post)]),
+                  isWitnessPending: Boolean(witnessPendingByPostId[getPostId(post)]),
+                  onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                  onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                  onWitness: handleWitnessPost,
+                  onOpenPost: handleOpenPost,
+                  onOpenAuthor: handleOpenUserDetails,
+                  onPreviewMedia: handleOpenMediaPreview,
+                })}
+              </div>
+            )}
+          />
         )}
         {isFeedLoadingMore ? <EchoIdPostCardSkeleton count={2} /> : null}
       </section>
@@ -4974,41 +5216,41 @@ export default function EchoIdPage({
           ) : isSearchLoading && host ? (
             <EchoIdPostCardSkeleton count={3} />
           ) : postResults.length > 0 ? (
-           <div className="echoid-search-results">
-  <Virtuoso
-    className="echoid-virtuoso-feed"
-    customScrollParent={contentElement}
-    data={postResults}
-    computeItemKey={(index, post) => getVirtualPostKey(post, index)}
-    increaseViewportBy={{ top: 400, bottom: 900 }}
-    itemContent={(index, post) => (
-      <div className="echoid-virtual-post">
-        {renderPostCard(post, {
-          compact: true,
-          autoPlayVideos,
-          reactionValue: normalizeUserReactionValue(
-            postReactionMap[getPostId(post)] ?? post?.userReaction
-          ),
-          witnessValue: normalizeWitnessValue(
-            postWitnessMap[getPostId(post)] ?? post?.userWitness
-          ),
-          isReactionPending: Boolean(
-            reactionPendingByPostId[getPostId(post)]
-          ),
-          isWitnessPending: Boolean(
-            witnessPendingByPostId[getPostId(post)]
-          ),
-          onLike: (targetPost) => handleReactToPost(targetPost, 1),
-          onDislike: (targetPost) => handleReactToPost(targetPost, -1),
-          onWitness: handleWitnessPost,
-          onOpenPost: handleOpenPost,
-          onOpenAuthor: handleOpenUserDetails,
-          onPreviewMedia: handleOpenMediaPreview,
-        })}
-      </div>
-    )}
-  />
-</div>
+            <div className="echoid-search-results">
+              <Virtuoso
+                className="echoid-virtuoso-feed"
+                customScrollParent={contentElement}
+                data={postResults}
+                computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+                increaseViewportBy={{ top: 400, bottom: 900 }}
+                itemContent={(index, post) => (
+                  <div className="echoid-virtual-post">
+                    {renderPostCard(post, {
+                      compact: true,
+                      autoPlayVideos,
+                      reactionValue: normalizeUserReactionValue(
+                        postReactionMap[getPostId(post)] ?? post?.userReaction
+                      ),
+                      witnessValue: normalizeWitnessValue(
+                        postWitnessMap[getPostId(post)] ?? post?.userWitness
+                      ),
+                      isReactionPending: Boolean(
+                        reactionPendingByPostId[getPostId(post)]
+                      ),
+                      isWitnessPending: Boolean(
+                        witnessPendingByPostId[getPostId(post)]
+                      ),
+                      onLike: (targetPost) => handleReactToPost(targetPost, 1),
+                      onDislike: (targetPost) => handleReactToPost(targetPost, -1),
+                      onWitness: handleWitnessPost,
+                      onOpenPost: handleOpenPost,
+                      onOpenAuthor: handleOpenUserDetails,
+                      onPreviewMedia: handleOpenMediaPreview,
+                    })}
+                  </div>
+                )}
+              />
+            </div>
           ) : (
             <div className="echoid-empty-card">No matching posts yet.</div>
           )}
@@ -5028,21 +5270,26 @@ export default function EchoIdPage({
 
       {displayedStoredNotifications.length > 0 ? (
         displayedStoredNotifications.map((alert) => {
-          const isWitnessAlert = String(alert.type || "").toUpperCase() === "WITNESS";
+          const { tone, Icon, label } = getEchoIdNotificationPresentation(alert);
+          const hasPostTarget = Boolean(String(alert.postId || "").trim());
           return (
-            <article
+            <button
+              type="button"
               key={alert.id}
-              className={`echoid-alert-card tone-${isWitnessAlert ? "warning" : "accent"} ${alert.read ? "" : "is-unread"}`}
+              className={`echoid-alert-card tone-${tone} ${alert.read ? "" : "is-unread"} ${hasPostTarget ? "is-clickable" : ""}`}
+              onClick={() => handleOpenNotification(alert)}
             >
               <div className="echoid-alert-icon">
-                {isWitnessAlert ? <TriangleAlert size={18} /> : <Sparkles size={18} />}
+                <Icon size={18} />
               </div>
               <div className="echoid-alert-copy">
+                <span className="echoid-alert-kicker">{label} </span>
                 <strong>{alert.title}</strong>
                 <p>{alert.body || "A new EchoId notification is ready."}</p>
                 <span>{formatRelativeTime(getRelativeMinutesFromDate(alert.createdAt))}</span>
               </div>
-            </article>
+              {hasPostTarget ? <ChevronRight className="echoid-alert-chevron" size={18} /> : null}
+            </button>
           );
         })
       ) : (
@@ -5098,36 +5345,36 @@ export default function EchoIdPage({
         ) : null}
         {!isOwnPostsLoading &&
           !isOwnPostsHidden &&
-       <Virtuoso
-  className="echoid-virtuoso-feed"
-  customScrollParent={contentElement}
-  data={ownPosts}
-  computeItemKey={(index, post) => getVirtualPostKey(post, index)}
-  increaseViewportBy={{ top: 400, bottom: 900 }}
-  itemContent={(index, post) => (
-    <div className="echoid-virtual-post">
-      {renderPostCard(post, {
-        compact: true,
-        autoPlayVideos,
-        showOwnerMeta: true,
-        witnessValue: normalizeWitnessValue(
-          postWitnessMap[getPostId(post)] ?? post?.userWitness
-        ),
-        isWitnessPending: Boolean(
-          witnessPendingByPostId[getPostId(post)]
-        ),
-        isDeletePending: Boolean(
-          deletePendingByPostId[getPostId(post)]
-        ),
-        onWitness: handleWitnessPost,
-        onDelete: handleDeletePost,
-        onOpenPost: handleOpenPost,
-        onOpenAuthor: handleOpenUserDetails,
-        onPreviewMedia: handleOpenMediaPreview,
-      })}
-    </div>
-  )}
-/>}
+          <Virtuoso
+            className="echoid-virtuoso-feed"
+            customScrollParent={contentElement}
+            data={ownPosts}
+            computeItemKey={(index, post) => getVirtualPostKey(post, index)}
+            increaseViewportBy={{ top: 400, bottom: 900 }}
+            itemContent={(index, post) => (
+              <div className="echoid-virtual-post">
+                {renderPostCard(post, {
+                  compact: true,
+                  autoPlayVideos,
+                  showOwnerMeta: true,
+                  witnessValue: normalizeWitnessValue(
+                    postWitnessMap[getPostId(post)] ?? post?.userWitness
+                  ),
+                  isWitnessPending: Boolean(
+                    witnessPendingByPostId[getPostId(post)]
+                  ),
+                  isDeletePending: Boolean(
+                    deletePendingByPostId[getPostId(post)]
+                  ),
+                  onWitness: handleWitnessPost,
+                  onDelete: handleDeletePost,
+                  onOpenPost: handleOpenPost,
+                  onOpenAuthor: handleOpenUserDetails,
+                  onPreviewMedia: handleOpenMediaPreview,
+                })}
+              </div>
+            )}
+          />}
         {!isOwnPostsLoading && !isOwnPostsHidden && hasMoreOwnPosts ? (
           <div className="echoid-empty-card">Scroll to load 10 more posts.</div>
         ) : null}
@@ -5139,8 +5386,8 @@ export default function EchoIdPage({
         </div>
         <div className="echoid-detail-list">
           <div className="echoid-detail-row">
-            <span>Region</span>
-            <strong>Sector Nine</strong>
+            <span>Anonymous ID</span>
+            <strong>{anonymousPosterClientId || "Not set"}</strong>
           </div>
           <div className="echoid-detail-row">
             <span>Signal mode</span>
@@ -5304,7 +5551,7 @@ export default function EchoIdPage({
     }
   };
 
-  const previewOverlay = mediaPreview ? <EchoIdMediaPreview preview={mediaPreview} onClose={handleCloseMediaPreview} /> : null;
+  const previewOverlay = mediaPreview ? <EchoIdMediaViewer preview={mediaPreview} onClose={handleCloseMediaPreview} /> : null;
 
   if (isAnonymousBootstrapLoading) {
     return (
@@ -5423,7 +5670,17 @@ export default function EchoIdPage({
           onCloseWitnessPanel={() => setWitnessPanelPostId("")}
           onRemoveWitnessEntry={(entry) => handleRemoveWitnessEntry(selectedPost, entry)}
           onOpenAuthor={handleOpenUserDetails}
-          onPreviewMedia={handleOpenMediaPreview}
+          onPreviewMedia={(media, altText) =>
+            handleOpenMediaPreview(media, altText, {
+              author: selectedPost?.name || "Anonymous",
+              handle: selectedPost?.anonymity === true || String(selectedPost?.anonymity || "").toLowerCase() === "true"
+                ? `@${String(selectedPost?.posterId || selectedPost?.postId || selectedPost?.PostId || "anonymous").trim()}`
+                : selectedPost?.username ? `@${selectedPost.username}` : "@anonymous",
+              title: selectedPost?.title || "",
+              relativeTimeLabel: formatRelativeTime(getRelativeMinutesFromDate(selectedPost?.createdAt)),
+              avatarUrl: String(selectedPost?.profilePic || selectedPost?.profileUrl || selectedPost?.userProfile || "").trim(),
+            })
+          }
           onPreviewImage={handleOpenProfileImagePreview}
           authorAvatarUrl={String(selectedPost?.profilePic || selectedPost?.profileUrl || selectedPost?.userProfile || "").trim()}
           onReport={handleReportPost}
@@ -5542,42 +5799,42 @@ export default function EchoIdPage({
           <div className="echoid-drawer-list">
             {shouldShowBottomNav
               ? homeCategoryLabels.map((item) => {
-                  const value = toCategoryValue(item);
-                  const isActive = value === selectedHomeCategory;
+                const value = toCategoryValue(item);
+                const isActive = value === selectedHomeCategory;
 
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`echoid-drawer-item ${isActive ? "is-active" : ""}`}
-                      onClick={() => handleSelectHomeCategory(value)}
-                    >
-                      <span>{item}</span>
-                      <ChevronRight size={15} />
-                    </button>
-                  );
-                })
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`echoid-drawer-item ${isActive ? "is-active" : ""}`}
+                    onClick={() => handleSelectHomeCategory(value)}
+                  >
+                    <span>{item}</span>
+                    <ChevronRight size={15} />
+                  </button>
+                );
+              })
               : drawerNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  const hasUnreadAlerts = item.id === "alerts" && echoIdUnreadNotifications > 0;
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                const hasUnreadAlerts = item.id === "alerts" && echoIdUnreadNotifications > 0;
 
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`echoid-drawer-item ${isActive ? "is-active" : ""} ${hasUnreadAlerts ? "has-echoid-alerts" : ""}`}
-                      onClick={() => handleSelectDrawerTab(item.id)}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <span>
-                        <Icon size={16} />
-                        {item.label}
-                      </span>
-                      <ChevronRight size={15} />
-                    </button>
-                  );
-                })}
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`echoid-drawer-item ${isActive ? "is-active" : ""} ${hasUnreadAlerts ? "has-echoid-alerts" : ""}`}
+                    onClick={() => handleSelectDrawerTab(item.id)}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <span>
+                      <Icon size={16} />
+                      {item.label}
+                    </span>
+                    <ChevronRight size={15} />
+                  </button>
+                );
+              })}
           </div>
         </section>
       </aside>
@@ -5679,9 +5936,8 @@ export default function EchoIdPage({
                 <button
                   key={tab.id}
                   type="button"
-                  className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""} ${
-                    hasUnreadAlerts ? "has-echoid-alerts" : ""
-                  }`}
+                  className={`echoid-nav-button ${tab.isPrimary ? "is-primary" : ""} ${isActive ? "is-active" : ""} ${hasUnreadAlerts ? "has-echoid-alerts" : ""
+                    }`}
                   onClick={() => {
                     setIsComposePreviewOpen(false);
                     setActiveTab(tab.id);

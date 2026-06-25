@@ -2,10 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { IonAlert, isPlatform } from '@ionic/react';
 import { useHistory, useLocation } from 'react-router-dom';
 import { LoginContext } from '../Contexts/UserContext';
-import { FcGoogle } from 'react-icons/fc';
-import { FaFacebookF } from 'react-icons/fa';
-import { HiOutlineArrowNarrowRight } from 'react-icons/hi';
-import { IoFlash } from 'react-icons/io5';
+import { ArrowRight, Fingerprint, Github, Facebook, Eye, EyeOff } from 'lucide-react';
 import PropTypes from "prop-types";
 import StarLoader from '../pages/StarLoader';
 import Maindata from '../data';
@@ -30,6 +27,8 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
   const [password, setPassword] = useState('');
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+  const [serverOnline, setServerOnline] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { message } = location.state || {};
   const isNative = isPlatform('hybrid') || isPlatform('ios') || isPlatform('android');
@@ -40,6 +39,36 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
       setShowAlert(true);
     }
   }, [message]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkServerStatus = async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const response = await fetch(`${host}/user/version`, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!cancelled) setServerOnline(response.ok);
+      } catch {
+        if (!cancelled) setServerOnline(false);
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    };
+
+    checkServerStatus();
+    const statusInterval = window.setInterval(checkServerStatus, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(statusInterval);
+    };
+  }, [host]);
 
   useEffect(() => {
     const checkToken = async () => {
@@ -96,7 +125,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
           tx.executeSql(
             `ALTER TABLE messages ADD COLUMN isReplyTo TEXT DEFAULT null;`,
             [],
-            () => {},
+            () => { },
             () => false
           );
           tx.executeSql(
@@ -300,6 +329,11 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
     }
   };
 
+  const submitLogin = (event) => {
+    event.preventDefault();
+    handleLogin();
+  };
+
   if (loginlaod) {
     return (
       <div className="login-screen-loader">
@@ -312,111 +346,106 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
     <div className={`login-screen ${isNative ? "is-native" : "is-web"}`}>
       <div className="login-screen-grid" />
       <div className="login-screen-shell">
-        {!isNative ? (
-          <div className="login-web-brandbar">
-         
-            <button type="button" className="login-help-dot" aria-label="Help">?</button>
-          </div>
-        ) : null}
+        <header className="login-topbar">
+          <button type="button" className="login-brand-mark" onClick={() => history.push('/login')}>
+            <img src="/echoid_v3.png" alt="" />
+            <span>ECHOID</span>
+          </button>
+
+          <button type="button" className="login-signup-cta" onClick={() => history.push('/signup')}>
+            Sign Up
+          </button>
+        </header>
 
         <div className="login-screen-content">
           <section className="login-screen-brand-panel">
-            <div className="login-brand-mark">ECHOID</div>
+            <span className="login-brand-kicker">Secure Access Protocol</span>
+            <h1>Identity<br />Terminal</h1>
+            <p>Enter your encrypted credentials to access the EchoID ecosystem. Professional-grade security for digital architects.(Just Kidding)</p>
           </section>
 
           <section className="login-screen-main-panel">
-            {!isNative ? (
-              <div className="login-web-copy">
-                <h1>Welcome Back</h1>
-                <p>Enter your credentials to sync with the pulse.</p>
-              </div>
-            ) : null}
+            <form className="login-card" onSubmit={submitLogin}>
+              <div className="login-card-corner" aria-hidden="true" />
 
-            <div className="login-card">
-              <label className="login-label" htmlFor="username">Email address</label>
+              <label className="login-label" htmlFor="username">Email ID</label>
               <input
                 id="username"
                 type="text"
                 className="login-input"
-                placeholder="name@domain.com"
+                placeholder="ECH-000-000"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
               />
 
-              <div className="login-password-row">
-                <label className="login-label" htmlFor="password">Password</label>
-                {!isNative ? (
-                  <button type="button" className="login-forgot-btn">
-                    Forgot?
-                  </button>
-                ) : null}
+              <label className="login-label login-security-label" htmlFor="password">Security Password</label>
+              <div className="login-input-wrapper">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  className="login-input"
+                  placeholder="........"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
-              <input
-                id="password"
-                type="password"
-                className="login-input"
-                placeholder="........"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
 
-              <button type="button" className="login-submit-btn" onClick={handleLogin}>
-                Login
+              <div className="login-options-row">
+                <button type="button" className="login-forgot-btn">
+                  Recovery PassWord?
+                </button>
+              </div>
+
+              <button type="submit" className="login-submit-btn">
+                <span>Initialize Authentication</span>
+                <ArrowRight size={17} strokeWidth={2} />
               </button>
 
-              {isNative ? (
-                <div className="login-signup-inline">
-                  <span>Don&apos;t have an account?</span>
-                  <button type="button" className="login-signup-link" onClick={() => history.push('/signup')}>
-                    Signup
-                  </button>
-                </div>
-              ) : null}
-
-              {isNative ? (
-                <button type="button" className="login-forgot-link-mobile">
-                  Forgot Password?
-                </button>
-              ) : (
-                <div className="login-divider">
-                  <span>OR CONTINUE WITH</span>
-                </div>
-              )}
+              <div className="login-divider">
+                <span>Other Logins</span>
+              </div>
 
               <div className="login-social-row">
                 <button type="button" className="login-social-btn">
-                  <FcGoogle size={16} />
-                  <span>Google</span>
-                </button>
-                <button type="button" className="login-social-btn">
-                  <FaFacebookF size={13} />
+                  <Facebook size={16} strokeWidth={2} />
                   <span>Facebook</span>
                 </button>
+                <button type="button" className="login-social-btn">
+                  <Fingerprint size={16} strokeWidth={2} />
+                  <span>Passkey</span>
+                </button>
               </div>
-            </div>
 
-            <button type="button" className="login-guest-card" onClick={() => history.push('/temporary-setup')}>
-              <span className="login-guest-icon">
-                <IoFlash size={14} />
-              </span>
-              <span className="login-guest-copy">
-                <small>{isNative ? "Don’t want to create an account yet?" : "QUICK ACCESS"}</small>
-                <strong>{isNative ? "Continue without account" : "Continue without account"}</strong>
-              </span>
-              {!isNative ? <HiOutlineArrowNarrowRight size={20} className="login-guest-arrow" /> : null}
-            </button>
-
-           
-              <div className="login-web-footer-links">
-                <span>PRIVACY PROTOCOL</span>
-                <span>TERMS OF SERVICE</span>
-                <span>SYSTEM STATUS</span>
+              <div className="login-mobile-signup">
+                <span>Need terminal access?</span>
+                <button type="button" className="login-signup-link" onClick={() => history.push('/signup')}>
+                  Sign Up
+                </button>
               </div>
-            
+            </form>
           </section>
         </div>
+
+        <footer className="login-footer">
+          <div className="login-footer-inner">
+            <strong>&copy; 2026 ECHOID.</strong>
+
+            <div className={`login-status ${serverOnline ? "is-online" : "is-offline"}`}>
+              <span aria-hidden="true" />
+              <strong>{serverOnline ? "Nodes Online" : "Nodes Offline"}</strong>
+            </div>
+          </div>
+        </footer>
 
         <IonAlert
           isOpen={showAlert}
@@ -436,3 +465,4 @@ LoginForm.propTypes = {
   sendPublicKeyToBackend: PropTypes.func,
   connect: PropTypes.func,
 };
+

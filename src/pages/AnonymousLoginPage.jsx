@@ -6,6 +6,7 @@ import { ArrowLeft, LockKeyhole } from "lucide-react";
 import ghostAnimation from "../assets/empty ghost.json";
 import { api } from "../services/api";
 import { clearAnonymousProfile, saveAnonymousProfile } from "../services/anonymousProfileStorage";
+import { saveAnonymousPosterSecretFromVault } from "../services/anonymousPosterVault";
 
 export default function AnonymousLoginPage({ host }) {
   const history = useHistory();
@@ -60,6 +61,9 @@ export default function AnonymousLoginPage({ host }) {
       const user = json.userResponse;
       if (user) {
         saveAnonymousProfile(user);
+        if (user.anonymousPosterVault) {
+          await saveAnonymousPosterSecretFromVault(user.anonymousPosterVault);
+        }
       }
       history.replace("/Profile", { activeSection: "anonymous" });
     } catch (err) {

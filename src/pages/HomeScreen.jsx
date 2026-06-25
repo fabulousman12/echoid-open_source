@@ -4,7 +4,7 @@ import { FaEllipsisV, FaCommentDots, FaVolumeMute, FaUsers, FaRegEdit } from 're
 import { isPlatform } from '@ionic/react';
 import { useHistory } from 'react-router';
 import { PushNotifications } from '@capacitor/push-notifications';
-import {closeCircleOutline} from 'ionicons/icons';
+import { closeCircleOutline } from 'ionicons/icons';
 import './HomeScreen.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { LoginContext } from '../Contexts/UserContext';
@@ -24,7 +24,7 @@ import UserMain from '../components/UserMain';
 import DesktopHomeLayout from '../components/DesktopHomeLayout';
 import ChatWindow from './chatwindo';
 import GroupChatWindow from './GroupChatWindow';
-import {   FaTimes } from 'react-icons/fa';
+import { FaTimes } from 'react-icons/fa';
 import useUserStore from '../services/useUserStore';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { IonIcon } from '@ionic/react';
@@ -33,11 +33,14 @@ import UpdateModal from '../components/UpdateModal';
 import { api } from "../services/api";
 import { getAccessToken, getRefreshToken, clearTokens } from "../services/authTokens";
 import { getDeviceId, getDeviceIdSync } from "../services/deviceInfo";
+import { AiTwotoneNotification } from "react-icons/ai";
 import { hashPrivateKey } from "../services/keyHash";
 // Helper to wait until the WebSocket is fully connected
 import { CiWifiOff } from "react-icons/ci";
 import { useNetworkStatus } from '../services/useNetworkStatus';
+
 import { MdOutlinePortableWifiOff } from "react-icons/md";
+
 import { MdOutlineCancel } from "react-icons/md";
 import { RiDeleteBin5Fill } from "react-icons/ri";
 import Swal from 'sweetalert2';
@@ -95,7 +98,7 @@ const HomeScreen = ({
   connect,
   setCurrenuser,
   getmessages,
-  setUnreadCounts = () => {},
+  setUnreadCounts = () => { },
   selectedUser1,
   messagesRef,
   isIntialized,
@@ -125,40 +128,41 @@ const HomeScreen = ({
   setCustomSounds,
   clearDirectNotificationForUser,
 }) => {
-//  const { socket,messages,db,setMessages,connect,setSelectedUser,setCurrenuser,getmessages,setUnreadCounts } = useWebSocket(); // Use WebSocket context methods
- const {
-  currentUserId,
-  setCurrentUser,
-  selectedUser,
-  setSelectedUser1,
+  //  const { socket,messages,db,setMessages,connect,setSelectedUser,setCurrenuser,getmessages,setUnreadCounts } = useWebSocket(); // Use WebSocket context methods
+  const {
+    currentUserId,
+    setCurrentUser,
+    selectedUser,
+    setSelectedUser1,
 
-  activeFooter,
-  setActiveFooter,
-  calls,
-  setCalls,
-  menuVisible,
-  setMenuVisible,
-  showAlert,
-  setShowAlert,
-  alertMessage,
-  setAlertMessage,
-  isLoad,
-  setIsLoad,
-  echoIdUnreadNotifications,
-  setEchoIdUnreadNotifications,
+    activeFooter,
+    setActiveFooter,
+    calls,
+    setCalls,
+    menuVisible,
+    setMenuVisible,
+    showAlert,
+    setShowAlert,
+    alertMessage,
+    setAlertMessage,
+    isLoad,
+    setIsLoad,
+    echoIdUnreadNotifications,
+    setEchoIdUnreadNotifications,
   } = useContext(MessageContext);
   const context = useContext(LoginContext);
   const { host, getuser } = context;
   //const {usersMaintest,setUsersMaintest} = useUserStore()
-  const [selectedChats, setSelectedChats] = useState([]); 
+  const [selectedChats, setSelectedChats] = useState([]);
   const history = useHistory();
-const [isloading, setIsLoading] = useState(false);
-   const [selectedUsers, setSelectedUsers] = useState([]);
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [showModal, setShowModal] = useState(false);
+  const [isloading, setIsLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [callsSelectionMode, setCallsSelectionMode] = useState(false);
   const [selectedCallIds, setSelectedCallIds] = useState([]);
-  const [mutedUsers,setmutedList] = useState([])
+  const [mutedUsers, setmutedList] = useState([])
 
   const [showModal2, setShowModal2] = useState(false);
   const [criticalUpdate, setCriticalUpdate] = useState(false);
@@ -280,19 +284,19 @@ const [isloading, setIsLoading] = useState(false);
     const list = Array.isArray(customSounds) ? customSounds : [];
     return new Map(list.map(s => [s.senderId, s]));
   }, [customSounds]);
-  
-function isVersionGreater(v1, v2) {
-  const a = v1.split('.').map(Number);
-  const b = v2.split('.').map(Number);
-console.log("isVersionGreater",v1,v2,a,b)
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const num1 = a[i] || 0;
-    const num2 = b[i] || 0;
-    if (num1 > num2) return true;
-    if (num1 < num2) return false;
+
+  function isVersionGreater(v1, v2) {
+    const a = v1.split('.').map(Number);
+    const b = v2.split('.').map(Number);
+    console.log("isVersionGreater", v1, v2, a, b)
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const num1 = a[i] || 0;
+      const num2 = b[i] || 0;
+      if (num1 > num2) return true;
+      if (num1 < num2) return false;
+    }
+    return false; // versions are equal
   }
-  return false; // versions are equal
-}
   const { connected, connectionType } = useNetworkStatus();
 
 
@@ -301,22 +305,22 @@ console.log("isVersionGreater",v1,v2,a,b)
       try {
         const res = await fetch(`https://${Maindata.SERVER_URL}/user/version`);
         const data = await res.json(); // expects { version: "1.5", url: "..." }
-if(!data.success) return;
-console.log(CURRENT_APP_VERSION,data.version)
+        if (!data.success) return;
+        console.log(CURRENT_APP_VERSION, data.version)
         if (isVersionGreater(data.version, CURRENT_APP_VERSION)) {
           const updatedetails = fetch(`https://${Maindata.SERVER_URL}/user/updatedetails`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-             
+
             },
             body: JSON.stringify({
               version: data.version,
-            
+
             })
           })
           const dat = await updatedetails.json()
-       
+
           //updatedetails.resposnse_url
           setCriticalUpdate(isCritical(data.version));
           setServerVersion(data.version);
@@ -332,7 +336,7 @@ console.log(CURRENT_APP_VERSION,data.version)
   }, []);
   useEffect(() => {
 
-    if(isIntialized===true){
+    if (isIntialized === true) {
       return;
     }
 
@@ -340,178 +344,178 @@ console.log(CURRENT_APP_VERSION,data.version)
     const setupApp = async () => {
 
       //console.log("this should run even in new sign in or sign up")
-   
 
-    
+
+
       const savedUsers = readJSON('usersMain', []);
 
-const capUsersRaw = await globalThis.storage.getItemAsync('usersMain');
-const capUsers = capUsersRaw ? JSON.parse(capUsersRaw) : [];
-//console.log("saved users",savedUsers)
-//console.log("cap users",capUsers)
-const localMap = new Map(savedUsers.map(user => [user.phoneNumber, user]));
+      const capUsersRaw = await globalThis.storage.getItemAsync('usersMain');
+      const capUsers = capUsersRaw ? JSON.parse(capUsersRaw) : [];
+      //console.log("saved users",savedUsers)
+      //console.log("cap users",capUsers)
+      const localMap = new Map(savedUsers.map(user => [user.phoneNumber, user]));
 
-for (const user of capUsers) {
-  const localUser = localMap.get(user.phoneNumber);
+      for (const user of capUsers) {
+        const localUser = localMap.get(user.phoneNumber);
 
-  if (!localUser) {
-    // User doesn't exist in localStorage, add directly
-    localMap.set(user.phoneNumber, user);
-  } else {
-    const capMsg = user.lastMessage;
-    const localMsg = localUser.lastMessage;
+        if (!localUser) {
+          // User doesn't exist in localStorage, add directly
+          localMap.set(user.phoneNumber, user);
+        } else {
+          const capMsg = user.lastMessage;
+          const localMsg = localUser.lastMessage;
 
-    // Check if lastMessage has changed or is newer
-    const isUpdated =
-      capMsg &&
-      (!localMsg || capMsg.timestamp > localMsg.timestamp );
+          // Check if lastMessage has changed or is newer
+          const isUpdated =
+            capMsg &&
+            (!localMsg || capMsg.timestamp > localMsg.timestamp);
 
-    if (isUpdated) {
-      localMap.set(user.phone, user); // Replace with updated version
-    }
-  }
-}
+          if (isUpdated) {
+            localMap.set(user.phone, user); // Replace with updated version
+          }
+        }
+      }
 
-// Final merged users array
-const mergedUsers = Array.from(localMap.values());
-const mergedStr = JSON.stringify(mergedUsers);
+      // Final merged users array
+      const mergedUsers = Array.from(localMap.values());
+      const mergedStr = JSON.stringify(mergedUsers);
 
-// Sync to storage and Capacitor
-writeJSON('usersMain', mergedUsers);
-//console.log("merged users",mergedUsers)
-//console.log("merged str",mergedStr)
+      // Sync to storage and Capacitor
+      writeJSON('usersMain', mergedUsers);
+      //console.log("merged users",mergedUsers)
+      //console.log("merged str",mergedStr)
 
-      if(socket && socket.readyState === WebSocket.OPEN){
-   
+      if (socket && socket.readyState === WebSocket.OPEN) {
+
         setIsIntialized(true)
       }
       setUsersMain(mergedUsers);
       setUsersMaintest(mergedUsers)
       setIsLoad(true)
 
-      
+
       setmutedList(readJSON('mutedUsers', []));
       const token = await getAccessToken();
       if (!token) {
-       history.push('/login');
-       return;
+        history.push('/login');
+        return;
       }
       await sendPublicKeyToBackend(token);
-const usermain = readJSON('currentuser', null);
-var user = null
+      const usermain = readJSON('currentuser', null);
+      var user = null
       if (!hasValidFetchedUserShape(usermain)) {
-if (usermain) {
-  globalThis.storage.removeItem('currentuser');
-}
-user = await getuser()
+        if (usermain) {
+          globalThis.storage.removeItem('currentuser');
+        }
+        user = await getuser()
 
-      }else{
+      } else {
         user = usermain
       }
       //console.log("user from home",user)
-      
+
       if (!user) {
         setCurrenuser(user)
-       
-       history.push('/login', { message: 'Session expired. Please re-login.' });
-       return;
+
+        history.push('/login', { message: 'Session expired. Please re-login.' });
+        return;
       }
-  
+
       setCurrentUser(user._id)
-      
+
       // Connect WebSocket
       const deviceId = getDeviceIdSync() || await getDeviceId();
       const clientType = Capacitor.isNativePlatform?.() ? "native" : "web";
       const wsUrl = `wss://${Maindata.SERVER_URL}?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}&clientType=${clientType}`;
-     
+
       if (!socket || socket.readyState === WebSocket.CLOSED) {
         //console.log('%c Is this on developing phase :' + 'Connecting to ws throug home', 'color: blue; font-size: 15px; font-weight: bold;')
-         connect(wsUrl);
-         console.log('%c wsUrl should work lol in home :' + wsUrl, 'color: red; font-size: 15px; font-weight: bold;');
+        connect(wsUrl);
+        console.log('%c wsUrl should work lol in home :' + wsUrl, 'color: red; font-size: 15px; font-weight: bold;');
 
       }
 
- 
 
-   
-setIsLoad(false)
+
+
+      setIsLoad(false)
       // Save the filtered list back to localStorage
       // //console.log('%c not good to see tjis :' + Maindata.IsDev, 'color: red; font-size: 15px; font-weight: bold;');
-   
-    //  //console.log("user saved",globalThis.storage.readJSON('', null))
-        const initAds = async () => {
-      try {
-        await ffmpeg_thumnail.initStartio({ appId: '205258541' });
-        console.log('Start.io initialized');
-      } catch (err) {
-        console.error('Error initializing Start.io:', err);
-      }
-    };
 
-    
+      //  //console.log("user saved",globalThis.storage.readJSON('', null))
+      const initAds = async () => {
+        try {
+          await ffmpeg_thumnail.initStartio({ appId: '205258541' });
+          console.log('Start.io initialized');
+        } catch (err) {
+          console.error('Error initializing Start.io:', err);
+        }
+      };
 
-  
-        //console.log("WebSocket is now ready, running loadMessages...");
-        await loadMessages();
-          
-        setIsIntialized(true);
-     
-    
 
-    
-     
-    
-     
+
+
+      //console.log("WebSocket is now ready, running loadMessages...");
+      await loadMessages();
+
+      setIsIntialized(true);
+
+
+
+
+
+
+
     }
-     
+
     setIsLoading(false)
-   
+
     //console.log("let my bro run ")
     fetchUsers();
 
     setupApp();
-    
-  setIsIntialized(true)
+
+    setIsIntialized(true)
     // Cleanup
- 
+
   }, []);
 
 
   function isCritical(versionStr) {
-  const v = parseFloat(versionStr);
-  return v % 0.5 === 0;
-}
+    const v = parseFloat(versionStr);
+    return v % 0.5 === 0;
+  }
 
 
 
 
-const handleMessageNotification = async (data) => {
-  //console.log('Handling message notification:', data);
+  const handleMessageNotification = async (data) => {
+    //console.log('Handling message notification:', data);
 
-  try {
-    // 1. Show local notification
-    showSystemTrayNotification({
-      senderId: data.sender,
-      content: data.content,
-      timestamp: data.timestamp,
-    });
+    try {
+      // 1. Show local notification
+      showSystemTrayNotification({
+        senderId: data.sender,
+        content: data.content,
+        timestamp: data.timestamp,
+      });
 
-    // 2. Database name
-    const dbName = 'Conversa_chats_store.db';
+      // 2. Database name
+      const dbName = 'Conversa_chats_store.db';
 
-    // 3. Open DB
-    const db = await new Promise((resolve, reject) => {
-      const database = window.sqlitePlugin.openDatabase({ name: dbName, location: 'default' },
-        () => resolve(database),
-        err => reject(err)
-      );
-    });
+      // 3. Open DB
+      const db = await new Promise((resolve, reject) => {
+        const database = window.sqlitePlugin.openDatabase({ name: dbName, location: 'default' },
+          () => resolve(database),
+          err => reject(err)
+        );
+      });
 
-    // 4. Execute SQL
-    db.transaction(tx => {
-      // Ensure table exists
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS messages (
+      // 4. Execute SQL
+      db.transaction(tx => {
+        // Ensure table exists
+        tx.executeSql(
+          `CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
           sender TEXT,
           recipient TEXT,
@@ -533,58 +537,58 @@ const handleMessageNotification = async (data) => {
           encryptedAESKey TEXT DEFAULT null,
           isReplyTo TEXT DEFAULT null
         );`
-      );
-      tx.executeSql(
-        `ALTER TABLE messages ADD COLUMN isReplyTo TEXT DEFAULT null;`,
-        [],
-        () => {},
-        () => false
-      );
+        );
+        tx.executeSql(
+          `ALTER TABLE messages ADD COLUMN isReplyTo TEXT DEFAULT null;`,
+          [],
+          () => { },
+          () => false
+        );
 
-      // Insert message
-      tx.executeSql(
-        `INSERT OR REPLACE INTO messages (
+        // Insert message
+        tx.executeSql(
+          `INSERT OR REPLACE INTO messages (
           id, sender, recipient, content, timestamp, status, read, isDeleted,
           isDownload, type, file_name, file_type, file_size, thumbnail,
           file_path, isError, isSent, isReplyTo
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          data.id,
-          data.sender,
-          data.recipient,
-          data.content,
-          data.timestamp,
-          data.status || 'delivered',
-          0,  // read
-          0,  // isDeleted
-          0,  // isDownload
-          data.type || 'text',
-          data.file_name || null,
-          data.file_type || null,
-          data.file_size || null,
-          data.thumbnail || null,
-          data.file_path || null,
-          0,  // isError
-          1,  // isSent
-          data.isReplyTo || null
-        ]
-      );
-    }, err => {
-      console.error('❌ Transaction error:', err);
-    }, () => {
-      //console.log('✅ Message saved to DB.');
-    });
+          [
+            data.id,
+            data.sender,
+            data.recipient,
+            data.content,
+            data.timestamp,
+            data.status || 'delivered',
+            0,  // read
+            0,  // isDeleted
+            0,  // isDownload
+            data.type || 'text',
+            data.file_name || null,
+            data.file_type || null,
+            data.file_size || null,
+            data.thumbnail || null,
+            data.file_path || null,
+            0,  // isError
+            1,  // isSent
+            data.isReplyTo || null
+          ]
+        );
+      }, err => {
+        console.error('❌ Transaction error:', err);
+      }, () => {
+        //console.log('✅ Message saved to DB.');
+      });
 
-  } catch (err) {
-    console.error('❌ Failed to handle message notification:', err);
-  }
-};
+    } catch (err) {
+      console.error('❌ Failed to handle message notification:', err);
+    }
+  };
 
 
-const handleCallNotification = (data) => {
-  //console.log('Handling call notification:', data);
-  // e.g., show incoming call UI, ring tone, etc.
-};
+  const handleCallNotification = (data) => {
+    //console.log('Handling call notification:', data);
+    // e.g., show incoming call UI, ring tone, etc.
+  };
 
 
   const notificationOpenedCallback = (result) => {
@@ -594,54 +598,54 @@ const handleCallNotification = (data) => {
 
 
   const showSystemTrayNotification = (notificationData) => {
-  const { senderId, content, timestamp } = notificationData;
+    const { senderId, content, timestamp } = notificationData;
 
-  // 1. Get sender name and avatar from localStorage
-  const sender = contactsById.get(senderId);
+    // 1. Get sender name and avatar from localStorage
+    const sender = contactsById.get(senderId);
 
-  const senderName = sender?.name || 'Unknown';
-  const avatar = sender?.avatar || null; // e.g., 'file:///path/to/avatar.png'
+    const senderName = sender?.name || 'Unknown';
+    const avatar = sender?.avatar || null; // e.g., 'file:///path/to/avatar.png'
 
-  // 2. Get custom sound for sender from localStorage
-  const senderSound = soundsBySenderId.get(senderId);
-  const soundPath = senderSound?.soundPath || 'default';
+    // 2. Get custom sound for sender from localStorage
+    const senderSound = soundsBySenderId.get(senderId);
+    const soundPath = senderSound?.soundPath || 'default';
 
-  // 3. Format body and time
-  const formattedBody = `${senderName}: ${content}`;
-  const formattedTime = new Date(timestamp).toLocaleTimeString();
+    // 3. Format body and time
+    const formattedBody = `${senderName}: ${content}`;
+    const formattedTime = new Date(timestamp).toLocaleTimeString();
 
-  // 4. Build the local notification
-  LocalNotifications.schedule({
-    notifications: [
-      {
-        id: new Date().getTime(), // unique ID
-        title: 'New Message',
-        body: `${formattedBody}  (${formattedTime})`,
-        schedule: { at: new Date() },
-        sound: soundPath, // custom or 'default'
-        attachments: avatar ? [avatar] : [],
-        smallIcon: 'echoidv2',
-        android: {
-          channelId: 'default',
-          color: '#ffffff',
-          priority: 2,
+    // 4. Build the local notification
+    LocalNotifications.schedule({
+      notifications: [
+        {
+          id: new Date().getTime(), // unique ID
+          title: 'New Message',
+          body: `${formattedBody}  (${formattedTime})`,
+          schedule: { at: new Date() },
+          sound: soundPath, // custom or 'default'
+          attachments: avatar ? [avatar] : [],
+          smallIcon: 'echoidv2',
+          android: {
+            channelId: 'default',
+            color: '#ffffff',
+            priority: 2,
+          },
         },
-      },
-    ],
-  });
-};
-
-  
+      ],
+    });
+  };
 
 
 
-  useEffect(()=>{
-    if(isIntialized===true){
+
+
+  useEffect(() => {
+    if (isIntialized === true) {
       return;
     }
 
 
-  },[setMessages])
+  }, [setMessages])
 
   useEffect(() => {
     let cancelled = false;
@@ -699,7 +703,7 @@ const handleCallNotification = (data) => {
         onMove: ev => handleSwipe(ev),
       });
       gesture.enable();
-  
+
       return () => gesture.destroy();
     } else {
       console.warn('Swipe container not found');
@@ -854,34 +858,34 @@ const handleCallNotification = (data) => {
         return;
       }
       //console.log("Checking for user updates...");
-  
+
       const storedUsers = readJSON('usersMain', []);
-  
+
       // Create timestamps array from stored users
       const timestamps = storedUsers.map(user => ({
         id: user.id,
         updatedAt: user.updatedAt || new Date(0).toISOString() // fallback to very old date
       }));
-  
+
 
       const response = await api.allUsers(host, timestamps);
-  
+
       if (response.ok) {
         const data = await response.json();
         const { userDetails, currentUserId } = data;
-  
+
         if (userDetails.length === 0) {
           //console.log("No user updates");
           return;
         }
-  
+
         // Merge updated users into storedUsers
         const updatedUserMap = new Map(userDetails.map(u => [u.id, u]));
         const mergedUsers = storedUsers.map(user => {
           const updated = updatedUserMap.get(user.id);
-        
+
           if (!updated) return user; // If no updated user, keep as-is
-        
+
           return {
             ...user,
             name: updated.name ?? user.name,
@@ -892,12 +896,12 @@ const handleCallNotification = (data) => {
             updatedAt: updated.updatedAt ?? user.updatedAt,
             avatar: updated.profilePic || img,
             About: updated.About || user.About,
-              publicKey:updated.publicKey || user.publicKey,
+            publicKey: updated.publicKey || user.publicKey,
 
-            
+
           };
         });
-  
+
         // Add any new users not already in local storage
         const newUsers = userDetails
           .filter(u => !storedUsers.some(su => su.id === u.id))
@@ -910,15 +914,15 @@ const handleCallNotification = (data) => {
             unreadCount: 0,
             phoneNumber: u.phoneNumber || null,
             updatedAt: u.updatedAt,
-            gender:u.gender,
-            dob:u.dob,
-            Location:u.location,
-            About:u.About,
-            publicKey:u.publicKey
+            gender: u.gender,
+            dob: u.dob,
+            Location: u.location,
+            About: u.About,
+            publicKey: u.publicKey
           }));
-  
+
         const finalUserList = [...mergedUsers, ...newUsers];
-  
+
         setUsersMain(finalUserList);
         setUsersMaintest(finalUserList);
         writeJSON('usersMain', finalUserList);
@@ -927,7 +931,7 @@ const handleCallNotification = (data) => {
       console.error("Error fetching users:", error);
     }
   }, [history, host, readJSON, writeJSON]);
-  
+
   async function sendPublicKeyToBackend(userId) {
     let currentUser = readJSON('currentuser', null);
     if (!currentUser) {
@@ -1014,8 +1018,8 @@ const handleCallNotification = (data) => {
       try {
         await getmessages();
         const results = await messagesRef.current;
-        
-     //console.log("main messages",JSON.stringify(results))
+
+        //console.log("main messages",JSON.stringify(results))
         mainMessages = results.map(row => ({
           id: row.id,
           sender: row.sender,
@@ -1038,42 +1042,42 @@ const handleCallNotification = (data) => {
           encryptedAESKey: row.encryptedAESKey || null,
           isReplyTo: row.isReplyTo || null
 
-          
+
         }));
       } catch (err) {
         console.error('Error retrieving messages from SQLite:', err);
         return [];
       }
     } else {
-       await getmessages();
-       
+      await getmessages();
+
       mainMessages = messagesRef.current
-   
-     //console.log("main messages",mainMessages)
+
+      //console.log("main messages",mainMessages)
     }
-  
+
     const latestMessages = {};
     const unreadCountsMap = {};
-   
+
     for (const message of mainMessages) {
-     
+
       const otherUserId = message.sender === currentUserId ? message.recipient : message.sender;
 
- 
-  const users = globalThis.storage.readJSON('usersMain', []);
+
+      const users = globalThis.storage.readJSON('usersMain', []);
 
       // Check if the user exists in `usersMain`
       const filteredUsers = users.filter((user) => user.id);
 
       // Check if a user with the specified `otherUserId` exists in the filtered list
       let userExists = filteredUsers.some((user) => user.id === otherUserId);
- 
+
       if (!userExists) {
-      if(!otherUserId) return 
+        if (!otherUserId) return
         // Fetch the user's details if they don't exist in `usersMain`
         const response = await api.fetchUser(host, otherUserId);
         const data = await response.json();
-console.log("Fetched user details for missing user:", data);
+        console.log("Fetched user details for missing user:", data);
         if (response.ok && data.success) {
           const newUser = buildUsersMainEntry(data?.userResponse || null, {
             lastMessage: message.content,
@@ -1084,7 +1088,7 @@ console.log("Fetched user details for missing user:", data);
             console.error("Skipping invalid fetched user payload in HomeScreen", data?.userResponse);
             continue;
           }
-        
+
 
           // Add the new user to `usersMain` and localStorage
           setUsersMain(prevUsers => {
@@ -1096,102 +1100,102 @@ console.log("Fetched user details for missing user:", data);
               const { profilePhoto, ...otherDetails } = user;
               //console.log("User details (without photo) in homescreen:", otherDetails);
             });
-          
+
 
             globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers));
             return updatedUsers;
           });
-         setUsersMaintest((prevUsers) => {
+          setUsersMaintest((prevUsers) => {
             // Ensure no duplicates by filtering out users with the same id
             const updatedUsers = [
               ...prevUsers,
               newUser
             ].filter((user, index, self) => index === self.findIndex((u) => u.id === user.id)); // Ensuring no duplicates
-            
-      
+
+
             return updatedUsers;
           });
-          
-  
+
+
           userExists = true; // Mark as exists for further processing
         } else {
           console.error("Failed to fetch user details");
         }
       }
-  
+
       if (userExists) {
-      
+
         // Update latest message and unread count for the existing user
         if (!latestMessages[otherUserId] || new Date(message.timestamp) > new Date(latestMessages[otherUserId].timestamp)) {
-        
+
           latestMessages[otherUserId] = message;
-         
+
         }
         if (message.read === 0 && message.sender !== currentUserId) {
           unreadCountsMap[otherUserId] = (unreadCountsMap[otherUserId] || 0) + 1;
         }
-   
+
       }
     }
-    
+
     setUnreadCounts(unreadCountsMap);
-  
+
     // Update `usersMain` and sort by latest message timestamp
     setUsersMain((prevUsers) => {
       const updatedUsers1 = prevUsers.map(user => {
         const newMsg = latestMessages[user.id];
         const hasNewMessage = Boolean(newMsg);
-    
+
         return {
           ...user,
-          lastMessage: hasNewMessage 
-            ? newMsg.content 
+          lastMessage: hasNewMessage
+            ? newMsg.content
             : user.lastMessage || "No messages yet",
-    
-          timestamp: hasNewMessage 
-            ? newMsg.timestamp 
+
+          timestamp: hasNewMessage
+            ? newMsg.timestamp
             : user.timestamp,
-    
+
           unreadCount: unreadCountsMap[user.id] || 0,
         };
       });
 
-    
+
       globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers1));
-    
+
       return updatedUsers1; // ✅ You missed this passed!
     });
-   setUsersMaintest((prevUsers) => {
+    setUsersMaintest((prevUsers) => {
       // Map through the users and update based on latest messages and unread counts
       const updatedUsers1 = prevUsers.map(user => {
         const newMsg = latestMessages[user.id]; // Retrieve the latest message for the user
         const hasNewMessage = Boolean(newMsg);  // Check if a new message exists for the user
-    
+
         // Update user details based on whether there’s a new message
         return {
           ...user,
-          lastMessage: hasNewMessage 
+          lastMessage: hasNewMessage
             ? newMsg.content  // Set new message content if exists
             : user.lastMessage || "No messages yet",  // Default message if no new message
-    
-          timestamp: hasNewMessage 
+
+          timestamp: hasNewMessage
             ? newMsg.timestamp  // Update timestamp if there's a new message
             : user.timestamp,   // Keep the original timestamp if no new message
-    
+
           unreadCount: unreadCountsMap[user.id] || 0,  // Set unread count for the user
         };
       });
-    
+
       // Persist the updated users array to localStorage
-    //  globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers1));
-    
+      //  globalThis.storage.setItem('usersMain', JSON.stringify(updatedUsers1));
+
       // Return the updated users list to update Zustand state
       return updatedUsers1;
     });
-    
-    
+
+
   };
-  
+
   const updateMessage = async (message) => {
     if (isPlatform('hybrid')) {
       // Hybrid platform (e.g., mobile app with Capacitor or Cordova)
@@ -1253,25 +1257,25 @@ console.log("Fetched user details for missing user:", data);
             isReplyTo = ?
           WHERE id = ?
         `;
-  
+
         const values = [
-          updatedMessage.content, 
-          updatedMessage.timestamp, 
-          updatedMessage.status, 
-          updatedMessage.read, 
-          updatedMessage.isDeleted, 
-          updatedMessage.isDownload, 
-          updatedMessage.file_name, 
-          updatedMessage.file_type, 
-          updatedMessage.file_size, 
-          updatedMessage.thumbnail, 
-          updatedMessage.file_path, 
-          updatedMessage.isError, 
-          updatedMessage.isSent, 
+          updatedMessage.content,
+          updatedMessage.timestamp,
+          updatedMessage.status,
+          updatedMessage.read,
+          updatedMessage.isDeleted,
+          updatedMessage.isDownload,
+          updatedMessage.file_name,
+          updatedMessage.file_type,
+          updatedMessage.file_size,
+          updatedMessage.thumbnail,
+          updatedMessage.file_path,
+          updatedMessage.isError,
+          updatedMessage.isSent,
           updatedMessage.isReplyTo,
           updatedMessage.id
         ];
-  
+
         await db.executeSql(updateQuery, values);
         //console.log("Updated message in SQLite:", message);
       } catch (err) {
@@ -1281,13 +1285,13 @@ console.log("Fetched user details for missing user:", data);
       // Web platform (e.g., desktop or browser)
       try {
         const users = readJSON('usersMain', []);
-  
+
         // Update message in localStorage
         const updatedUsers = users.map(user => {
           if (user.id === message.sender || user.id === message.recipient) {
             user.lastMessage = message.content;
             user.timestamp = message.timestamp;
-            
+
             // If the message is unread, increment unread count for the user
             if (message.read === 0 && message.sender !== currentUserId) {
               user.unreadCount = (user.unreadCount || 0) + 1;
@@ -1295,7 +1299,7 @@ console.log("Fetched user details for missing user:", data);
           }
           return user;
         });
-  
+
         // Save back to localStorage
         writeJSON('usersMain', updatedUsers);
         //console.log("Updated message in localStorage:", message);
@@ -1306,9 +1310,9 @@ console.log("Fetched user details for missing user:", data);
       console.error("Unsupported platform");
     }
   };
-  
-  
-  const handleUserClick = async(user) => {
+
+
+  const handleUserClick = async (user) => {
     //console.log("click the main user ",JSON.stringify(user.id))
     await clearDirectNotificationForUser?.(user?.id);
     setSelectedUser1(user);
@@ -1319,9 +1323,9 @@ console.log("Fetched user details for missing user:", data);
       return;
     }
 
-    history.push('/chatwindow', { userdetails: user, callback: 'goBackToUserList',currentUserId });
+    history.push('/chatwindow', { userdetails: user, callback: 'goBackToUserList', currentUserId });
   };
-  
+
   // Reset selected user to go back to the user list
   const goBackToUserList = () => {
     setSelectedUser1(null);
@@ -1345,7 +1349,9 @@ console.log("Fetched user details for missing user:", data);
 
   const toggleMenu = () => setMenuVisible(prev => !prev);
   const closeMenu = () => setMenuVisible(false);
-  const logout = async () =>{
+  const logout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
       const refreshToken = await getRefreshToken();
       if (refreshToken) {
@@ -1356,6 +1362,7 @@ console.log("Fetched user details for missing user:", data);
     } finally {
       await clearTokens();
       history.push('/login')
+      setIsLoggingOut(false);
     }
   }
 
@@ -1374,17 +1381,17 @@ console.log("Fetched user details for missing user:", data);
     setSelectedChats([]);
   };
 
-  const handleArchive = async() => {
+  const handleArchive = async () => {
     //console.log("Archive button clicked");
-  
+
     let usersMain = readJSON("usersMain", []);
-  
+
     // Archive and mute logic update
     const updatedUsers = usersMain.map(user => {
       if (selectedUsers.includes(user.id)) {
         const currentArchiveStatus = user.isArchive || false;
         const newArchiveStatus = !currentArchiveStatus;
-  
+
         return {
           ...user,
           isArchive: newArchiveStatus,
@@ -1393,7 +1400,7 @@ console.log("Fetched user details for missing user:", data);
       }
       return user;
     });
-  
+
     // Determine new muted list based on isMuted flags
     const updatedMutedUsers = updatedUsers.reduce((acc, user) => {
       if (user.isMuted && selectedUsers.includes(user.id)) {
@@ -1403,7 +1410,7 @@ console.log("Fetched user details for missing user:", data);
       }
       return acc;
     }, globalThis.storage.readJSON("mutedUsers", null) || []);
-  
+
     // Save to localStorage
     writeJSON("usersMain", updatedUsers);
     writeJSON("mutedUsers", updatedMutedUsers);
@@ -1411,21 +1418,21 @@ console.log("Fetched user details for missing user:", data);
     setUsersMain(updatedUsers);
     setmutedList(updatedMutedUsers);
     setMenuVisible(prev => !prev);
-    
-       await Toast.show({
-        text: 'Archived and synced mute',
-        duration: 'short',
-      });
-  
+
+    await Toast.show({
+      text: 'Archived and synced mute',
+      duration: 'short',
+    });
+
     //console.log(`Toggled archive and synced mute for: ${selectedUsers.join(', ')}`);
   };
-  
+
   const handleDeleteChat = () => {
     setShowModal(true);
     //console.log("Delete Chat button clicked");
   };
-  
-  
+
+
   const handleConfirmAction = () => {
     // Confirm the action (delete, archive, or share)
     setShowAlert(false);
@@ -1452,50 +1459,50 @@ console.log("Fetched user details for missing user:", data);
 
   const handlePartialDelete = async () => {
     let usersMain = readJSON("usersMain", []);
-  
+
     const selectedUserIds = selectedUsers
-  //console.log("selectedUserIds",selectedUserIds);
+    //console.log("selectedUserIds",selectedUserIds);
     const updatedUsers = usersMain.map(user => {
       if (selectedUserIds.includes(user.id)) {
         return { ...user, isPartialDelete: true };
       }
       return user;
     });
-  
+
     writeJSON("usersMain", updatedUsers);
     setUsersMain(updatedUsers);
-  
+
     //console.log(`Marked users ${selectedUserIds.join(', ')} as partially deleted`);
-  
+
     setShowModal(false); // Close the modal
-      setSelectedChats([]); 
-           await Toast.show({
-            text: 'User hided successfully',
-            duration: 'short',
-          });
-      
+    setSelectedChats([]);
+    await Toast.show({
+      text: 'User hided successfully',
+      duration: 'short',
+    });
+
   };
-  
-  const handleWipeChat = async() => {
+
+  const handleWipeChat = async () => {
     //console.log("Wipe the chat completely");
-  
+
     const selectedUserIds = selectedUsers // Get all selected user IDs
-  
+
     // Web (Browser)
     if (!isPlatform('web')) {
       //console.log("Web platform detected");
-  
+
       // Remove matching users from 'userMain'
       const userMain = readJSON("usersMain", null);
- 
-  if (Array.isArray(userMain)) {
-    const FilteruserMain = userMain.filter(user => !selectedUserIds.includes(user.id));
-    writeJSON("usersMain", FilteruserMain);
-    // console.log("Filtered usersMain in localStorage");
-      setUsersMain(FilteruserMain);
-  }
-  
-  
+
+      if (Array.isArray(userMain)) {
+        const FilteruserMain = userMain.filter(user => !selectedUserIds.includes(user.id));
+        writeJSON("usersMain", FilteruserMain);
+        // console.log("Filtered usersMain in localStorage");
+        setUsersMain(FilteruserMain);
+      }
+
+
       // Remove messages related to selected users
       let messages = readJSON("messages", []);
       messages = messages.filter(
@@ -1504,18 +1511,18 @@ console.log("Fetched user details for missing user:", data);
       writeJSON("messages", messages);
       //console.log("Deleted messages related to selected users from localStorage");
     }
-  
+
     // Android (Hybrid)
     if (isPlatform('hybrid')) {
       const userMain = readJSON("usersMain", null);
-     if (Array.isArray(userMain)) {
-       const FilteruserMain  = userMain.filter(user => !selectedUserIds.includes(user.id));
-    writeJSON("usersMain", FilteruserMain);
-    // console.log("Filtered usersMain in localStorage");
-    setUsersMain(FilteruserMain);
-  }
+      if (Array.isArray(userMain)) {
+        const FilteruserMain = userMain.filter(user => !selectedUserIds.includes(user.id));
+        writeJSON("usersMain", FilteruserMain);
+        // console.log("Filtered usersMain in localStorage");
+        setUsersMain(FilteruserMain);
+      }
 
-  
+
       // Run SQL delete for each selected user
       db.transaction(tx => {
         selectedUserIds.forEach(userId => {
@@ -1525,7 +1532,7 @@ console.log("Fetched user details for missing user:", data);
           `;
           tx.executeSql(
             query,
-            [userId ,userId],
+            [userId, userId],
             (_, result) => {
               console.log(`✅ Deleted messages for user ${userId}`);
             },
@@ -1538,19 +1545,19 @@ console.log("Fetched user details for missing user:", data);
       });
     }
 
-    setSelectedChats([]); 
-         await Toast.show({
-          text: 'successfully deleted users',
-          duration: 'short',
-        });
-    
+    setSelectedChats([]);
+    await Toast.show({
+      text: 'successfully deleted users',
+      duration: 'short',
+    });
+
     setShowModal(false); // Close the modal
   };
-  const toggleMute = async() => {
+  const toggleMute = async () => {
     setmutedList(prevMutedUsers => {
       // selectedUsers already contains IDs
       const selectedUserIds = selectedUsers;
-  //console.log("selected users",selectedUserIds)
+      //console.log("selected users",selectedUserIds)
       // Toggle mute status for each selected user
       const updatedMutedUsers = selectedUserIds.reduce((acc, userId) => {
         if (acc.includes(userId)) {
@@ -1561,18 +1568,18 @@ console.log("Fetched user details for missing user:", data);
           return [...acc, userId];
         }
       }, [...prevMutedUsers]); // Start with previous muted users
- // console.log("updated muted users",updatedMutedUsers)
+      // console.log("updated muted users",updatedMutedUsers)
       // Update localStorage with the updated muted users
       writeJSON('mutedUsers', updatedMutedUsers);
 
       return updatedMutedUsers; // Return the updated state
     });
- 
-        await  Toast.show({
-          text: 'user toggle muted',
-          duration: 'short',
-        });
-    
+
+    await Toast.show({
+      text: 'user toggle muted',
+      duration: 'short',
+    });
+
   };
 
   const markAllChatsRead = useCallback(() => {
@@ -1595,8 +1602,8 @@ console.log("Fetched user details for missing user:", data);
   }, [activeFooter, history]);
 
   const handleImportChats = useCallback(async () => {
-console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
-    if(Capacitor.isNativePlatform?.()){
+    console.log("Import chats button clicked", Capacitor.isNativePlatform?.());
+    if (Capacitor.isNativePlatform?.()) {
       history.push("/newchat");
       return;
     }
@@ -1649,8 +1656,7 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
     });
   }, [socket]);
 
-  
-  
+
   const headerTitle = "EchoId";
   const headerSubtitle = activeFooter === "Calls"
     ? `${(calls || []).length} call logs`
@@ -1678,7 +1684,7 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
             <div className="home-screen-copy">
               <h5 className="home-screen-title">
                 {headerTitle}
-                {echoIdUnreadNotifications > 0 ? <span className="home-screen-echoid-dot" aria-label={`${echoIdUnreadNotifications} unread EchoId notifications`} /> : null}
+                {echoIdUnreadNotifications > 0 ? <img src="envelope.png" style={{ height: '28px', width: '28px', }} aria-label={`${echoIdUnreadNotifications} unread EchoId notifications`} /> : null}
               </h5>
               <div className="home-screen-subtitle">{headerSubtitle}</div>
             </div>
@@ -1757,12 +1763,12 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
                     setMenuVisible(false);
                     history.push('/Profile');
                   }}>Profile Settings</button>
-                  <button className="btn"  onClick={(e) => {
+                  <button className="btn" onClick={(e) => {
                     e.currentTarget.blur();
                     setMenuVisible(prev => !prev);
                     history.push('/Archived');
                   }}>Archived Chats</button>
-                  <button className="btn"  onClick={(e) => {
+                  <button className="btn" onClick={(e) => {
                     e.currentTarget.blur();
                     setMenuVisible(false);
                     history.push('/AdminChat');
@@ -1876,9 +1882,9 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
     </div>
   ) : desktopSelectedUser ? (
     <div className="desktop-chat-embed-shell">
-        <ChatWindow
-          db={db}
-          socket={socket}
+      <ChatWindow
+        db={db}
+        socket={socket}
         setMessages={setMessages}
         saveMessage={saveMessage}
         selectedUser={selectedUser}
@@ -1895,11 +1901,11 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
         customSounds={customSounds}
         setCustomSounds={setCustomSounds}
         clearDirectNotificationForUser={clearDirectNotificationForUser}
-          embedded
-          embeddedUser={desktopSelectedUser}
-          onEmbeddedUserChange={setDesktopSelectedUser}
-          onEmbeddedBack={goBackToUserList}
-        />
+        embedded
+        embeddedUser={desktopSelectedUser}
+        onEmbeddedUserChange={setDesktopSelectedUser}
+        onEmbeddedBack={goBackToUserList}
+      />
     </div>
   ) : (
     <div className="desktop-home-placeholder">
@@ -1999,11 +2005,11 @@ console.log("Import chats button clicked",Capacitor.isNativePlatform?.());
           showPrimaryAction={canCreateChat}
         />
       )}
-       <IonLoading
-        isOpen={false}
-        message={'Loading...'}
+      <IonLoading
+        isOpen={isLoggingOut}
+        message={'Logging out...'}
         duration={0}
-      /> 
+      />
       <IonAlert isOpen={showAlert} message={alertMessage} buttons={[{ text: 'Ok', handler: () => setShowAlert(false) }]} />
     </IonContent>
   );

@@ -12,3 +12,15 @@ window.matchMedia = window.matchMedia || function() {
     removeListener: function() {}
   };
 };
+
+if (typeof window.ResizeObserver === "undefined") {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = window.ResizeObserver;
+}

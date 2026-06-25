@@ -312,127 +312,132 @@ var num =0
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-900 text-gray-200">
-
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-950 border-b border-slate-700">
-        <div className="flex items-center gap-3">
-          {selectionMode ? (
-            <button
-              onClick={cancelSelection}
-              className="text-gray-300 hover:text-gray-100 text-sm"
-              title="Cancel selection"
-            >
-              X
-            </button>
-          ) : (
-            <button onClick={() => history.goBack()} title="Back">
-              <BiArrowBack size={20} />
-            </button>
-          )}
-          <h1 className="font-semibold text-lg text-white">
-            Developer Chat
-          </h1>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectionMode && selectedIds.size > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              className="text-red-400 hover:text-red-300 text-sm"
-              title="Delete selected"
-            >
-              Delete
-            </button>
-          )}
-          {!selectionMode && (
-            <button
-              onClick={handleRefresh}
-              className={`text-gray-200 ${isRefreshing ? "opacity-60" : ""}`}
-              title="Refresh messages"
-              disabled={isRefreshing}
-            >
-              <FaSyncAlt size={18} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div
-        className="flex-1 overflow-y-auto px-4 py-3 flex flex-col-reverse gap-3"
-        data-testid="admin-messages"
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const maxScrollTop = Math.max(el.scrollHeight - el.clientHeight, 0);
-         //console.log("maxscrolltop",maxScrollTop,"el.scroll",el.scrollTop)
-          if (maxScrollTop > 0 && el.scrollTop <= -maxScrollTop +1 ) {
-            handleLoadOlder();
-          }
-        }}
-      >
-        {[...messages].reverse().map(msg => {
-          const id = getMsgId(msg) || msg.id;
-          const selected = id && selectedIds.has(id);
-          return (
-            <div
-              key={id}
-              data-testid="admin-message"
-              onClick={() => selectionMode && toggleSelection(msg)}
-              {...makeLongPressHandlers(msg)}
-              className={selected ? "ring-2 ring-red-400 rounded-2xl" : ""}
-            >
-              <div
-                className={`max-w-[75%] px-4 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
-                  ${msg.sender === "admin"
-                    ? "bg-slate-800 text-gray-200 self-start"
-                    : "bg-blue-600 text-white self-end ml-auto"
-                  }`}
+    <div className="h-screen bg-slate-950 flex justify-center">
+      <div className="w-full max-w-2xl h-full flex flex-col bg-slate-900 text-gray-200 shadow-2xl relative">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-950 border-b border-slate-700 z-10">
+          <div className="flex items-center gap-3">
+            {selectionMode ? (
+              <button
+                onClick={cancelSelection}
+                className="text-gray-300 hover:text-gray-100 text-sm w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800"
+                title="Cancel selection"
               >
-                <div>{msg.content}</div>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>
-                    {msg.timestamp
-                      ? new Date(msg.timestamp).toLocaleString()
-                      : ""}
-                  </span>
-                  {msg.sender === "admin" && (
-                    <span>{msg.read ? "Read" : "Unread"}</span>
-                  )}
+                ✕
+              </button>
+            ) : (
+              <button 
+                onClick={() => history.goBack()} 
+                title="Back"
+                className="p-1 rounded-full hover:bg-slate-800 transition-colors"
+              >
+                <BiArrowBack size={20} />
+              </button>
+            )}
+            <h1 className="font-semibold text-lg text-white">
+              Developer Chat
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {selectionMode && selectedIds.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="text-red-400 hover:text-red-300 text-sm font-medium px-3 py-1 rounded-lg hover:bg-red-400/10 transition-colors"
+                title="Delete selected"
+              >
+                Delete
+              </button>
+            )}
+            {!selectionMode && (
+              <button
+                onClick={handleRefresh}
+                className={`text-gray-200 p-2 rounded-full hover:bg-slate-800 transition-all ${isRefreshing ? "opacity-60" : ""}`}
+                title="Refresh messages"
+                disabled={isRefreshing}
+              >
+                <FaSyncAlt size={18} className={isRefreshing ? "animate-spin" : ""} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3 flex flex-col-reverse gap-3 scrollbar-thin scrollbar-thumb-slate-700"
+          data-testid="admin-messages"
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const maxScrollTop = Math.max(el.scrollHeight - el.clientHeight, 0);
+            if (maxScrollTop > 0 && el.scrollTop <= -maxScrollTop + 1) {
+              handleLoadOlder();
+            }
+          }}
+        >
+          {[...messages].reverse().map(msg => {
+            const id = getMsgId(msg) || msg.id;
+            const selected = id && selectedIds.has(id);
+            return (
+              <div
+                key={id}
+                data-testid="admin-message"
+                onClick={() => selectionMode && toggleSelection(msg)}
+                {...makeLongPressHandlers(msg)}
+                className={`transition-all duration-200 ${selected ? "ring-2 ring-red-400/50 rounded-2xl bg-red-400/5" : ""}`}
+              >
+                <div
+                  className={`max-w-[85%] sm:max-w-[75%] px-4 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm
+                    ${msg.sender === "admin"
+                      ? "bg-slate-800 text-gray-200 self-start rounded-tl-none"
+                      : "bg-blue-600 text-white self-end ml-auto rounded-tr-none"
+                    }`}
+                >
+                  <div>{msg.content}</div>
+                  <div className={`mt-1 flex items-center justify-between text-[11px] ${msg.sender === "admin" ? "text-slate-400" : "text-blue-100/70"}`}>
+                    <span>
+                      {msg.timestamp
+                        ? new Date(msg.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                        : ""}
+                    </span>
+                    {msg.sender === "admin" && (
+                      <span className="font-medium">{msg.read ? "Read" : "Unread"}</span>
+                    )}
+                  </div>
                 </div>
               </div>
+            );
+          })}
+          {cachedCount > visibleCount && (
+            <div className="flex justify-center my-4">
+              <button
+                type="button"
+                onClick={handleLoadOlder}
+                className="text-xs text-slate-300 hover:text-white border border-slate-700 px-4 py-1.5 rounded-full bg-slate-800/50 hover:bg-slate-800 transition-colors"
+              >
+                {loadingOlder ? "Loading..." : "Load older"}
+              </button>
             </div>
-          );
-        })}
-        {cachedCount > visibleCount && (
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={handleLoadOlder}
-              className="text-xs text-slate-300 hover:text-white border border-slate-700 px-3 py-1 rounded-full"
-            >
-              {loadingOlder ? "Loading..." : "Load older"}
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-slate-700 bg-slate-900 flex gap-2">
-        <input
-        disabled={false}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 bg-slate-950 border border-slate-600 rounded-xl px-4 py-2 text-sm outline-none text-gray-200 placeholder-gray-400"
-        />
-        <button
-        disabled={false}
-          onClick={handleSend}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 rounded-xl transition"
-        >
-          Send
-        </button>
+        {/* Input */}
+        <div className="p-3 border-t border-slate-700 bg-slate-950/80 backdrop-blur-md flex gap-2">
+          <input
+            disabled={false}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSend()}
+            placeholder="Type your message..."
+            className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none text-gray-200 placeholder-gray-500 focus:border-blue-500/50 transition-colors"
+          />
+          <button
+            disabled={!input.trim()}
+            onClick={handleSend}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:bg-slate-700 text-white px-5 rounded-xl font-medium transition-all active:scale-95"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );

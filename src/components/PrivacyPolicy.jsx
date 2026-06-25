@@ -65,8 +65,13 @@ const policySections = [
     body: "If you have questions about privacy, contact support through admin chat in settings.",
   },
   {
+    title: "Anonymous posts",
+    body:
+      "EchoID supports anonymous posting through Maskey Tier 3 anonymization. When a post is created anonymously, the system is designed to separate the author's identity from the published content and minimize the ability to link the two. If a user does not voluntarily reveal identifying information within the post or through external actions, determining the author's identity from the anonymous post alone is intended to be computationally and practically infeasible under normal operation. However, anonymity may be reduced if users disclose personal information, reuse identifiable usernames elsewhere, reveal their identity through writing patterns, or if disclosure is required by applicable law.",
+  },
+  {
     title: "Permissions and their usage ",
-    body:"We request permissions for camera, microphone, photos/media/files, contacts, background activity ,overlay and notifications. Camera and microphone access are used for calls and voice messages. Photo and media access are used for profile images and attachments. Contacts access is optional and only used to show your device contacts when you create a new chat. Notifications permission is used to send you alerts about new messages and calls.Background activity permission is used to keep the app running in the background for timely message delivery and notifications. Overlay permission is used to show incoming call screens and chat heads when the app is in the background. We only request permissions that are necessary for the app's core functionality, and you can choose to grant or deny them based on your preferences.",
+    body: "We request permissions for camera, microphone, photos/media/files, contacts, background activity ,overlay and notifications. Camera and microphone access are used for calls and voice messages. Photo and media access are used for profile images and attachments. Contacts access is optional and only used to show your device contacts when you create a new chat. Notifications permission is used to send you alerts about new messages and calls.Background activity permission is used to keep the app running in the background for timely message delivery and notifications. Overlay permission is used to show incoming call screens and chat heads when the app is in the background. We only request permissions that are necessary for the app's core functionality, and you can choose to grant or deny them based on your preferences.",
   }
 ];
 

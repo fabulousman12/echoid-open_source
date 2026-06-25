@@ -11,18 +11,30 @@ vi.mock("lucide-react", () => {
   return {
     ArrowLeft: Icon,
     Bell: Icon,
+    Ban: Icon,
     ChevronRight: Icon,
     CircleUserRound: Icon,
     Compass: Icon,
     Filter: Icon,
+    Flag: Icon,
     Home: Icon,
     Image: Icon,
+    Maximize2: Icon,
     Menu: Icon,
+    MessageCircle: Icon,
     MessageSquarePlus: Icon,
+    Minus: Icon,
+    Pause: Icon,
+    Play: Icon,
+    Plus: Icon,
     Search: Icon,
+    Settings: Icon,
     Sparkles: Icon,
+    ThumbsUp: Icon,
     TriangleAlert: Icon,
     Video: Icon,
+    Volume2: Icon,
+    VolumeX: Icon,
   };
 });
 
@@ -30,6 +42,16 @@ vi.mock("sweetalert2", () => ({
   default: {
     fire: vi.fn(),
   },
+}));
+
+vi.mock("react-virtuoso", () => ({
+  Virtuoso: ({ data = [], itemContent, className }) => (
+    <div className={className} data-testid="virtuoso-item-list">
+      {data.map((item, index) => (
+        <div key={item?._id || item?.id || index}>{itemContent(index, item)}</div>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("../services/api", () => ({
@@ -52,11 +74,27 @@ vi.mock("../services/api", () => ({
     postCommentReplies: vi.fn(),
     createPostComment: vi.fn(),
     postMyPosts: vi.fn(),
+    postMyAnonymousPosts: vi.fn(),
     postByClientId: vi.fn(),
+    anonymousPostById: vi.fn(),
+    anonymousPostDelete: vi.fn(),
+    postNotifications: vi.fn(),
     postUploadInit: vi.fn(),
     postUploadDelete: vi.fn(),
     createPost: vi.fn(),
+    createAnonymousPost: vi.fn(),
   },
+}));
+
+vi.mock("../services/anonymousPosterVault", () => ({
+  readAnonymousPosterSecret: vi.fn(() => ({
+    anonymousId: "anon-poster-1",
+    authsec: "anon-secret-1",
+  })),
+  saveAnonymousPosterSecretFromVault: vi.fn(async () => ({
+    anonymousId: "anon-poster-1",
+    authsec: "anon-secret-1",
+  })),
 }));
 
 vi.mock("../services/anonymousProfileStorage", () => ({
@@ -114,6 +152,9 @@ beforeEach(() => {
   api.postFeed.mockResolvedValue(jsonResponse({ success: true, posts: [] }));
   api.postSearch.mockResolvedValue(jsonResponse({ success: true, posts: [] }));
   api.postById.mockResolvedValue(jsonResponse({ success: true, post: null }, 404));
+  api.anonymousPostById.mockResolvedValue(jsonResponse({ success: true, post: null }, 404));
+  api.postNotifications.mockResolvedValue(jsonResponse({ success: true, notifications: [] }));
+  api.postMyAnonymousPosts.mockResolvedValue(jsonResponse({ success: true, posts: [] }));
   api.postReactionsBatch.mockResolvedValue(jsonResponse({ success: true, reactions: [] }));
   api.postLike.mockResolvedValue(jsonResponse({ success: true, likes: 0, dislikes: 0 }));
   api.postDislike.mockResolvedValue(jsonResponse({ success: true, likes: 0, dislikes: 0 }));
@@ -1176,7 +1217,7 @@ test("lazily fetches replies for a comment when the reply count is opened", asyn
   fireEvent.click(await findByText("Show comments"));
   expect(await findByText("Marcus Chen")).toBeTruthy();
 
-  fireEvent.click(getByText("2 replies"));
+  fireEvent.click(getByText(/2 replies/));
 
   expect(api.postCommentReplies).toHaveBeenCalledWith("https://api.example.com", "comment-thread-parent");
   expect(await findByText("Loaded on demand")).toBeTruthy();
@@ -1305,7 +1346,7 @@ test("publishes uploaded media with Link_cover for the selected cover image", as
         contentType: "image/png",
       })
     );
-  api.createPost.mockResolvedValue(
+  api.createAnonymousPost.mockResolvedValue(
     jsonResponse({
       success: true,
       post: {
@@ -1342,14 +1383,16 @@ test("publishes uploaded media with Link_cover for the selected cover image", as
   });
 
   expect(api.postUploadInit).toHaveBeenCalledTimes(2);
-  expect(api.createPost).toHaveBeenCalledWith(
+  expect(api.createAnonymousPost).toHaveBeenCalledWith(
     "https://api.example.com",
     expect.objectContaining({
       title: "Cover publish",
       anonymity: true,
+      clientId: "anon-poster-1",
+      authsec: "anon-secret-1",
     })
   );
-  const createPayload = api.createPost.mock.calls[0][1];
+  const createPayload = api.createAnonymousPost.mock.calls[0][1];
   expect(createPayload.body).toContain("w170");
   expect(createPayload.body).toContain("[Link:-https://cdn.example.com/1.png]");
   expect(createPayload.body).toContain("[Link_cover:-https://cdn.example.com/2.png]");

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Copy, Maximize2, Pause, Play, Share2, Video, Volume2, VolumeX, X } from "lucide-react";
 import Skeleton from "react-loading-skeleton";
+import Swal from "sweetalert2";
 
 const APP_POST_ORIGIN = "https://app.echoidchat.online";
 
@@ -488,7 +489,13 @@ export default function EchoIdPostDetail({
   const loadMoreSentinelRef = useRef(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const author = post.name || "Anonymous";
-  const handle = post.username ? `@${post.username}` : "@anonymous";
+  const isAnonymousPost = post?.anonymity === true || String(post?.anonymity || "").toLowerCase() === "true";
+  const anonymousPosterId = String(post?.posterId || post?.postId || post?.PostId || "").trim();
+  const handle = isAnonymousPost
+    ? `@${anonymousPosterId || "anonymous"}`
+    : post.username
+      ? `@${post.username}`
+      : "@anonymous";
   const title = post.title || "";
   const hasComments = Number(post.comments || 0) > 0;
   const replyTargetId = String(replyTarget?.id || "").trim();
@@ -504,6 +511,33 @@ export default function EchoIdPostDetail({
   const handleOpenCommentAuthor = (entry) => {
     if (!entry?.clientId) return;
     onOpenAuthor?.(entry);
+  };
+  const handleOpenPostAuthor = () => {
+    if (isAnonymousPost) return;
+    onOpenAuthor?.(post);
+  };
+  const handleCopyAnonymousPosterId = async () => {
+    if (!isAnonymousPost || !anonymousPosterId) return;
+    try {
+      await copyTextToClipboard(anonymousPosterId);
+      await Swal.fire({
+        toast: true,
+        position: "top",
+        icon: "success",
+        title: "Poster id copied",
+        showConfirmButton: false,
+        timer: 1300,
+      });
+    } catch {
+      await Swal.fire({
+        toast: true,
+        position: "top",
+        icon: "error",
+        title: "Could not copy poster id",
+        showConfirmButton: false,
+        timer: 1500,
+      });
+    }
   };
 
   useEffect(() => {
@@ -578,7 +612,7 @@ export default function EchoIdPostDetail({
                   <button
                     type="button"
                     className="echoid-post-detail-avatar-button"
-                    onClick={() => (authorAvatarUrl ? onPreviewImage?.(authorAvatarUrl, author) : onOpenAuthor?.(post))}
+                    onClick={() => (authorAvatarUrl ? onPreviewImage?.(authorAvatarUrl, author) : handleOpenPostAuthor())}
                   >
                     {authorAvatarUrl ? (
                       <img src={authorAvatarUrl} alt={author} className="echoid-post-detail-avatar" />
@@ -590,12 +624,15 @@ export default function EchoIdPostDetail({
                   </button>
                   <div className="echoid-post-detail-author-copy">
                     <strong>
-                      <button type="button" className="echoid-inline-identity-button" onClick={() => onOpenAuthor?.(post)}>
+                      <button type="button" className="echoid-inline-identity-button" onClick={handleOpenPostAuthor}>
                         {author}
                       </button>
                     </strong>
                     <span>
-                      <button type="button" className="echoid-inline-identity-button" onClick={() => onOpenAuthor?.(post)}>
+                      <button type="button" className={`echoid-inline-identity-button ${isAnonymousPost ? "is-anonymous-poster-id" : ""}`}
+                        onClick={isAnonymousPost ? handleCopyAnonymousPosterId : handleOpenPostAuthor}
+                        title={isAnonymousPost && anonymousPosterId ? "Copy poster id" : undefined}
+                      >
                         {handle}
                       </button>
                     </span>
@@ -883,7 +920,7 @@ export default function EchoIdPostDetail({
                             <button type="button" onClick={() => onToggleReplies?.(comment)}>
                               {replyVisibleByCommentId?.[comment.id]
                                 ? "Hide replies"
-                                : `${Number(comment.replyCount || 0)} ${Number(comment.replyCount || 0) === 1 ? "reply" : "replies"}`}
+                                : `View ${Number(comment.replyCount || 0)} ${Number(comment.replyCount || 0) === 1 ? "reply" : "replies"}`}
                             </button>
                           ) : null}
                         </div>
