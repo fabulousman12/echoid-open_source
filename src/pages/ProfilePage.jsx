@@ -20,6 +20,8 @@ import { clearAnonymousProfile, readAnonymousProfile, saveAnonymousProfile } fro
 import Swal from "sweetalert2";
 import ImageRenderer from "../components/ImageRenderer";
 import PrivacyPolicy from "../components/PrivacyPolicy";
+import { reEncryptPrivateKeyWithPassword } from "../services/privateKeyVault";
+
 
 const PROFILE_NAME_MAX_LENGTH = 30;
 const PROFILE_ABOUT_MAX_LENGTH = 120;
@@ -799,50 +801,91 @@ if (
   };
 
   const confirmPasswordChange = async () => {
-    const oldPassword = passwordForm.oldPassword.trim();
+    const oldPassword = passwordForm.oldPassword;
     const newPassword = passwordForm.newPassword;
     const confirmPassword = passwordForm.confirmPassword;
+
     if (!oldPassword || !newPassword || !confirmPassword) {
       setPasswordError("Please fill in all password fields.");
       return;
     }
-    if (newPassword.length < 7) {
-      setPasswordError("New password must be longer than 6 characters.");
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("New password and confirmation do not match.");
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setPasswordError("New password must be different.");
       return;
     }
 
     setPasswordLoading(true);
     setPasswordError("");
     try {
-      const res = await api.changePassword(host, oldPassword, newPassword);
+      let newPrivateKeyHash = null;
+      let newPrivateKeyFingerprint = null;
+
+      // Re-encrypt private key if it exists
+      if (currentUser?.privateKeyHash) {
+        try {
+          newPrivateKeyHash = await reEncryptPrivateKeyWithPassword(
+            currentUser.privateKeyHash,
+            oldPassword,
+            newPassword
+          );
+          newPrivateKeyFingerprint = currentUser.privateKeyFingerprint || "";
+        } catch (reEncErr) {
+          console.error("Private key re-encryption failed:", reEncErr);
+          setPasswordError("Failed to re-secure encryption keys. Aborting.");
+          setPasswordLoading(false);
+          return;
+        }
+      }
+
+      const res = await api.changePassword(
+        host, 
+        oldPassword, 
+        newPassword,
+        newPrivateKeyHash,
+        newPrivateKeyFingerprint
+      );
       const json = await res.json();
+
       if (!res.ok || !json?.success) {
         throw new Error(json?.message || json?.error || "Failed to update password.");
       }
-      const nextUser = json.userResponse || currentUser;
-      if (nextUser) {
-        globalThis.storage?.setItem?.("currentuser", JSON.stringify(nextUser));
-        setCurrentUser(nextUser);
-      }
+
+      const nextUser = {
+        ...currentUser,
+        privateKeyHash: json.privateKeyHash || currentUser.privateKeyHash,
+        privateKeyFingerprint: json.privateKeyFingerprint || currentUser.privateKeyFingerprint
+      };
+      
+      globalThis.storage?.setItem?.("currentuser", JSON.stringify(nextUser));
+      setCurrentUser(nextUser);
       closePasswordModal();
+
       await Swal.fire({
-        title: "Password updated",
-        text: "Your encrypted private key was re-secured with the new password.",
+        title: "Success",
+        text: "Password updated and encryption keys re-secured.",
         icon: "success",
+        confirmButtonText: "OK",
         width: 320,
         padding: "1.2rem",
+        backdrop: "rgba(0,0,0,0.4)",
         customClass: { popup: "mobile-alert" },
       });
     } catch (err) {
-      setPasswordError(err.message || "Failed to update password.");
+      console.error("Password change error:", err);
+      setPasswordError(err.message || "Failed to change password.");
     } finally {
       setPasswordLoading(false);
     }
   };
+
   
   const confirmRevokeSession = async () => {
     if (!revokePassword) {

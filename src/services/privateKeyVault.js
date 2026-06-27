@@ -123,3 +123,12 @@ export async function createEncryptedKeyPair(password) {
     privateKeyHash: encryptedPrivateKey,
   };
 }
+
+export async function reEncryptPrivateKeyWithPassword(encryptedPrivateKey, oldPassword, newPassword) {
+  if (!encryptedPrivateKey || !oldPassword || !newPassword) {
+    throw new Error("Missing parameters for private key re-encryption.");
+  }
+  const privateKeyJwkStr = await decryptPrivateKeyWithPassword(encryptedPrivateKey, oldPassword);
+  return await encryptPrivateKeyWithPassword(privateKeyJwkStr, newPassword);
+}
+

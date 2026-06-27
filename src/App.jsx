@@ -249,7 +249,7 @@ const isAcitve = useRef(true);
   const [criticalUpdate, setCriticalUpdate] = useState(false);
   const [serverVersion, setServerVersion] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
-  const CURRENT_APP_VERSION = Maindata.AppVersion;
+ 
 const [blockedUsers, setBlockedUsers] = useState(new Set());
   const [adminMessages, setAdminMessages] = useState([]);
   const [adminUnread, setAdminUnread] = useState(false);

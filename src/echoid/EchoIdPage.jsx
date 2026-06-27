@@ -2010,97 +2010,221 @@ function UserDetails({
   onPreviewProfileImage,
   renderPostCard,
   autoPlayVideos = false,
+  isMobile = false,
 }) {
   const displayName = String(user?.name || "Unknown user").trim() || "Unknown user";
   const handle = user?.username ? `@${user.username}` : "@unknown";
   const about = String(user?.about || "").trim();
+  const joinedDate = user?.createdAt ? formatRelativeTime(getRelativeMinutesFromDate(user.createdAt)) : "Unknown";
+
   const stats = [
     { label: "Posts", value: String(Array.isArray(posts) ? posts.length : 0) },
     { label: "Trust score", value: String(Number(user?.trustScore || 0)) },
     { label: "Status", value: user?.isBanned ? "Banned" : "Active" },
-    { label: "Joined", value: user?.createdAt ? formatRelativeTime(getRelativeMinutesFromDate(user.createdAt)) : "Unknown" },
   ];
 
-  return (
-    <div className="echoid-post-detail-screen">
-      <header className="echoid-post-detail-header">
-        <button type="button" className="echoid-icon-button" aria-label="Back to EchoId" onClick={onBack}>
-          <ArrowLeft size={18} />
+  const renderMobile = () => (
+    <div className="fixed inset-0 z-[100] overflow-y-auto flex flex-col items-center bg-white dark:bg-surface-dim ud-text-primary font-body-md transition-colors duration-300">
+      <nav className="fixed top-0 left-0 w-full z-[110] bg-white dark:bg-surface-dim flex justify-between items-center px-margin-mobile py-3 border-b border-outline-variant/30 transition-colors">
+        <button
+          onClick={onBack}
+          className="p-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 duration-150 ud-text-primary"
+        >
+          <span className="material-symbols-outlined text-[24px] font-bold">arrow_back</span>
         </button>
-        <span className="echoid-post-detail-brand">Echo</span>
-      </header>
+        <span className="font-headline-sm text-body-lg font-black ud-text-primary uppercase tracking-tight">Profile</span>
+        <div className="flex gap-1">
+          <button className="p-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 duration-150 ud-text-primary">
+            <span className="material-symbols-outlined text-[24px] font-bold">settings</span>
+          </button>
+        </div>
+      </nav>
 
-      <main className="echoid-post-detail-body echoid-user-detail-body">
-        <div className="echoid-stack">
-          {isLoading ? (
-            <>
-              <EchoIdProfileCardSkeleton />
-              <EchoIdStatsSkeleton />
-            </>
-          ) : (
-            <>
-              <section className="echoid-profile-card echoid-user-detail-card">
-                <button
-                  type="button"
-                  className={`echoid-profile-avatar ${user?.profilePic ? "is-clickable" : ""}`}
-                  onClick={() => user?.profilePic && onPreviewProfileImage?.(user.profilePic, displayName)}
-                  disabled={!user?.profilePic}
-                >
-                  {user?.profilePic ? (
-                    <img src={user.profilePic} alt={displayName} className="echoid-profile-avatar-image" />
-                  ) : (
-                    getDisplayInitial(displayName, "U")
-                  )}
-                </button>
-                <div className="echoid-profile-copy">
-                  <h2>{displayName}</h2>
-                  <span>{handle}</span>
-                  <p>{about || "No profile description yet."}</p>
-                </div>
-              </section>
+      <main className="w-full max-w-[420px] px-margin-mobile pt-16 pb-24 flex flex-col gap-8">
+        <section className="flex flex-col items-center mt-6">
+          <div className="w-full bg-white dark:bg-surface-container rounded-2xl p-6 border border-outline-variant dark:border-outline shadow-[0_4px_16px_rgba(0,0,0,0.06)] flex flex-col items-center text-center">
+            <button
+              onClick={() => user?.profilePic && onPreviewProfileImage?.(user.profilePic, displayName)}
+              className="w-16 h-16 rounded-xl p-0.5 bg-gradient-to-tr from-primary to-primary-container mb-3 overflow-hidden shadow-sm"
+            >
+              <div className="w-full h-full rounded-xl bg-surface-container-low overflow-hidden flex items-center justify-center">
+                {user?.profilePic ? (
+                  <img className="w-full h-full object-cover" src={user.profilePic} alt={displayName} />
+                ) : (
+                  <span className="text-xl font-black ud-text-primary">{getDisplayInitial(displayName, "U")}</span>
+                )}
+              </div>
+            </button>
+            <h1 className="font-headline-sm text-headline-sm ud-text-primary font-black ">{displayName}</h1>
+            <p className="font-label-md text-label-md ud-text-accent mt-0.5 font-black uppercase tracking-[0.2em]">{handle}</p>
+            <p className="mt-4 font-body-sm text-body-sm ud-text-primary max-w-[280px] leading-relaxed font-bold italic">{about || "No profile description yet."}</p>
+          </div>
+        </section>
 
-              <section className="echoid-grid-stats">
-                {stats.map((item) => (
-                  <div key={item.label} className="echoid-grid-stat">
-                    <strong>{item.value}</strong>
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-              </section>
-            </>
-          )}
-
-          <section className="echoid-section">
-            <div className="echoid-section-heading">
-              <span className="echoid-section-label">Public posts</span>
-              <button type="button" onClick={onLoadPosts} disabled={isLoading}>
-                Load posts
-              </button>
+        <section className="grid grid-cols-3 gap-gutter px-2">
+          {stats.map((item) => (
+            <div key={item.label} className="flex flex-col items-center">
+              <span className={`font-headline-sm text-headline-sm font-black ${item.label === "Status" ? "ud-text-accent" : "ud-text-primary"}`}>
+                {item.value}
+              </span>
+              <span className="font-label-sm text-[10px] ud-text-primary uppercase tracking-[0.2em] mt-1 font-black leading-none">{item.label}</span>
             </div>
-            {!isLoading && error ? <div className="echoid-empty-card">{error}</div> : null}
-            {postsLoading ? <EchoIdPostCardSkeleton count={3} /> : null}
-            {!postsLoading && postsError ? <div className="echoid-empty-card">{postsError}</div> : null}
-            {!postsLoading && !postsError && postsLoaded && Array.isArray(posts) && posts.length > 0
-              ? posts.map((post) =>
+          ))}
+        </section>
+
+        <section className="px-2 text-center">
+          <h3 className="font-headline-sm text-body-md ud-text-primary font-black">{joinedDate}</h3>
+          <p className="font-label-sm text-[10px] ud-text-secondary uppercase tracking-[0.2em] font-black mt-0.5">Joined</p>
+        </section>
+
+        <section className="flex flex-col gap-5">
+          <div className="flex justify-between items-center px-2">
+            <h2 className="font-label-sm text-[10px] ud-text-primary uppercase tracking-[0.25em] font-black">PUBLIC FEED</h2>
+            <button
+              onClick={onLoadPosts}
+              disabled={isLoading || postsLoading}
+              className="bg-primary shadow-[0_6px_16px_rgba(37,99,235,0.3)] text-white font-black py-2 px-8 rounded-full hover:brightness-110 active:scale-95 transition-all text-[11px] tracking-widest"
+            >
+              {postsLoading ? "Loading..." : "LOAD LATEST"}
+            </button>
+          </div>
+
+          {postsLoaded && Array.isArray(posts) && posts.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {posts.map((post) =>
                 renderPostCard(post, {
                   compact: true,
                   autoPlayVideos,
                   onOpenPost,
                 })
-              )
-              : null}
-            {!postsLoading && !postsError && !postsLoaded ? (
-              <div className="echoid-empty-card">Tap load posts to view this user's public feed.</div>
-            ) : null}
-            {!postsLoading && !postsError && postsLoaded && Array.isArray(posts) && posts.length === 0 ? (
-              <div className="echoid-empty-card">No public posts yet.</div>
-            ) : null}
-          </section>
-        </div>
+              )}
+            </div>
+          ) : (
+            <div className="w-full bg-white dark:bg-surface-container-highest/20 rounded-2xl p-10 border border-dashed border-outline-variant/80 dark:border-outline flex flex-col items-center justify-center text-center">
+              <div className="w-14 h-14 rounded-full bg-surface-container dark:bg-surface-container flex items-center justify-center mb-4 ud-text-primary">
+                <span className="material-symbols-outlined text-3xl font-bold">auto_awesome_motion</span>
+              </div>
+              <p className="font-label-md text-label-md ud-text-secondary font-black tracking-widest uppercase">
+                {postsError || (postsLoaded && posts.length === 0 ? "Empty Feed" : "Tap Load Feed")}
+              </p>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );
+
+  const renderWeb = () => (
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-white dark:bg-surface-dim font-body-md text-body-md selection:bg-primary/20 ud-text-primary transition-colors duration-300">
+      <nav className="sticky top-0 z-[110] bg-white dark:bg-surface-dim flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 shadow-sm md:shadow-none transition-colors border-b border-outline-variant/30">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={onBack}
+            className="material-symbols-outlined ud-text-primary hover:bg-surface-container transition-colors p-2.5 rounded-full active:scale-95 duration-150 text-[24px] font-bold"
+          >
+            arrow_back
+          </button>
+          <h1 className="font-headline-sm text-body-lg font-black ud-text-primary uppercase tracking-tight">Profile</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="material-symbols-outlined ud-text-primary hover:bg-surface-container transition-colors p-2.5 rounded-full active:scale-95 duration-150 text-[24px] font-bold">
+            settings
+          </button>
+          <button className="material-symbols-outlined ud-text-primary hover:bg-surface-container transition-colors p-2.5 rounded-full active:scale-95 duration-150 text-[24px] font-bold">
+            more_vert
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-[760px] mx-auto px-margin-mobile md:px-margin-desktop py-16 space-y-16 ud-text-primary">
+        <section className="flex justify-center">
+          <div className="bg-white dark:bg-surface-container rounded-2xl p-10 w-full max-w-[520px] shadow-[0_8px_32px_rgba(0,0,0,0.06)] border border-outline-variant dark:border-white/5 flex items-center gap-10">
+            <button
+              onClick={() => user?.profilePic && onPreviewProfileImage?.(user.profilePic, displayName)}
+              className="w-28 h-28 rounded-3xl bg-surface-container-low dark:bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant dark:border-outline shadow-sm"
+            >
+              {user?.profilePic ? (
+                <img className="w-full h-full object-cover" src={user.profilePic} alt={displayName} />
+              ) : (
+                <span className="text-4xl font-black ud-text-primary">{getDisplayInitial(displayName, "U")}</span>
+              )}
+            </button>
+            <div className="flex flex-col text-left space-y-2">
+              <h2 className="font-headline-sm text-headline-sm ud-text-primary font-black tracking-tight">{displayName}</h2>
+              <p className="font-label-md text-label-md ud-text-accent font-black uppercase tracking-[0.25em]">{handle}</p>
+              <p className="mt-4 font-body-sm text-body-sm ud-text-primary font-bold italic opacity-80 leading-relaxed">
+                {about || "No profile description yet."}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-3 gap-12 max-w-[560px] mx-auto">
+          {stats.map((item) => (
+            <div key={item.label} className="flex flex-col items-center text-center">
+              <span className={`font-headline-sm text-3xl font-black ${item.label === "Status" ? "ud-text-accent" : "ud-text-primary"}`}>
+                {item.value}
+              </span>
+              <span className="font-label-sm text-[10px] ud-text-secondary uppercase tracking-[0.3em] mt-2 font-black leading-none">{item.label}</span>
+            </div>
+          ))}
+        </section>
+
+        <section className="flex flex-col items-center text-center space-y-1">
+          <p className="font-headline-sm text-headline-sm ud-text-primary font-black tracking-tight">{joinedDate}</p>
+          <p className="font-label-sm text-[10px] ud-text-secondary uppercase tracking-[0.3em] font-black">Joined</p>
+        </section>
+
+        <section className="space-y-8">
+          <div className="flex items-center justify-between border-b border-outline-variant pb-4">
+            <h3 className="font-label-sm text-[11px] ud-text-primary uppercase tracking-[0.5em] font-black">PUBLIC FEED</h3>
+            <button
+              onClick={onLoadPosts}
+              disabled={isLoading || postsLoading}
+              className="bg-primary text-white shadow-[0_8px_20px_rgba(37,99,235,0.2)] font-black px-10 py-3 rounded-full hover:scale-105 active:scale-95 transition-all text-xs uppercase tracking-[0.2em]"
+            >
+              {postsLoading ? "Loading..." : "LOAD LATEST"}
+            </button>
+          </div>
+
+          {postsLoaded && Array.isArray(posts) && posts.length > 0 ? (
+            <div className="flex flex-col gap-8">
+              {posts.map((post) =>
+                renderPostCard(post, {
+                  compact: true,
+                  autoPlayVideos,
+                  onOpenPost,
+                })
+              )}
+            </div>
+          ) : (
+            <div className="w-full h-56 flex items-center justify-center rounded-2xl border-2 border-dashed border-outline-variant/50 dark:border-outline bg-white/50 dark:bg-surface-container/20 group hover:border-primary transition-all cursor-pointer">
+              <div className="flex flex-col items-center space-y-3">
+                <span className="material-symbols-outlined text-5xl ud-text-primary font-bold">
+                  cloud_off
+                </span>
+                <p className="font-label-sm text-[11px] ud-text-secondary font-black tracking-[0.4em] uppercase">
+                  {postsError || (postsLoaded && posts.length === 0 ? "Empty Feed" : "Tap Load Feed")}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-surface-dim">
+        <StarLoader />
+      </div>
+    );
+  }
+
+  return isMobile ? renderMobile() : renderWeb();
 }
+
 
 function Compose({
   composeForm,
@@ -5585,6 +5709,7 @@ export default function EchoIdPage({
       <>
         <UserDetails
           user={selectedUserDetail}
+          isMobile={isMobileLayout || isNativeAndroid}
           posts={selectedUserPosts}
           postsLoaded={selectedUserPostsLoaded}
           postsLoading={selectedUserPostsLoading}

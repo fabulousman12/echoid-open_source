@@ -215,7 +215,7 @@ const SignupForm = ({ sendPublicKeyToBackend, connect }) => {
         <header className="login-topbar">
           <button type="button" className="login-brand-mark" onClick={() => history.push('/login')}>
             <img src="/echoid_v3.png" alt="" />
-            <span>ECHOID</span>
+            <span>ECHOID </span>
           </button>
 
           <button type="button" className="login-signup-cta" onClick={() => history.push('/login')}>

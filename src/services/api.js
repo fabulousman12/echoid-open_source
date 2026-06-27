@@ -44,12 +44,13 @@ export const api = {
       body
     }, host),
 
-  changePassword: (host, oldPassword, newPassword) =>
+  changePassword: (host, oldPassword, newPassword, privateKeyHash, privateKeyFingerprint) =>
     authFetch(`${host}/user/change-password`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ oldPassword, newPassword })
+      body: JSON.stringify({ oldPassword, newPassword, privateKeyHash, privateKeyFingerprint })
     }, host),
+
 
   allUsers: (host, timestamps) =>
     authFetch(`${host}/user/alluser`, {

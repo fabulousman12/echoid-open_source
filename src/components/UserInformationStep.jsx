@@ -466,7 +466,7 @@ return new Promise((resolve) => {
               onChange={(e) => setAcceptedTerms(e.target.checked)}
               style={{ display: 'none' }}
             />
-            <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+            <span      onClick={(e) => { e.stopPropagation(); setShowPolicy(true); }} style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
               I agree to the{" "}
               <button
                 type="button"
@@ -503,7 +503,7 @@ return new Promise((resolve) => {
               onChange={(e) => setAccepteduse(e.target.checked)}
               style={{ display: 'none' }}
             />
-            <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+            <span              onClick={(e) => { e.stopPropagation(); setShowterm(true); }} style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
               I agree to the{" "}
               <button
                 type="button"
@@ -522,7 +522,7 @@ return new Promise((resolve) => {
         </button>
 
         <div className="login-mobile-signup" style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
-          <span>Already registered?</span>
+          <span>Already registered? </span>
           <button type="button" className="login-signup-link" onClick={() => history.push('/login')}>
             Log in
           </button>
@@ -596,7 +596,9 @@ return new Promise((resolve) => {
             <PrivacyPolicy
               variant="dark"
               showVersionHeader
-              onClose={() => setShowPolicy(false)}
+              onClose={() => {
+                 setAcceptedTerms(false);
+                setShowPolicy(false)}}
               onAccept={() => {
                 setAcceptedTerms(true);
                 setShowPolicy(false);
@@ -613,7 +615,9 @@ return new Promise((resolve) => {
             <TermsUse
               variant="dark"
               showVersionHeader
-              onClose={() => setShowterm(false)}
+              onClose={() => {
+                 setAccepteduse(false);
+                setShowterm(false)}}
               onAccept={() => {
                 setAccepteduse(true);
                 setShowterm(false);

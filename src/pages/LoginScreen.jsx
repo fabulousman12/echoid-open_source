@@ -427,7 +427,7 @@ const LoginForm = ({ sendPublicKeyToBackend, connect }) => {
               </div>
 
               <div className="login-mobile-signup">
-                <span>Need terminal access?</span>
+                <span>Need terminal access? </span>
                 <button type="button" className="login-signup-link" onClick={() => history.push('/signup')}>
                   Sign Up
                 </button>

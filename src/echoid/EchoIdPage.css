@@ -10,7 +10,7 @@
     linear-gradient(180deg, #fef3ff 0%, #f8e7ff 100%);
   padding: 16px 12px;
   box-sizing: border-box;
-  color: #3a264b;
+  color: #08050a;
   overflow: hidden;
   font-family: "Be Vietnam Pro", sans-serif;
 }
@@ -5635,4 +5635,28 @@ body.dark-theme .echoid-inline-identity-button.is-anonymous-poster-id:focus-visi
     word-break: break-word;
     vertical-align: top;
   }
+}
+/* User Details Redesign Colors */
+:root {
+  --ud-color-primary: #08050a;
+  --ud-color-secondary: #69537b;
+  --ud-color-accent: #2563eb;
+}
+
+body.dark-theme {
+  --ud-color-primary: #f0f0f0;
+  --ud-color-secondary: #a694b8;
+  --ud-color-accent: #4fa1ff;
+}
+
+.ud-text-primary {
+  color: var(--ud-color-primary) !important;
+}
+
+.ud-text-secondary {
+  color: var(--ud-color-secondary) !important;
+}
+
+.ud-text-accent {
+  color: var(--ud-color-accent) !important;
 }

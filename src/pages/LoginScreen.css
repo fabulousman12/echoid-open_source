@@ -366,9 +366,9 @@
   background: #f0f0f0;
 }
 
-.login-mobile-signup {
+/* .login-mobile-signup {
   display: none;
-}
+} */
 
 .login-footer {
   border-top: 1px solid #050505;
@@ -418,7 +418,7 @@
   }
 
   .login-topbar {
-    height: 45px;
+    height: 50px;
     grid-template-columns: 1fr auto;
     padding: 0 42px;
   }

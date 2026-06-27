@@ -152,7 +152,7 @@ const UserRow = React.memo(({ user, isActiveSwipe, action, onSwipe, onClick, sel
       </div>
       <div className="text-right user-row-meta">
         {hasUnread && <span className="badge unread-badge-modern">{user.unreadCount}</span>}
-        {user.isActive !== false && <span className="user-row-online" />}
+        {/* {user.isActive !== false && <span className="user-row-online" />} */}
       </div>
 
       {isActiveSwipe && (
