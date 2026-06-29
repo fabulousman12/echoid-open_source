@@ -4449,13 +4449,14 @@ const expandedProfilePanel = userdetails ? (
 
   ) : (
              <div
-  className={`header  text-white d-flex items-center p-3 justify-between transition-all duration-300 ${isExpanded ? 'expanded' : ''}`}
+  className={`header  text-white d-flex items-center p-2 justify-between transition-all duration-300 ${isExpanded ? 'expanded' : ''}`}
   style={{
     display: 'contents',
     height: 'auto',
     overflow: 'visible',
     background: 'transparent',
-    padding: '0px'
+    padding: '0px',
+    marginTop:'10px'
   }}
 >
   {/* Back Button */}
