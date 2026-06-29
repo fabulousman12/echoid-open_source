@@ -74,6 +74,13 @@ Unlike many communication platforms optimized mainly for engagement metrics, Ech
 - Local-first data handling (where possible)
 
 ---
+<table>
+<tr>
+<td><img src="public/2026-06-27-231426_hyprshot.png" width="500"></td>
+
+<td><img src="public/2026-06-27-231530_hyprshot.png" width="500"></td>
+</tr>
+</table>
 
 # Important Open Source Notes
 
